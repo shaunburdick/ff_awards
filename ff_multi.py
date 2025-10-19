@@ -95,6 +95,7 @@ class MultiDivisionAnalyzer:
         self.divisions: List[DivisionData] = []
         self.all_teams: List[TeamStats] = []
         self.all_games: List[GameResult] = []
+        self.current_week: Optional[int] = None
 
     def connect_and_analyze(self) -> bool:
         """Connect to all leagues and analyze data"""
@@ -357,6 +358,10 @@ class MultiDivisionAnalyzer:
             else:
                 max_week = max_week_candidate
 
+            # Store the actual processed week (last completed week)
+            if self.current_week is None:
+                self.current_week = max_week
+
             # Process each completed week
 
             for week in range(1, max_week + 1):
@@ -553,6 +558,9 @@ class MultiDivisionAnalyzer:
 
         print(f"\n🏈 Fantasy Football Multi-Division Challenge Tracker ({self.year})")
         print(f"📊 {len(self.divisions)} divisions, {len(self.all_teams)} teams total")
+        if self.current_week is not None:
+            print(f"📅 Current Week: {self.current_week}")
+        print(f"CURRENT_WEEK={self.current_week or 'unknown'}")  # Machine-readable output for scripts
 
         # Display division standings
         for division in self.divisions:

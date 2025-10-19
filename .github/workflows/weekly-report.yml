@@ -58,8 +58,12 @@ jobs:
         # Generate the report and save to file
         uv run ff-multi --env $PRIVATE_FLAG --sheets --output weekly-report.tsv
 
-        # Also capture the console output for email body
+        # Also capture the console output for email body and extract current week
         uv run ff-multi --env $PRIVATE_FLAG > weekly-report.txt
+
+        # Extract the current fantasy football week from the output
+        CURRENT_WEEK=$(grep "CURRENT_WEEK=" weekly-report.txt | cut -d'=' -f2)
+        echo "current_week=${CURRENT_WEEK}" >> $GITHUB_OUTPUT
 
         # Set outputs for the email step
         echo "report_generated=true" >> $GITHUB_OUTPUT
@@ -98,14 +102,14 @@ jobs:
         to-email: ${{ secrets.EMAIL_RECIPIENTS }}
         username: ${{ secrets.SMTP_USERNAME }}
         password: ${{ secrets.SMTP_PASSWORD }}
-        subject: "Weekly Fantasy Football Report - Week ${{ github.run_number }}"
+        subject: "Weekly Fantasy Football Report - Week ${{ steps.generate-report.outputs.current_week }}"
         html: ${{ steps.generate-html.outputs.html_content }}
 
     - name: Upload report artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: weekly-report-${{ github.run_number }}
+        name: weekly-report-week-${{ steps.generate-report.outputs.current_week }}
         path: |
           weekly-report.txt
           weekly-report.tsv
