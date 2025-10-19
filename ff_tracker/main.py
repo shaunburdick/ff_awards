@@ -2,11 +2,11 @@
 Main CLI entry point for Fantasy Football Challenge Tracker.
 
 Usage:
-    python -m ff_tracker LEAGUE_ID [--year YEAR] [--private] [--format FORMAT]
+    uv run ff-tracker LEAGUE_ID [--year YEAR] [--private] [--format FORMAT]
 
 Examples:
-    python -m ff_tracker 123456 --year 2024
-    python -m ff_tracker 123456 --private --format email
+    uv run ff-tracker 123456 --year 2024
+    uv run ff-tracker 123456 --private --format email
 """
 
 from __future__ import annotations

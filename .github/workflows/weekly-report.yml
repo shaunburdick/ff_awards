@@ -56,10 +56,10 @@ jobs:
         fi
 
         # Generate the TSV report for Google Sheets using --env flag
-        uv run python -m ff_tracker --env $PRIVATE_FLAG --format sheets > weekly-report.tsv
+        uv run ff-tracker --env $PRIVATE_FLAG --format sheets > weekly-report.tsv
 
         # Generate console output for reference and extract current week
-        uv run python -m ff_tracker --env $PRIVATE_FLAG --format console > weekly-report.txt
+        uv run ff-tracker --env $PRIVATE_FLAG --format console > weekly-report.txt
 
         # Extract current week from console output (looks for CURRENT_WEEK=X line)
         CURRENT_WEEK=$(grep "^CURRENT_WEEK=" weekly-report.txt | cut -d'=' -f2)
@@ -90,7 +90,7 @@ jobs:
         fi
 
         # Generate mobile-friendly HTML email content using --env flag
-        uv run python -m ff_tracker --env $PRIVATE_FLAG --format email > email_content.html
+        uv run ff-tracker --env $PRIVATE_FLAG --format email > email_content.html
 
         # Read the generated HTML content
         {
