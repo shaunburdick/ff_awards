@@ -55,14 +55,23 @@ jobs:
           PRIVATE_FLAG=""
         fi
 
-        # Generate the report and save to file
-        uv run ff-multi --env $PRIVATE_FLAG --sheets --output weekly-report.tsv
+        # Generate the TSV report for Google Sheets using --env flag
+        uv run python -m ff_tracker --env $PRIVATE_FLAG --format sheets > weekly-report.tsv
 
-        # Also capture the console output for email body and extract current week
-        uv run ff-multi --env $PRIVATE_FLAG > weekly-report.txt
+        # Generate console output for reference and extract current week
+        uv run python -m ff_tracker --env $PRIVATE_FLAG --format console > weekly-report.txt
 
-        # Extract the current fantasy football week from the output
-        CURRENT_WEEK=$(grep "CURRENT_WEEK=" weekly-report.txt | cut -d'=' -f2)
+        # Extract current week from console output (looks for CURRENT_WEEK=X line)
+        CURRENT_WEEK=$(grep "^CURRENT_WEEK=" weekly-report.txt | cut -d'=' -f2)
+
+        # Fallback to date-based calculation if parsing fails
+        if [ -z "$CURRENT_WEEK" ] || [ "$CURRENT_WEEK" = "unknown" ]; then
+          CURRENT_WEEK=$(date +%U)
+          echo "Warning: Could not extract current week from output, using date-based fallback: $CURRENT_WEEK"
+        else
+          echo "Extracted current week from fantasy football data: $CURRENT_WEEK"
+        fi
+
         echo "current_week=${CURRENT_WEEK}" >> $GITHUB_OUTPUT
 
         # Set outputs for the email step
@@ -80,8 +89,8 @@ jobs:
           PRIVATE_FLAG=""
         fi
 
-        # Generate mobile-friendly HTML email content
-        uv run ff-multi --env $PRIVATE_FLAG --email-html > email_content.html
+        # Generate mobile-friendly HTML email content using --env flag
+        uv run python -m ff_tracker --env $PRIVATE_FLAG --format email > email_content.html
 
         # Read the generated HTML content
         {

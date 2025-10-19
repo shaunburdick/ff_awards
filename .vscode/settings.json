@@ -1,0 +1,11 @@
+{
+    "python.analysis.typeCheckingMode": "strict",
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.stubPath": "./typings",
+    "python.analysis.exclude": [
+        "**/node_modules",
+        "**/__pycache__"
+    ],
+    "python.defaultInterpreterPath": ".venv/bin/python",
+    "pylance.insidersChannel": "off"
+}

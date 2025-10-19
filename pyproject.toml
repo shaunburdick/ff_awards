@@ -1,14 +1,14 @@
 [project]
 name = "ff-awards"
-version = "0.1.0"
-description = "A command-line tool to analyze ESPN Fantasy Football leagues and track 5 specific season challenges worth $30 each"
+version = "2.0.0"
+description = "A modern, type-safe CLI tool to analyze ESPN Fantasy Football leagues and track 5 specific season challenges across multiple divisions"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
     { name = "Shaun Burdick", email = "github@shaunburdick.com" },
 ]
 requires-python = ">=3.9"
-keywords = ["fantasy-football", "espn", "cli", "sports", "analytics"]
+keywords = ["fantasy-football", "espn", "cli", "sports", "analytics", "type-safe", "modular"]
 
 dependencies = [
     "espn-api==0.45.1",
@@ -22,14 +22,67 @@ Repository = "https://github.com/shaunburdick/ff_awards"
 Issues = "https://github.com/shaunburdick/ff_awards/issues"
 
 [project.scripts]
-ff-multi = "ff_multi:main"
+# Main CLI entry point
+ff-tracker = "ff_tracker:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["."]
+packages = ["ff_tracker"]
 
 [dependency-groups]
-dev = []
+dev = [
+    "ruff",
+    "mypy",
+    "pytest",
+]
+
+[tool.ruff]
+# Modern Python type checking and formatting
+target-version = "py39"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by formatter
+]
+
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+# Indent with spaces
+indent-style = "space"
+# End files with newline
+skip-magic-trailing-comma = false
+
+[tool.mypy]
+# Type checking configuration
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+# Ignore missing stubs for third-party libraries
+[[tool.mypy.overrides]]
+module = "espn_api.*"
+ignore_missing_imports = true

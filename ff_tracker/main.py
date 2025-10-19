@@ -1,0 +1,164 @@
+"""
+Main CLI entry point for Fantasy Football Challenge Tracker.
+
+Usage:
+    python -m ff_tracker LEAGUE_ID [--year YEAR] [--private] [--format FORMAT]
+
+Examples:
+    python -m ff_tracker 123456 --year 2024
+    python -m ff_tracker 123456 --private --format email
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from .display import ConsoleFormatter, EmailFormatter, SheetsFormatter
+from .exceptions import FFTrackerError
+from .services import ChallengeCalculator, ESPNService
+
+
+def create_parser() -> argparse.ArgumentParser:
+    """Create and configure argument parser."""
+    parser = argparse.ArgumentParser(
+        description="Fantasy Football Multi-Division Challenge Tracker",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s 123456                           # Single public league
+  %(prog)s 123456 --year 2024               # Specific year
+  %(prog)s 123456 --private                 # Private league (requires .env)
+  %(prog)s --env                            # Multiple leagues from LEAGUE_IDS in .env
+  %(prog)s 123456 --format email            # HTML email output
+  %(prog)s 123456 --format sheets           # TSV for Google Sheets
+
+Output Formats:
+  console   Human-readable tables (default)
+  sheets    Tab-separated values for Google Sheets
+  email     Mobile-friendly HTML for email reports
+
+Private League Setup:
+  Create a .env file with:
+    ESPN_S2=your_espn_s2_cookie
+    SWID=your_swid_cookie
+        """
+    )
+
+    parser.add_argument(
+        "league_id",
+        type=int,
+        nargs='?',  # Make league_id optional
+        help="ESPN Fantasy Football League ID (or use --env for multiple leagues)"
+    )
+
+    parser.add_argument(
+        "--env",
+        action="store_true",
+        help="Load league IDs from LEAGUE_IDS environment variable"
+    )
+
+    parser.add_argument(
+        "--year",
+        type=int,
+        help="Fantasy season year (default: current year)"
+    )
+
+    parser.add_argument(
+        "--private",
+        action="store_true",
+        help="Access private league (requires ESPN_S2 and SWID in .env)"
+    )
+
+    parser.add_argument(
+        "--format",
+        choices=["console", "sheets", "email"],
+        default="console",
+        help="Output format (default: console)"
+    )
+
+    parser.add_argument(
+        "--env-file",
+        type=Path,
+        default=Path(".env"),
+        help="Path to environment file (default: .env)"
+    )
+
+    return parser
+
+
+def create_formatter(format_name: str, year: int):
+    """Create formatter instance based on format name."""
+    if format_name == "console":
+        return ConsoleFormatter(year)
+    elif format_name == "sheets":
+        return SheetsFormatter(year)
+    elif format_name == "email":
+        return EmailFormatter(year)
+    else:
+        raise ValueError(f"Unknown format: {format_name}")
+
+
+def main() -> int:
+    """Main CLI entry point."""
+    parser = create_parser()
+    args = parser.parse_args()
+
+    try:
+        # Validate arguments
+        if not args.league_id and not args.env:
+            parser.error("Either provide a league_id or use --env flag")
+
+        if args.league_id and args.env:
+            parser.error("Cannot use both league_id and --env flag")
+
+        # Load configuration
+        from .config import create_config
+        if args.env:
+            # Load multiple leagues from environment
+            config = create_config(
+                use_env=True,
+                year=args.year,
+                private=args.private
+            )
+        else:
+            # Single league from command line
+            config = create_config(
+                league_ids=[args.league_id],
+                year=args.year,
+                private=args.private,
+                use_env=False
+            )
+
+        # Initialize services
+        espn_service = ESPNService(config)
+        challenge_calculator = ChallengeCalculator()
+
+        # Create formatter
+        formatter = create_formatter(args.format, config.year)
+
+        # Connect to ESPN and extract data
+        with espn_service:
+            divisions = espn_service.load_all_divisions()
+            challenges = challenge_calculator.calculate_all_challenges(divisions)
+
+        # Generate and display output
+        output = formatter.format_output(divisions, challenges, espn_service.current_week)
+        print(output)
+
+        return 0
+
+    except FFTrackerError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"Unexpected error: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

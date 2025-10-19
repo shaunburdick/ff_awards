@@ -1,49 +1,40 @@
 # Fantasy Football Challenge Tracker
 
-A command-line tool to analyze ESPN Fantasy Football leagues and track 5 specific season challenges worth $30 each across single leagues or multiple divisions.
+A modern, type-safe command-line tool to analyze ESPN Fantasy Football leagues and track 5 specific season challenges across single leagues or multiple divisions.
+
+**New in v2.0**: Complete rewrite with modern Python patterns, modular architecture, comprehensive type safety, and improved error handling.
 
 ## Table of Contents
 
-- [Fantasy Football Challenge Tracker](#fantasy-football-challenge-tracker)
-  - [Table of Contents](#table-of-contents)
-  - [Features](#features)
-  - [Installation](#installation)
-    - [Option 1: Modern Installation with uv (Recommended)](#option-1-modern-installation-with-uv-recommended)
-    - [Option 2: Traditional Installation with Virtual Environment](#option-2-traditional-installation-with-virtual-environment)
-    - [Authentication Setup (All Methods)](#authentication-setup-all-methods)
-  - [Usage](#usage)
-    - [League Analysis](#league-analysis)
-  - [Examples](#examples)
-  - [Configuration](#configuration)
-    - [Multi-Division Setup (.env file)](#multi-division-setup-env-file)
-    - [ESPN Authentication (Private Leagues Only)](#espn-authentication-private-leagues-only)
-  - [Sample Output](#sample-output)
-    - [Regular Console Output](#regular-console-output)
-    - [Google Sheets Format (with --sheets flag)](#google-sheets-format-with---sheets-flag)
-  - [The 5 Season Challenges ($30 Each)](#the-5-season-challenges-30-each)
-  - [Requirements](#requirements)
-  - [Google Sheets Export](#google-sheets-export)
-  - [Automated Weekly Reports (GitHub Actions)](#automated-weekly-reports-github-actions)
-    - [Setup GitHub Actions Workflow](#setup-github-actions-workflow)
-    - [Manual Trigger](#manual-trigger)
-    - [What Gets Emailed](#what-gets-emailed)
-    - [Customizing the Schedule](#customizing-the-schedule)
-  - [Dependencies](#dependencies)
-  - [Contributing](#contributing)
-  - [License](#license)
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Examples](#examples)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+- [Sample Output](#sample-output)
+- [The 5 Season Challenges](#the-5-season-challenges)
+- [Requirements](#requirements)
+- [Google Sheets Export](#google-sheets-export)
+- [Automated Weekly Reports (GitHub Actions)](#automated-weekly-reports-github-actions)
+- [Dependencies](#dependencies)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Features
 
-- **5 Season Challenges**: Track Most Points Overall, Most Points in One Game, Most Points in a Loss, Least Points in a Win, and Closest Victory
-- **Multi-Division Support**: Analyze multiple leagues as divisions with overall rankings
-- **Private League Support**: Works with both public and private ESPN leagues
-- **Clean Table Output**: Well-formatted tables using tabulate library
-- **Google Sheets Export**: Output results in tab-separated format for easy copy-paste into Google Sheets
-- **Simple CLI**: Just pass in your league ID(s) and get instant results
+- **🏆 5 Season Challenges**: Track Most Points Overall, Most Points in One Game, Most Points in a Loss, Least Points in a Win, and Closest Victory
+- **🏢 Multi-Division Support**: Analyze multiple leagues as divisions with overall rankings
+- **🔒 Private League Support**: Works with both public and private ESPN leagues
+- **📊 Multiple Output Formats**: Console tables, Google Sheets TSV, and mobile-friendly HTML email
+- **🛡️ Type Safety**: Comprehensive type annotations with modern Python syntax
+- **⚡ Fast Error Handling**: Fail-fast approach with clear error messages
+- **🏗️ Modular Architecture**: Clean separation of concerns for easy maintenance and extension
+- **📱 Mobile-Friendly**: HTML email format optimized for mobile devices
 
 ## Installation
 
-### Option 1: Modern Installation with uv (Recommended)
+### Quick Start with uv (Recommended)
 
 [uv](https://docs.astral.sh/uv/) is a fast, modern Python package manager that handles virtual environments automatically.
 
@@ -57,8 +48,6 @@ A command-line tool to analyze ESPN Fantasy Football leagues and track 5 specifi
 
    # Alternative: via pip/pipx (if you have them)
    pip install uv
-   # or
-   pipx install uv
    ```
 
 2. **Clone and setup the project**
@@ -70,96 +59,172 @@ A command-line tool to analyze ESPN Fantasy Football leagues and track 5 specifi
    uv sync
    ```
 
-3. **Run the tools**
+3. **Run the new tracker**
    ```bash
-   # uv automatically manages the virtual environment
-   uv run ff-multi <league_id>         # Single league
-   uv run ff-multi --env               # Multiple leagues from .env
+   # Single league analysis
+   uv run ff-tracker 123456
+
+   # With specific year and format
+   uv run ff-tracker 123456 --year 2024 --format email
+
+   # Private league with HTML email output
+   uv run ff-tracker 123456 --private --format email
    ```
 
-### Option 2: Traditional Installation with Virtual Environment
-
-If you prefer the traditional approach or can't install uv:
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd ff-awards
-   ```
-
-2. **Create and activate a virtual environment**
-   ```bash
-   # Create virtual environment
-   python3 -m venv venv
-
-   # Activate it (macOS/Linux)
-   source venv/bin/activate
-
-   # Activate it (Windows)
-   venv\Scripts\activate
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Run the tools**
-   ```bash
-   # Make sure virtual environment is activated first
-   python ff_multi.py <league_id>      # Single league
-   python ff_multi.py --env            # Multiple leagues from .env
-   ```
-
-### Authentication Setup (All Methods)
+### Authentication Setup
 
 **For private leagues only**: Set up ESPN authentication
 ```bash
 cp .env.example .env
-# Edit .env with your ESPN credentials (see section below)
+# Edit .env with your ESPN credentials (see Configuration section below)
 ```
 
 ## Usage
 
-### League Analysis
+### Basic Usage
+
 ```bash
 # Single league (public)
-python ff_multi.py <league_id>
+uv run ff-tracker <league_id>
 
 # Single private league
-python ff_multi.py <league_id> --private
-
-# Multiple leagues as divisions
-python ff_multi.py <league_id1> <league_id2> <league_id3>
-
-# Use league IDs from .env file
-python ff_multi.py --env
+uv run ff-tracker <league_id> --private
 
 # Specific year
-python ff_multi.py <league_id> --year 2023
+uv run ff-tracker <league_id> --year 2023
 
-# Google Sheets format output
-python ff_multi.py <league_id> --sheets
+# Different output format
+uv run ff-tracker <league_id> --format sheets
+```
 
-# Save Google Sheets format to file
-python ff_multi.py <league_id> --sheets --output results.tsv
+### Output Formats
+
+The new modular architecture supports multiple output formats:
+
+- **`console`** (default): Human-readable tables for terminal display
+- **`sheets`**: Tab-separated values for easy import into Google Sheets
+- **`email`**: Mobile-friendly HTML format perfect for email reports
+
+```bash
+# Console output (default)
+uv run ff-tracker 123456
+
+# Google Sheets format
+uv run ff-tracker 123456 --format sheets > results.tsv
+
+# HTML email format
+uv run ff-tracker 123456 --format email > report.html
 ```
 
 ## Examples
 
 ```bash
+# Basic single league analysis
+uv run ff-tracker 123456
+
+# Private league with specific year
+uv run ff-tracker 123456 --private --year 2024
+
+# Generate Google Sheets compatible output
+uv run ff-tracker 123456 --format sheets > weekly_report.tsv
+
+# Create HTML email report
+uv run ff-tracker 123456 --format email > email_report.html
+
+# Multiple leagues (requires .env setup - see Configuration)
+# Note: Multi-league support requires configuration file setup
+```
+
+## Configuration
+
+### Multi-Division Setup (.env file)
+
+For analyzing multiple leagues as divisions, create a `.env` file:
+
+```bash
+# Copy the example
+cp .env.example .env
+```
+
+Example `.env` content:
+```env
+# Multiple league IDs (comma-separated)
+LEAGUE_IDS=123456789,987654321,555444333
+
+# Private league authentication (if needed)
+ESPN_S2=your_espn_s2_cookie_here
+SWID=your_swid_value_here
+```
+
+**Example**: Analyze multiple leagues as divisions:
+```bash
+uv run ff-tracker --env --format console   # Console output for all leagues
+uv run ff-tracker --env --format sheets    # TSV output for Google Sheets
+```
+
+### ESPN Authentication (Private Leagues Only)
+
+For private leagues, you need ESPN authentication cookies:
+
+1. **Get your cookies**:
+   - Log into ESPN Fantasy in your browser
+   - Open Developer Tools (F12)
+   - Go to Application/Storage > Cookies > espn.com
+   - Find `espn_s2` and `SWID` values
+
+2. **Add to .env file**:
+   ```env
+   ESPN_S2=your_very_long_espn_s2_cookie_value_here
+   SWID={YOUR-SWID-VALUE-HERE}
+   ```
+
+3. **Use with --private flag**:
+   ```bash
+   uv run ff-tracker 123456 --private
+   ```
+
+## Architecture
+
+The new v2.0 architecture follows modern Python best practices with clear separation of concerns:
+
+```
+ff_tracker/
+├── __init__.py          # Package initialization
+├── __main__.py          # Module entry point
+├── main.py              # CLI argument parsing and orchestration
+├── config.py            # Configuration and environment management
+├── exceptions.py        # Custom exception hierarchy
+├── models/              # Type-safe data models
+│   └── __init__.py      # GameResult, TeamStats, ChallengeResult, DivisionData
+├── services/            # Business logic services
+│   ├── __init__.py
+│   ├── espn_service.py  # ESPN API integration
+│   └── challenge_service.py  # Challenge calculation logic
+└── display/             # Output formatters
+    ├── __init__.py
+    ├── base.py          # Formatter protocol and base class
+    ├── console.py       # Terminal table output
+    ├── sheets.py        # Google Sheets TSV format
+    └── email.py         # Mobile-friendly HTML email
+```
+
+**Key Design Principles**:
+- **Type Safety**: Comprehensive type annotations using modern Python syntax
+- **Fail-Fast**: Clear error messages with no retry logic (as requested)
+- **Separation of Concerns**: Business logic, data access, and presentation are clearly separated
+- **Extensibility**: Easy to add new output formats or challenge calculations
+- **Modern Python**: Uses `from __future__ import annotations`, union syntax (`str | None`), and dataclasses
 # Analyze a single public league
-python ff_multi.py 123456789
+uv run ff-tracker 123456789
 
 # Analyze multiple divisions from .env file
-python ff_multi.py --env
+uv run ff-tracker --env
 
 # Get Google Sheets format for a private league
-python ff_multi.py 987654321 --private --sheets
+uv run ff-tracker 987654321 --private --format sheets
 
 # Save multi-division results to file
-python ff_multi.py --env --sheets --output season_results.tsv
-```
+uv run ff-tracker --env --format sheets > season_results.tsv
 
 ## Configuration
 
@@ -190,47 +255,94 @@ For private leagues, you need to get your ESPN authentication cookies:
 
 ## Sample Output
 
-### Regular Console Output
+### Console Output
+
+The default console format provides clean, readable tables:
+
 ```
-Sample Fantasy League Division (2025)
+Fantasy Football Multi-Division Challenge Tracker (2024)
+1 divisions, 10 teams total
 
- LEAGUE STANDINGS
-+------+------------------------+---------------+------------+--------+
-| Rank | Team                   | Owner         | Points For | Record |
-+======+========================+===============+============+========+
-|    1 | Lightning Bolts       | Team Owner A  | 867.0      | 5-1    |
-|    2 | Thunder Hawks         | Team Owner B  | 799.3      | 4-2    |
-+------+------------------------+---------------+------------+--------+
+Sample Fantasy League STANDINGS
+╭──────┬─────────────────────┬──────────────┬────────────┬─────────────────┬────────╮
+│ Rank │ Team                │ Owner        │ Points For │ Points Against  │ Record │
+├──────┼─────────────────────┼──────────────┼────────────┼─────────────────┼────────┤
+│    1 │ Lightning Bolts     │ Team Owner A │     1267.0 │          1098.4 │ 8-2    │
+│    2 │ Thunder Hawks       │ Team Owner B │     1199.3 │          1156.7 │ 7-3    │
+│    3 │ Fire Dragons        │ Team Owner C │     1156.8 │          1201.2 │ 6-4    │
+╰──────┴─────────────────────┴──────────────┴────────────┴─────────────────┴────────╯
 
-SEASON CHALLENGES ($30 Each)
-+-------------------------+----------------------+-------+---------------------------+
-| Challenge               | Winner               | Value | Details                   |
-+=========================+======================+=======+===========================+
-| Most Points Overall     | Lightning Bolts     | $30   | 867.0 total points       |
-| Most Points in One Game | Fire Dragons        | $30   | 186.5 points (Week 2)    |
-| Most Points in a Loss   | Storm Chasers       | $30   | 173.4 points in loss     |
-| Least Points in a Win   | Ice Wolves          | $30   | 101.2 points in win      |
-| Closest Victory         | Steel Panthers      | $30   | Won by 0.4 points        |
-+-------------------------+----------------------+-------+---------------------------+
-```
+OVERALL SEASON CHALLENGES
+╭─────────────────────────┬─────────────────┬──────────────┬───────────┬──────────────────────────╮
+│ Challenge               │ Winner          │ Owner        │ Division  │ Details                  │
+├─────────────────────────┼─────────────────┼──────────────┼───────────┼──────────────────────────┤
+│ Most Points Overall     │ Lightning Bolts │ Team Owner A │ League    │ 1267.0 total points     │
+│ Most Points in One Game │ Fire Dragons    │ Team Owner C │ League    │ 186.5 points (Week 2)   │
+│ Most Points in a Loss   │ Storm Chasers   │ Team Owner D │ League    │ 173.4 points in loss    │
+│ Least Points in a Win   │ Ice Wolves      │ Team Owner E │ League    │ 101.2 points in win     │
+│ Closest Victory         │ Steel Panthers  │ Team Owner F │ League    │ Won by 0.4 points       │
+╰─────────────────────────┴─────────────────┴──────────────┴───────────┴──────────────────────────╯
 
-### Google Sheets Format (with --sheets flag)
-```
-Fantasy Football Multi-Division Challenge Tracker (2025)
-3 divisions, 30 teams total
-
-Sample Fantasy League Division STANDINGS
-Rank    Team    Owner   Points For      Record
-1       Lightning Bolts Team Owner A    867.0   5-1
-2       Thunder Hawks   Team Owner B    799.3   4-2
-
-OVERALL SEASON CHALLENGES ($30 Each)
-Challenge       Winner  Owner   Division        Value   Details
-Most Points Overall     Golden Eagles   Team Owner C    Championship Division   $30     971.9 total points
-Most Points in One Game Fire Dragons    Team Owner D    Sample Fantasy League Division  $30     186.5 points (Week 2)
+Game data: 50 individual results processed
 ```
 
-## The 5 Season Challenges ($30 Each)
+### Google Sheets Format
+
+Perfect for importing into spreadsheets (use `--format sheets`):
+
+```
+Fantasy Football Multi-Division Challenge Tracker (2024)
+1 divisions, 10 teams total
+
+Sample Fantasy League STANDINGS
+Rank	Team	Owner	Points For	Points Against	Record
+1	Lightning Bolts	Team Owner A	1267.0	1098.4	8-2
+2	Thunder Hawks	Team Owner B	1199.3	1156.7	7-3
+3	Fire Dragons	Team Owner C	1156.8	1201.2	6-4
+
+OVERALL SEASON CHALLENGES
+Challenge	Winner	Owner	Division	Details
+Most Points Overall	Lightning Bolts	Team Owner A	League	1267.0 total points
+Most Points in One Game	Fire Dragons	Team Owner C	League	186.5 points (Week 2)
+Most Points in a Loss	Storm Chasers	Team Owner D	League	173.4 points in loss
+Least Points in a Win	Ice Wolves	Team Owner E	League	101.2 points in win
+Closest Victory	Steel Panthers	Team Owner F	League	Won by 0.4 points
+
+Game data: 50 individual results processed
+```
+
+### Email HTML Format
+
+Mobile-optimized HTML perfect for weekly email reports (use `--format email`):
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Football Challenge Tracker (2024)</title>
+    <style>
+        /* Mobile-friendly responsive styles */
+        body { font-family: Arial, sans-serif; margin: 0; padding: 10px; }
+        .container { max-width: 100%; background: white; padding: 15px; border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { padding: 6px 4px; border-bottom: 1px solid #ddd; }
+        .winner { color: #27ae60; font-weight: bold; }
+        /* More mobile-responsive styles... */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Fantasy Football Multi-Division Challenge Tracker (2024)</h1>
+        <div class="summary">1 divisions • 10 teams total</div>
+        <!-- Responsive tables with challenge results -->
+    </div>
+</body>
+</html>
+```
+
+## The 5 Season Challenges
 
 1. **Most Points Overall** - Team with highest total regular season points
 2. **Most Points in One Game** - Highest single week score across all teams
@@ -241,7 +353,7 @@ Most Points in One Game Fire Dragons    Team Owner D    Sample Fantasy League Di
 **Challenge Rules:**
 - Only regular season games count (playoffs excluded)
 - Ties go to the first team to achieve the result
-- If still tied after that, the payout splits between tied teams
+- If still tied after that, the award splits between tied teams
 
 ## Requirements
 
@@ -255,14 +367,14 @@ The tool supports exporting results in a format that can be easily copied into G
 
 **Console Output (for copy-paste):**
 ```bash
-python ff_multi.py 123456789 --sheets        # Single league
-python ff_multi.py --env --sheets            # Multiple leagues
+uv run ff-tracker 123456789 --format sheets        # Single league
+uv run ff-tracker --env --format sheets            # Multiple leagues
 ```
 
 **File Output (save to file first):**
 ```bash
-python ff_multi.py 123456789 --sheets --output results.tsv
-python ff_multi.py --env --sheets --output multi_results.tsv
+uv run ff-tracker 123456789 --format sheets > results.tsv
+uv run ff-tracker --env --format sheets > multi_results.tsv
 ```
 
 The output uses tab-separated values (TSV) format which Google Sheets automatically recognizes when pasting. Simply copy the output and paste it directly into a Google Sheets document.
