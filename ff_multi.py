@@ -430,7 +430,7 @@ class MultiDivisionAnalyzer:
             winner=highest_scorer.name,
             owner=highest_scorer.owner,
             division=highest_scorer.division,
-            value="$30",
+            value="",
             description=f"{highest_scorer.points_for:.1f} total points"
         ))
 
@@ -449,7 +449,7 @@ class MultiDivisionAnalyzer:
                     winner="Data Unavailable",
                     owner="N/A",
                     division="N/A",
-                    value="$30",
+                    value="",
                     description=desc
                 ))
             return results
@@ -461,7 +461,7 @@ class MultiDivisionAnalyzer:
             winner=highest_game.team_name,
             owner=self._find_owner_for_team(highest_game.team_name, highest_game.division),
             division=highest_game.division,
-            value="$30",
+            value="",
             description=f"{highest_game.score:.1f} points (Week {highest_game.week})"
         ))
 
@@ -474,7 +474,7 @@ class MultiDivisionAnalyzer:
                 winner=highest_loss.team_name,
                 owner=self._find_owner_for_team(highest_loss.team_name, highest_loss.division),
                 division=highest_loss.division,
-                value="$30",
+                value="",
                 description=f"{highest_loss.score:.1f} points in loss (Week {highest_loss.week})"
             ))
         else:
@@ -483,7 +483,7 @@ class MultiDivisionAnalyzer:
                 winner="No losses found",
                 owner="N/A",
                 division="N/A",
-                value="$30",
+                value="",
                 description="No losing games recorded yet"
             ))
 
@@ -496,7 +496,7 @@ class MultiDivisionAnalyzer:
                 winner=lowest_win.team_name,
                 owner=self._find_owner_for_team(lowest_win.team_name, lowest_win.division),
                 division=lowest_win.division,
-                value="$30",
+                value="",
                 description=f"{lowest_win.score:.1f} points in win (Week {lowest_win.week})"
             ))
         else:
@@ -505,7 +505,7 @@ class MultiDivisionAnalyzer:
                 winner="No wins found",
                 owner="N/A",
                 division="N/A",
-                value="$30",
+                value="",
                 description="No winning games recorded yet"
             ))
 
@@ -517,7 +517,7 @@ class MultiDivisionAnalyzer:
                 winner=closest_win.team_name,
                 owner=self._find_owner_for_team(closest_win.team_name, closest_win.division),
                 division=closest_win.division,
-                value="$30",
+                value="",
                 description=f"Won by {closest_win.margin:.1f} points (Week {closest_win.week})"
             ))
         else:
@@ -526,7 +526,7 @@ class MultiDivisionAnalyzer:
                 winner="No wins found",
                 owner="N/A",
                 division="N/A",
-                value="$30",
+                value="",
                 description="No winning games recorded yet"
             ))
 
@@ -553,11 +553,12 @@ class MultiDivisionAnalyzer:
                     team.name[:25],
                     team.owner[:20],
                     f"{team.points_for:.1f}",
+                    f"{team.points_against:.1f}",
                     f"{team.wins}-{team.losses}"
                 ])
 
             print(tabulate(division_table,
-                         headers=["Rank", "Team", "Owner", "Points For", "Record"],
+                         headers=["Rank", "Team", "Owner", "Points For", "Points Against", "Record"],
                          tablefmt="grid"))
 
         # Display overall standings (top teams across all divisions)
@@ -572,17 +573,18 @@ class MultiDivisionAnalyzer:
                 team.owner[:15],
                 team.division[:15],
                 f"{team.points_for:.1f}",
+                f"{team.points_against:.1f}",
                 f"{team.wins}-{team.losses}"
             ])
 
         print(tabulate(overall_table,
-                     headers=["Rank", "Team", "Owner", "Division", "Points For", "Record"],
+                     headers=["Rank", "Team", "Owner", "Division", "Points For", "Points Against", "Record"],
                      tablefmt="grid"))
 
         # Display overall challenge results
         challenges = self.calculate_overall_challenges()
         if challenges:
-            print(f"\n💰 OVERALL SEASON CHALLENGES ($30 Each)")
+            print(f"\n💰 OVERALL SEASON CHALLENGES")
             challenge_table = []
             for challenge in challenges:
                 challenge_table.append([
@@ -590,12 +592,11 @@ class MultiDivisionAnalyzer:
                     challenge.winner[:25],
                     challenge.owner[:20],
                     challenge.division[:15],
-                    challenge.value,
                     challenge.description[:35]
                 ])
 
             print(tabulate(challenge_table,
-                         headers=["Challenge", "Winner", "Owner", "Division", "Value", "Details"],
+                         headers=["Challenge", "Winner", "Owner", "Division", "Details"],
                          tablefmt="grid"))
 
             if self.all_games:
@@ -615,32 +616,32 @@ class MultiDivisionAnalyzer:
         # Division standings
         for division in self.divisions:
             output_lines.append(f"{division.name} STANDINGS")
-            output_lines.append("Rank\tTeam\tOwner\tPoints For\tRecord")
+            output_lines.append("Rank\tTeam\tOwner\tPoints For\tPoints Against\tRecord")
 
             sorted_teams = sorted(division.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
             for i, team in enumerate(sorted_teams, 1):
-                output_lines.append(f"{i}\t{team.name}\t{team.owner}\t{team.points_for:.1f}\t{team.wins}-{team.losses}")
+                output_lines.append(f"{i}\t{team.name}\t{team.owner}\t{team.points_for:.1f}\t{team.points_against:.1f}\t{team.wins}-{team.losses}")
 
             output_lines.append("")
 
         # Overall top teams
         output_lines.append("OVERALL TOP TEAMS (Across All Divisions)")
-        output_lines.append("Rank\tTeam\tOwner\tDivision\tPoints For\tRecord")
+        output_lines.append("Rank\tTeam\tOwner\tDivision\tPoints For\tPoints Against\tRecord")
 
         sorted_all_teams = sorted(self.all_teams, key=lambda x: (x.wins, x.points_for), reverse=True)[:20]
         for i, team in enumerate(sorted_all_teams, 1):
-            output_lines.append(f"{i}\t{team.name}\t{team.owner}\t{team.division}\t{team.points_for:.1f}\t{team.wins}-{team.losses}")
+            output_lines.append(f"{i}\t{team.name}\t{team.owner}\t{team.division}\t{team.points_for:.1f}\t{team.points_against:.1f}\t{team.wins}-{team.losses}")
 
         output_lines.append("")
 
         # Challenge results
         challenges = self.calculate_overall_challenges()
         if challenges:
-            output_lines.append("OVERALL SEASON CHALLENGES ($30 Each)")
-            output_lines.append("Challenge\tWinner\tOwner\tDivision\tValue\tDetails")
+            output_lines.append("OVERALL SEASON CHALLENGES")
+            output_lines.append("Challenge\tWinner\tOwner\tDivision\tDetails")
 
             for challenge in challenges:
-                output_lines.append(f"{challenge.challenge_name}\t{challenge.winner}\t{challenge.owner}\t{challenge.division}\t{challenge.value}\t{challenge.description}")
+                output_lines.append(f"{challenge.challenge_name}\t{challenge.winner}\t{challenge.owner}\t{challenge.division}\t{challenge.description}")
 
             output_lines.append("")
 

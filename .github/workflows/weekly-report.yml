@@ -100,7 +100,7 @@ jobs:
           <ul>
             <li>Current standings for all divisions</li>
             <li>Overall top performers across all leagues</li>
-            <li>Season challenge leaders ($30 each)</li>
+            <li>Season challenge leaders</li>
           </ul>
           <p><strong>📁 Download spreadsheet version:</strong><br>
           <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">Click here to download the TSV file</a> (go to "Artifacts" section)</p>
