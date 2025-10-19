@@ -7,10 +7,10 @@ Create a simple, type-safe CLI tool to track specific fantasy football challenge
 
 ### Core Functionality
 - **Input**: ESPN Fantasy Football League ID
-- **Output**: Table showing 5 specific $30 challenges with winners
+- **Output**: Table showing 5 specific challenges with winners
 - **Data Source**: ESPN Fantasy Football API (via espn-api Python library)
 
-### The 5 Challenges ($30 each)
+### The 5 Challenges
 1. **Most Points Overall** - Team with most total regular season points
 2. **Most Points in One Game** - Highest single week score
 3. **Most Points in a Loss** - Highest score in a losing effort

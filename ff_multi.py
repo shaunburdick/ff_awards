@@ -853,11 +853,14 @@ class MultiDivisionAnalyzer:
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.85em;
+      font-size: 0.8em;
       font-weight: bold;
       margin-right: 10px;
       flex-shrink: 0;
       min-width: 28px;
+      text-align: center;
+      line-height: 1;
+      box-sizing: border-box;
     }}
     .top-rank {{
       background: #f39c12;
@@ -868,11 +871,14 @@ class MultiDivisionAnalyzer:
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.85em;
+      font-size: 0.8em;
       font-weight: bold;
       margin-right: 10px;
       flex-shrink: 0;
       min-width: 28px;
+      text-align: center;
+      line-height: 1;
+      box-sizing: border-box;
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
       border: 2px solid #e67e22;
     }}
