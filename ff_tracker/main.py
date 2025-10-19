@@ -12,6 +12,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
@@ -85,7 +86,41 @@ Private League Setup:
         help="Path to environment file (default: .env)"
     )
 
+    parser.add_argument(
+        "-v", "--verbose",
+        action="count",
+        default=0,
+        help="Enable verbose logging output (-v for INFO, -vv for DEBUG)"
+    )
+
     return parser
+
+
+def setup_logging(verbose: int = 0) -> None:
+    """Configure logging based on verbosity level.
+
+    Args:
+        verbose: 0 = WARNING only, 1 = INFO, 2+ = DEBUG
+    """
+    if verbose == 0:
+        level = logging.WARNING
+    elif verbose == 1:
+        level = logging.INFO
+    else:  # verbose >= 2
+        level = logging.DEBUG
+
+    # Configure root logger
+    logging.basicConfig(
+        level=level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%H:%M:%S'
+    )
+
+    # Reduce noise from third-party libraries unless in debug mode
+    if verbose < 2:
+        logging.getLogger('urllib3').setLevel(logging.WARNING)
+        logging.getLogger('requests').setLevel(logging.WARNING)
+        logging.getLogger('espn_api').setLevel(logging.WARNING)
 
 
 def create_formatter(format_name: str, year: int):
@@ -104,6 +139,9 @@ def main() -> int:
     """Main CLI entry point."""
     parser = create_parser()
     args = parser.parse_args()
+
+    # Setup logging based on verbosity
+    setup_logging(args.verbose)
 
     try:
         # Validate arguments
