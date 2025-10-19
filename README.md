@@ -276,11 +276,11 @@ OVERALL SEASON CHALLENGES
 ╭─────────────────────────┬─────────────────┬──────────────┬───────────┬──────────────────────────╮
 │ Challenge               │ Winner          │ Owner        │ Division  │ Details                  │
 ├─────────────────────────┼─────────────────┼──────────────┼───────────┼──────────────────────────┤
-│ Most Points Overall     │ Lightning Bolts │ Team Owner A │ League    │ 1267.0 total points     │
-│ Most Points in One Game │ Fire Dragons    │ Team Owner C │ League    │ 186.5 points (Week 2)   │
-│ Most Points in a Loss   │ Storm Chasers   │ Team Owner D │ League    │ 173.4 points in loss    │
-│ Least Points in a Win   │ Ice Wolves      │ Team Owner E │ League    │ 101.2 points in win     │
-│ Closest Victory         │ Steel Panthers  │ Team Owner F │ League    │ Won by 0.4 points       │
+│ Most Points Overall     │ Lightning Bolts │ Team Owner A │ League    │ 1267.0 total points      │
+│ Most Points in One Game │ Fire Dragons    │ Team Owner C │ League    │ 186.5 points (Week 2)    │
+│ Most Points in a Loss   │ Storm Chasers   │ Team Owner D │ League    │ 173.4 points in loss     │
+│ Least Points in a Win   │ Ice Wolves      │ Team Owner E │ League    │ 101.2 points in win      │
+│ Closest Victory         │ Steel Panthers  │ Team Owner F │ League    │ Won by 0.4 points        │
 ╰─────────────────────────┴─────────────────┴──────────────┴───────────┴──────────────────────────╯
 
 Game data: 50 individual results processed
