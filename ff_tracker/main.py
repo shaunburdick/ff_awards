@@ -16,7 +16,7 @@ import logging
 import sys
 from pathlib import Path
 
-from .display import BaseFormatter, ConsoleFormatter, EmailFormatter, SheetsFormatter
+from .display import BaseFormatter, ConsoleFormatter, EmailFormatter, JsonFormatter, SheetsFormatter
 from .exceptions import FFTrackerError
 from .services import ChallengeCalculator, ESPNService
 
@@ -39,6 +39,7 @@ Output Formats:
   console   Human-readable tables (default)
   sheets    Tab-separated values for Google Sheets
   email     Mobile-friendly HTML for email reports
+  json      Structured JSON data for further processing
 
 Private League Setup:
   Create a .env file with:
@@ -74,7 +75,7 @@ Private League Setup:
 
     parser.add_argument(
         "--format",
-        choices=["console", "sheets", "email"],
+        choices=["console", "sheets", "email", "json"],
         default="console",
         help="Output format (default: console)"
     )
@@ -131,6 +132,8 @@ def create_formatter(format_name: str, year: int) -> BaseFormatter:
         return SheetsFormatter(year)
     elif format_name == "email":
         return EmailFormatter(year)
+    elif format_name == "json":
+        return JsonFormatter(year)
     else:
         raise ValueError(f"Unknown format: {format_name}")
 

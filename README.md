@@ -6,20 +6,20 @@ A modern, type-safe command-line tool to analyze ESPN Fantasy Football leagues a
 
 ## Table of Contents
 
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Examples](#examples)
-- [Configuration](#configuration)
-- [Architecture](#architecture)
-- [Sample Output](#sample-output)
-- [The 5 Season Challenges](#the-5-season-challenges)
-- [Requirements](#requirements)
-- [Google Sheets Export](#google-sheets-export)
-- [Automated Weekly Reports (GitHub Actions)](#automated-weekly-reports-github-actions)
-- [Dependencies](#dependencies)
-- [Contributing](#contributing)
-- [License](#license)
+- [Fantasy Football Challenge Tracker](#fantasy-football-challenge-tracker)
+  - [Table of Contents](#table-of-contents)
+  - [Features](#features)
+  - [Installation](#installation)
+  - [Usage](#usage)
+  - [Examples](#examples)
+  - [Configuration](#configuration)
+  - [Sample Output](#sample-output)
+  - [The 5 Season Challenges](#the-5-season-challenges)
+  - [Requirements](#requirements)
+  - [Google Sheets Export](#google-sheets-export)
+  - [Automated Weekly Reports (GitHub Actions)](#automated-weekly-reports-github-actions)
+  - [Contributing](#contributing)
+  - [License](#license)
 
 ## Features
 
@@ -104,6 +104,7 @@ The new modular architecture supports multiple output formats:
 - **`console`** (default): Human-readable tables for terminal display
 - **`sheets`**: Tab-separated values for easy import into Google Sheets
 - **`email`**: Mobile-friendly HTML format perfect for email reports
+- **`json`**: Structured JSON data for further processing
 
 ```bash
 # Console output (default)
@@ -182,76 +183,6 @@ For private leagues, you need ESPN authentication cookies:
    ```bash
    uv run ff-tracker 123456 --private
    ```
-
-## Architecture
-
-The new v2.0 architecture follows modern Python best practices with clear separation of concerns:
-
-```
-ff_tracker/
-├── __init__.py          # Package initialization
-├── __main__.py          # Module entry point
-├── main.py              # CLI argument parsing and orchestration
-├── config.py            # Configuration and environment management
-├── exceptions.py        # Custom exception hierarchy
-├── models/              # Type-safe data models
-│   └── __init__.py      # GameResult, TeamStats, ChallengeResult, DivisionData
-├── services/            # Business logic services
-│   ├── __init__.py
-│   ├── espn_service.py  # ESPN API integration
-│   └── challenge_service.py  # Challenge calculation logic
-└── display/             # Output formatters
-    ├── __init__.py
-    ├── base.py          # Formatter protocol and base class
-    ├── console.py       # Terminal table output
-    ├── sheets.py        # Google Sheets TSV format
-    └── email.py         # Mobile-friendly HTML email
-```
-
-**Key Design Principles**:
-- **Type Safety**: Comprehensive type annotations using modern Python syntax
-- **Fail-Fast**: Clear error messages with no retry logic (as requested)
-- **Separation of Concerns**: Business logic, data access, and presentation are clearly separated
-- **Extensibility**: Easy to add new output formats or challenge calculations
-- **Modern Python**: Uses `from __future__ import annotations`, union syntax (`str | None`), and dataclasses
-# Analyze a single public league
-uv run ff-tracker 123456789
-
-# Analyze multiple divisions from .env file
-uv run ff-tracker --env
-
-# Get Google Sheets format for a private league
-uv run ff-tracker 987654321 --private --format sheets
-
-# Save multi-division results to file
-uv run ff-tracker --env --format sheets > season_results.tsv
-
-## Configuration
-
-### Multi-Division Setup (.env file)
-For analyzing multiple leagues as divisions, create a `.env` file:
-```bash
-# League IDs separated by commas
-LEAGUE_IDS=123456789,987654321,555444333
-
-# For private leagues, also add:
-ESPN_SWID={12345678-1234-1234-1234-123456789ABC}
-ESPN_S2=your-long-espn-s2-cookie-here%3D
-```
-
-### ESPN Authentication (Private Leagues Only)
-
-For private leagues, you need to get your ESPN authentication cookies:
-
-1. **Log into ESPN Fantasy Football** at [fantasy.espn.com](https://fantasy.espn.com)
-2. **Open browser developer tools** (F12 in most browsers)
-3. **Navigate to cookies**:
-   - Chrome/Edge: Application → Storage → Cookies → https://fantasy.espn.com
-   - Firefox: Storage → Cookies → https://fantasy.espn.com
-4. **Copy these two values**:
-   - `SWID` - Should look like `{12345678-1234-1234-1234-123456789ABC}`
-   - `espn_s2` - Long string ending with `%3D`
-5. **Add to .env file** as shown above
 
 ## Sample Output
 
@@ -342,6 +273,141 @@ Mobile-optimized HTML perfect for weekly email reports (use `--format email`):
 </html>
 ```
 
+### JSON Format
+
+Structured data format perfect for API integrations and custom processing (use `--format json`):
+
+```json
+{
+  "current_week": 7,
+  "divisions": [
+    {
+      "name": "Example Fantasy League Division",
+      "league_id": 1234567890,
+      "teams": [
+        {
+          "name": "Lightning Bolts",
+          "owner": "Team Owner A",
+          "points_for": 799.28,
+          "points_against": 716.78,
+          "wins": 4,
+          "losses": 2
+        },
+        {
+          "name": "Thunder Hawks",
+          "owner": "Team Owner B",
+          "points_for": 847.78,
+          "points_against": 830.22,
+          "wins": 3,
+          "losses": 3
+        },
+        {
+          "name": "Fire Dragons",
+          "owner": "Team Owner C",
+          "points_for": 675.84,
+          "points_against": 805.34,
+          "wins": 3,
+          "losses": 3
+        },
+        {
+          "name": "Storm Chasers",
+          "owner": "Team Owner D",
+          "points_for": 640.6,
+          "points_against": 757.46,
+          "wins": 2,
+          "losses": 4
+        },
+        {
+          "name": "Ice Wolves",
+          "owner": "Team Owner E",
+          "points_for": 780.16,
+          "points_against": 718.3,
+          "wins": 3,
+          "losses": 3
+        },
+        {
+          "name": "Steel Panthers",
+          "owner": "Team Owner F",
+          "points_for": 817.86,
+          "points_against": 773.24,
+          "wins": 3,
+          "losses": 3
+        },
+        {
+          "name": "Cosmic Eagles",
+          "owner": "Team Owner G",
+          "points_for": 784.98,
+          "points_against": 838.94,
+          "wins": 2,
+          "losses": 4
+        },
+        {
+          "name": "Shadow Hunters",
+          "owner": "Team Owner H",
+          "points_for": 776.5,
+          "points_against": 810.46,
+          "wins": 3,
+          "losses": 3
+        },
+        {
+          "name": "Flame Riders",
+          "owner": "Team Owner I",
+          "points_for": 785.4,
+          "points_against": 760.6,
+          "wins": 2,
+          "losses": 4
+        },
+        {
+          "name": "Victory Seekers",
+          "owner": "Team Owner J",
+          "points_for": 867.02,
+          "points_against": 764.08,
+          "wins": 5,
+          "losses": 1
+        }
+      ]
+    }
+  ],
+  "challenges": [
+    {
+      "name": "Most Points Overall",
+      "winner": "Victory Seekers",
+      "owner": "Team Owner J",
+      "division": "Example Fantasy League Division",
+      "description": "867.0 total points"
+    },
+    {
+      "name": "Most Points in One Game",
+      "winner": "Flame Riders",
+      "owner": "Team Owner I",
+      "division": "Example Fantasy League Division",
+      "description": "186.5 points (Week 2)"
+    },
+    {
+      "name": "Most Points in a Loss",
+      "winner": "Cosmic Eagles",
+      "owner": "Team Owner G",
+      "division": "Example Fantasy League Division",
+      "description": "157.6 points in loss (Week 5)"
+    },
+    {
+      "name": "Least Points in a Win",
+      "winner": "Steel Panthers",
+      "owner": "Team Owner F",
+      "division": "Example Fantasy League Division",
+      "description": "67.8 points in win (Week 7)"
+    },
+    {
+      "name": "Closest Victory",
+      "winner": "Shadow Hunters",
+      "owner": "Team Owner H",
+      "division": "Example Fantasy League Division",
+      "description": "Won by 0.4 points (Week 5)"
+    }
+  ]
+}
+```
+
 ## The 5 Season Challenges
 
 1. **Most Points Overall** - Team with highest total regular season points
@@ -419,7 +485,6 @@ The automated email includes:
   - Beautiful HTML formatting with the complete report
   - All standings tables and challenge results
   - Easy-to-read monospace formatting
-- **Attachment**: `weekly-report.tsv` - Google Sheets compatible format
 
 ### Customizing the Schedule
 
@@ -432,14 +497,6 @@ To change when reports are sent, edit `.github/workflows/weekly-report.yml` and 
 # Mondays at 8 AM ET: '0 12 * * 1'
 # Fridays at 5 PM ET: '0 21 * * 5'
 ```
-
-## Dependencies
-
-- `espn-api` - ESPN Fantasy Sports API wrapper
-- `tabulate` - Pretty table formatting
-- `python-dotenv` - Environment variable management
-
-**Installation**: Use `uv sync` (recommended) or `pip install -r requirements.txt` in a virtual environment.
 
 ## Contributing
 
