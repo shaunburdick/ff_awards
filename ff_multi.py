@@ -87,10 +87,11 @@ class DivisionData:
 class MultiDivisionAnalyzer:
     """Analyzes multiple fantasy football leagues as divisions"""
 
-    def __init__(self, league_ids: List[int], year: int = 2024, private: bool = False):
+    def __init__(self, league_ids: List[int], year: int = 2024, private: bool = False, quiet: bool = False):
         self.league_ids = league_ids
         self.year = year
         self.private = private
+        self.quiet = quiet
         self.divisions: List[DivisionData] = []
         self.all_teams: List[TeamStats] = []
         self.all_games: List[GameResult] = []
@@ -102,7 +103,8 @@ class MultiDivisionAnalyzer:
         success_count = 0
 
         for i, league_id in enumerate(self.league_ids):
-            print(f"\n🔍 Connecting to League {league_id}...")
+            if not self.quiet:
+                print(f"\n🔍 Connecting to League {league_id}...")
 
             try:
                 # Connect to league
@@ -111,7 +113,8 @@ class MultiDivisionAnalyzer:
                     s2 = os.getenv('ESPN_S2')
 
                     if not swid or not s2:
-                        print(f"❌ Error: Private league requires ESPN_SWID and ESPN_S2 in .env file")
+                        if not self.quiet:
+                            print(f"❌ Error: Private league requires ESPN_SWID and ESPN_S2 in .env file")
                         continue
 
                     league = League(league_id=league_id, year=self.year,
@@ -126,7 +129,8 @@ class MultiDivisionAnalyzer:
                 except:
                     league_name = f"Division {i+1}"
 
-                print(f"✅ Connected to: {league_name}")
+                if not self.quiet:
+                    print(f"✅ Connected to: {league_name}")
 
                 # Extract teams and games
                 teams = self._extract_teams(league, league_name)
@@ -146,18 +150,22 @@ class MultiDivisionAnalyzer:
                 self.all_games.extend(games)
 
                 success_count += 1
-                print(f"📊 Processed {len(teams)} teams, {len(games)} games")
+                if not self.quiet:
+                    print(f"📊 Processed {len(teams)} teams, {len(games)} games")
 
             except Exception as e:
-                print(f"❌ Error connecting to league {league_id}: {e}")
+                if not self.quiet:
+                    print(f"❌ Error connecting to league {league_id}: {e}")
                 continue
 
         if success_count == 0:
-            print("\n❌ Failed to connect to any leagues")
+            if not self.quiet:
+                print("\n❌ Failed to connect to any leagues")
             return False
 
-        print(f"\n✅ Successfully connected to {success_count}/{len(self.league_ids)} leagues")
-        print(f"📊 Total: {len(self.all_teams)} teams, {len(self.all_games)} games")
+        if not self.quiet:
+            print(f"\n✅ Successfully connected to {success_count}/{len(self.league_ids)} leagues")
+            print(f"📊 Total: {len(self.all_teams)} teams, {len(self.all_games)} games")
         return True
 
     def _extract_teams(self, league: Any, division_name: str) -> List[TeamStats]:
@@ -344,7 +352,8 @@ class MultiDivisionAnalyzer:
             # If current week appears incomplete, exclude it
             if not current_week_complete and max_week_candidate == current_week:
                 max_week = max_week_candidate - 1
-                print(f"  📅 Excluding Week {current_week} (appears incomplete)")
+                if not self.quiet:
+                    print(f"  📅 Excluding Week {current_week} (appears incomplete)")
             else:
                 max_week = max_week_candidate
 
@@ -532,10 +541,14 @@ class MultiDivisionAnalyzer:
 
         return results
 
-    def display_results(self, sheets_format: bool = False, output_file: Optional[str] = None) -> None:
+    def display_results(self, sheets_format: bool = False, email_html: bool = False, output_file: Optional[str] = None) -> None:
         """Display comprehensive results"""
         if sheets_format:
             self._output_sheets_format(output_file)
+            return
+
+        if email_html:
+            self._output_email_html()
             return
 
         print(f"\n🏈 Fantasy Football Multi-Division Challenge Tracker ({self.year})")
@@ -668,6 +681,212 @@ class MultiDivisionAnalyzer:
             print("=" * 70)
             print("💡 Copy the content above and paste directly into Google Sheets")
 
+    def _output_email_html(self) -> None:
+        """Output mobile-friendly HTML for email"""
+        challenges = self.calculate_overall_challenges()
+        top_teams = sorted(self.all_teams, key=lambda x: (x.wins, x.points_for), reverse=True)[:20]  # Top 20 like regular output
+
+        # Generate division standings HTML
+        divisions_html = ""
+        for division in self.divisions:
+            sorted_teams = sorted(division.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
+
+            divisions_html += f'''
+            <div class="division-section">
+              <div class="division-header">🏆 {division.name} STANDINGS</div>'''
+
+            for i, team in enumerate(sorted_teams, 1):
+                rank_class = "top-rank" if i <= 3 else "rank"
+                divisions_html += f'''
+              <div class="team-row">
+                <div class="{rank_class}">{i}</div>
+                <div class="team-info">
+                  <div class="team-name">{team.name}</div>
+                  <div class="team-owner">{team.owner}</div>
+                </div>
+                <div class="team-stats">{team.points_for:.1f} PF | {team.points_against:.1f} PA | {team.wins}-{team.losses}</div>
+              </div>'''
+
+            divisions_html += '</div>'
+
+        # Generate challenge items HTML
+        challenge_html = ""
+        challenge_icons = {
+            "Most Points Overall": "💰",
+            "Most Points in One Game": "🔥",
+            "Most Points in a Loss": "😤",
+            "Least Points in a Win": "🍀",
+            "Closest Victory": "⚡"
+        }
+
+        for challenge in challenges:
+            icon = challenge_icons.get(challenge.challenge_name, "🏆")
+            challenge_html += f'''
+            <div class="challenge-item">
+              <div class="challenge-title">{icon} {challenge.challenge_name}</div>
+              <div class="winner-info">{challenge.winner} ({challenge.owner}) from {challenge.division} - {challenge.description}</div>
+            </div>'''
+
+        # Generate overall top teams HTML
+        overall_teams_html = ""
+        for i, team in enumerate(top_teams, 1):
+            rank_class = "top-rank" if i <= 3 else "rank"
+            overall_teams_html += f'''
+            <div class="team-row">
+              <div class="{rank_class}">{i}</div>
+              <div class="team-info">
+                <div class="team-name">{team.name}</div>
+                <div class="team-owner">{team.owner} ({team.division})</div>
+              </div>
+              <div class="team-stats">{team.points_for:.1f} pts | {team.wins}-{team.losses}</div>
+            </div>'''
+
+        # Output complete HTML
+        html_output = f'''<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {{
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 10px;
+      background-color: #f8f9fa;
+    }}
+    .container {{
+      max-width: 100%;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }}
+    h2 {{
+      color: #2c3e50;
+      margin-top: 0;
+      font-size: 1.3em;
+    }}
+    .summary-section {{
+      background: #e8f4f8;
+      padding: 15px;
+      border-radius: 6px;
+      margin: 15px 0;
+      border-left: 4px solid #3498db;
+    }}
+    .challenge-item {{
+      background: #f0f8f0;
+      padding: 10px;
+      margin: 8px 0;
+      border-radius: 4px;
+      border-left: 3px solid #27ae60;
+    }}
+    .challenge-title {{
+      font-weight: bold;
+      color: #27ae60;
+      margin-bottom: 5px;
+    }}
+    .winner-info {{
+      color: #2c3e50;
+      font-size: 0.95em;
+    }}
+    .division-section {{
+      margin: 20px 0;
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 15px;
+      border: 1px solid #e1e5e9;
+    }}
+    .division-header {{
+      background: #3498db;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin: 0 0 15px 0;
+      font-weight: bold;
+      font-size: 1.1em;
+    }}
+    .team-row {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      margin: 3px 0;
+      background: #f8f9fa;
+      border-radius: 4px;
+      border: 1px solid #e1e5e9;
+    }}
+    .team-info {{
+      flex: 1;
+      min-width: 0;
+    }}
+    .team-name {{
+      font-weight: bold;
+      color: #2c3e50;
+      font-size: 0.9em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }}
+    .team-owner {{
+      color: #7f8c8d;
+      font-size: 0.8em;
+    }}
+    .team-stats {{
+      text-align: right;
+      font-size: 0.85em;
+      color: #34495e;
+      white-space: nowrap;
+    }}
+    .rank {{
+      background: #3498db;
+      color: white;
+      border-radius: 50%;
+      width: 25px;
+      height: 25px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8em;
+      font-weight: bold;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }}
+    .top-rank {{
+      background: #f1c40f;
+      color: #2c3e50;
+    }}
+    @media (max-width: 600px) {{
+      .container {{ padding: 10px; }}
+      h2 {{ font-size: 1.1em; }}
+      .team-row {{ flex-direction: column; align-items: flex-start; }}
+      .team-stats {{ text-align: left; margin-top: 5px; }}
+      .team-name {{ white-space: normal; }}
+    }}
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>🏈 Fantasy Football Multi-Division Challenge Tracker ({self.year})</h2>
+  <p><strong>📊 {len(self.divisions)} divisions, {len(self.all_teams)} teams total</strong></p>
+
+  {divisions_html}
+
+  <div class="summary-section">
+    <strong>🌟 OVERALL TOP TEAMS (Across All Divisions)</strong>
+  </div>
+  {overall_teams_html}
+
+  <div class="summary-section">
+    <strong>💰 OVERALL SEASON CHALLENGES</strong>
+  </div>
+  {challenge_html}
+
+  <p style="margin-top: 30px; text-align: center;"><small><em>Generated automatically by the FF Awards tracker</em></small></p>
+</div>
+</body>
+</html>'''
+
+        print(html_output)
+
 
 def parse_league_ids_from_env() -> List[int]:
     """Parse league IDs from environment variable"""
@@ -718,6 +937,8 @@ For private leagues, also add:
                        help="Use league IDs from LEAGUE_IDS in .env file")
     parser.add_argument("--sheets", action="store_true",
                        help="Output in Google Sheets compatible format (TSV)")
+    parser.add_argument("--email-html", action="store_true",
+                       help="Output mobile-friendly HTML for email (shows key highlights)")
     parser.add_argument("--output", type=str,
                        help="Save sheets output to file instead of printing to console")
 
@@ -735,18 +956,19 @@ For private leagues, also add:
         parser.print_help()
         sys.exit(1)
 
-    print("🏈 Fantasy Football Multi-Division Challenge Tracker")
-    print("=" * 60)
-    print(f"📅 Season: {args.year}")
-    print(f"📊 Analyzing {len(league_ids)} league(s): {league_ids}")
+    if not args.email_html:
+        print("🏈 Fantasy Football Multi-Division Challenge Tracker")
+        print("=" * 60)
+        print(f"📅 Season: {args.year}")
+        print(f"📊 Analyzing {len(league_ids)} league(s): {league_ids}")
 
     # Create analyzer and run
-    analyzer = MultiDivisionAnalyzer(league_ids, args.year, args.private)
+    analyzer = MultiDivisionAnalyzer(league_ids, args.year, args.private, quiet=args.email_html)
 
     if not analyzer.connect_and_analyze():
         sys.exit(1)
 
-    analyzer.display_results(sheets_format=args.sheets, output_file=args.output)
+    analyzer.display_results(sheets_format=args.sheets, email_html=args.email_html, output_file=args.output)
 
 
 if __name__ == "__main__":

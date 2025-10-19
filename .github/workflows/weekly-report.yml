@@ -65,13 +65,24 @@ jobs:
         echo "report_generated=true" >> $GITHUB_OUTPUT
 
     # Read report content for email body
-    - name: Read report content
-      id: read-report
+    - name: Generate mobile-friendly HTML email
+      id: generate-html
       if: steps.generate-report.outputs.report_generated == 'true'
       run: |
+        # Determine if private leagues are needed
+        if [ -n "${{ secrets.ESPN_SWID }}" ] && [ -n "${{ secrets.ESPN_S2 }}" ]; then
+          PRIVATE_FLAG="--private"
+        else
+          PRIVATE_FLAG=""
+        fi
+
+        # Generate mobile-friendly HTML email content
+        uv run ff-multi --env $PRIVATE_FLAG --email-html > email_content.html
+
+        # Read the generated HTML content
         {
-          echo "content<<EOF"
-          cat weekly-report.txt
+          echo "html_content<<EOF"
+          cat email_content.html
           echo "EOF"
         } >> $GITHUB_OUTPUT
 
@@ -88,23 +99,7 @@ jobs:
         username: ${{ secrets.SMTP_USERNAME }}
         password: ${{ secrets.SMTP_PASSWORD }}
         subject: "Weekly Fantasy Football Report - Week ${{ github.run_number }}"
-        html: |
-          <h2>🏈 Weekly Fantasy Football Challenge Update!</h2>
-          <p>Here's your latest fantasy football report with current standings and challenge leaders.</p>
-          <hr style="margin: 20px 0;">
-          <pre style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.4; white-space: pre-wrap; overflow-x: auto; border: 1px solid #e1e5e9;">
-          ${{ steps.read-report.outputs.content }}
-          </pre>
-          <hr style="margin: 20px 0;">
-          <p><strong>📊 This report includes:</strong></p>
-          <ul>
-            <li>Current standings for all divisions</li>
-            <li>Overall top performers across all leagues</li>
-            <li>Season challenge leaders</li>
-          </ul>
-          <p><strong>📁 Download spreadsheet version:</strong><br>
-          <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">Click here to download the TSV file</a> (go to "Artifacts" section)</p>
-          <p style="margin-top: 30px;"><small><em>Generated automatically by the FF Awards tracker</em></small></p>
+        html: ${{ steps.generate-html.outputs.html_content }}
 
     - name: Upload report artifacts
       if: always()
