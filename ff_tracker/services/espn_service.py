@@ -8,7 +8,11 @@ including authentication, data extraction, and error handling.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+# Import League type only for type checking to avoid runtime import issues
+if TYPE_CHECKING:
+    from espn_api.football import League
 
 from ..config import FFTrackerConfig
 from ..exceptions import ESPNAPIError, LeagueConnectionError, PrivateLeagueError
@@ -33,21 +37,9 @@ class ESPNService:
             config: Application configuration including credentials
         """
         self.config = config
-        self._espn_api_available = self._check_espn_api()
         self.current_week: int | None = None
 
-    def _check_espn_api(self) -> bool:
-        """Check if ESPN API library is available."""
-        try:
-            from espn_api.football import (
-                League,  # type: ignore # noqa: F401  # Import for availability test
-            )
-            return True
-        except ImportError:
-            logger.error("ESPN API library not available. Please install: pip install espn-api")
-            return False
-
-    def connect_to_league(self, league_id: int) -> Any:
+    def connect_to_league(self, league_id: int) -> League:
         """
         Connect to a specific ESPN league.
 
@@ -61,12 +53,6 @@ class ESPNService:
             LeagueConnectionError: If connection fails
             PrivateLeagueError: If private league credentials are invalid
         """
-        if not self._espn_api_available:
-            raise ESPNAPIError(
-                "ESPN API library not available. Please install: pip install espn-api",
-                league_id=league_id
-            )
-
         try:
             from espn_api.football import League
 
@@ -111,7 +97,7 @@ class ESPNService:
                     league_id=league_id
                 ) from e
 
-    def extract_teams(self, league: Any, division_name: str) -> list[TeamStats]:
+    def extract_teams(self, league: League, division_name: str) -> list[TeamStats]:
         """
         Extract team statistics from ESPN league.
 
@@ -281,7 +267,7 @@ class ESPNService:
 
     def extract_games(
         self,
-        league: Any,
+        league: League,
         division_name: str,
         max_week: int | None = None
     ) -> list[GameResult]:
@@ -339,7 +325,7 @@ class ESPNService:
                 f"Failed to extract games from {division_name}: {e}",
             ) from e
 
-    def _determine_max_week(self, league: Any, current_week: int, reg_season_count: int) -> int:
+    def _determine_max_week(self, league: League, current_week: int, reg_season_count: int) -> int:
         """
         Determine the maximum week to process based on current state.
 
@@ -368,7 +354,7 @@ class ESPNService:
 
         return max_week_candidate
 
-    def _extract_week_games(self, league: Any, week: int, division_name: str) -> list[GameResult]:
+    def _extract_week_games(self, league: League, week: int, division_name: str) -> list[GameResult]:
         """Extract games for a specific week."""
         games: list[GameResult] = []
 
@@ -494,8 +480,6 @@ class ESPNService:
 
     def __enter__(self) -> ESPNService:
         """Context manager entry."""
-        if not self._espn_api_available:
-            raise ESPNAPIError("ESPN API library not available")
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:

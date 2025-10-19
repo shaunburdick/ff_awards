@@ -16,7 +16,7 @@ import logging
 import sys
 from pathlib import Path
 
-from .display import ConsoleFormatter, EmailFormatter, SheetsFormatter
+from .display import BaseFormatter, ConsoleFormatter, EmailFormatter, SheetsFormatter
 from .exceptions import FFTrackerError
 from .services import ChallengeCalculator, ESPNService
 
@@ -123,7 +123,7 @@ def setup_logging(verbose: int = 0) -> None:
         logging.getLogger('espn_api').setLevel(logging.WARNING)
 
 
-def create_formatter(format_name: str, year: int):
+def create_formatter(format_name: str, year: int) -> BaseFormatter:
     """Create formatter instance based on format name."""
     if format_name == "console":
         return ConsoleFormatter(year)
