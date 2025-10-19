@@ -22,7 +22,6 @@ Repository = "https://github.com/shaunburdick/ff_awards"
 Issues = "https://github.com/shaunburdick/ff_awards/issues"
 
 [project.scripts]
-ff-tracker = "ff_tracker:main"
 ff-multi = "ff_multi:main"
 
 [build-system]

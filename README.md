@@ -59,8 +59,8 @@ A command-line tool to analyze ESPN Fantasy Football leagues and track 5 specifi
 3. **Run the tools**
    ```bash
    # uv automatically manages the virtual environment
-   uv run ff_tracker. <league_id>
-   uv run ff_multi --env
+   uv run ff-multi <league_id>         # Single league
+   uv run ff-multi --env               # Multiple leagues from .env
    ```
 
 ### Option 2: Traditional Installation with Virtual Environment
@@ -93,8 +93,8 @@ If you prefer the traditional approach or can't install uv:
 4. **Run the tools**
    ```bash
    # Make sure virtual environment is activated first
-   python ff_tracker.py <league_id>
-   python ff_multi.py --env
+   python ff_multi.py <league_id>      # Single league
+   python ff_multi.py --env            # Multiple leagues from .env
    ```
 
 ### Authentication Setup (All Methods)
@@ -107,50 +107,41 @@ cp .env.example .env
 
 ## Usage
 
-### Single League Analysis
+### League Analysis
 ```bash
-# Basic usage (public league)
-python ff_tracker.py <league_id>
+# Single league (public)
+python ff_multi.py <league_id>
 
-# Private league
-python ff_tracker.py <league_id> --private
+# Single private league
+python ff_multi.py <league_id> --private
 
-# Specific year
-python ff_tracker.py <league_id> --year 2023
-
-# Google Sheets format output
-python ff_tracker.py <league_id> --sheets
-
-# Save Google Sheets format to file
-python ff_tracker.py <league_id> --sheets --output results.tsv
-```
-
-### Multi-Division Analysis
-```bash
 # Multiple leagues as divisions
 python ff_multi.py <league_id1> <league_id2> <league_id3>
 
 # Use league IDs from .env file
 python ff_multi.py --env
 
-# Private leagues with Google Sheets output
-python ff_multi.py --env --private --sheets
+# Specific year
+python ff_multi.py <league_id> --year 2023
 
-# Save multi-division results to file
-python ff_multi.py --env --sheets --output multi_results.tsv
+# Google Sheets format output
+python ff_multi.py <league_id> --sheets
+
+# Save Google Sheets format to file
+python ff_multi.py <league_id> --sheets --output results.tsv
 ```
 
 ## Examples
 
 ```bash
 # Analyze a single public league
-python ff_tracker.py 123456789
+python ff_multi.py 123456789
 
 # Analyze multiple divisions from .env file
 python ff_multi.py --env
 
 # Get Google Sheets format for a private league
-python ff_tracker.py 987654321 --private --sheets
+python ff_multi.py 987654321 --private --sheets
 
 # Save multi-division results to file
 python ff_multi.py --env --sheets --output season_results.tsv
@@ -246,17 +237,17 @@ Most Points in One Game Fire Dragons    Team Owner D    Sample Fantasy League Di
 
 ## Google Sheets Export
 
-Both tools support exporting results in a format that can be easily copied into Google Sheets:
+The tool supports exporting results in a format that can be easily copied into Google Sheets:
 
 **Console Output (for copy-paste):**
 ```bash
-python ff_tracker.py 123456789 --sheets
-python ff_multi.py --env --sheets
+python ff_multi.py 123456789 --sheets        # Single league
+python ff_multi.py --env --sheets            # Multiple leagues
 ```
 
 **File Output (save to file first):**
 ```bash
-python ff_tracker.py 123456789 --sheets --output results.tsv
+python ff_multi.py 123456789 --sheets --output results.tsv
 python ff_multi.py --env --sheets --output multi_results.tsv
 ```
 

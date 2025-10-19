@@ -320,8 +320,35 @@ class MultiDivisionAnalyzer:
             if settings:
                 reg_season_count = getattr(settings, 'reg_season_count', 14)
 
-            # Process each week
-            max_week = min(reg_season_count, current_week)
+            # Determine max week to process
+            # Exclude current week if it appears to be in progress (has very low scores)
+            max_week_candidate = min(reg_season_count, current_week)
+
+            # Check if current week seems incomplete by looking for suspiciously low scores
+            current_week_complete = True
+            if current_week <= reg_season_count:
+                try:
+                    current_box_scores = league.box_scores(current_week)
+                    if current_box_scores:
+                        for box_score in current_box_scores:
+                            home_score = float(getattr(box_score, 'home_score', 0.0))
+                            away_score = float(getattr(box_score, 'away_score', 0.0))
+                            # If either team has very low score, week is likely incomplete
+                            if (home_score > 0 and home_score < 30) or (away_score > 0 and away_score < 30):
+                                current_week_complete = False
+                                break
+                except:
+                    # If we can't check, assume it's incomplete
+                    current_week_complete = False
+
+            # If current week appears incomplete, exclude it
+            if not current_week_complete and max_week_candidate == current_week:
+                max_week = max_week_candidate - 1
+                print(f"  📅 Excluding Week {current_week} (appears incomplete)")
+            else:
+                max_week = max_week_candidate
+
+            # Process each completed week
 
             for week in range(1, max_week + 1):
                 try:
