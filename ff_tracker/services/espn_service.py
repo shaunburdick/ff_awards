@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 # Import League type only for type checking to avoid runtime import issues
 if TYPE_CHECKING:
-    from espn_api.football import League
+    from espn_api.football import League, Team
 
 from ..config import FFTrackerConfig
 from ..exceptions import ESPNAPIError, LeagueConnectionError, PrivateLeagueError
@@ -117,23 +117,19 @@ class ESPNService:
             logger.debug(f"Extracting teams from {division_name}")
 
             for team in league.teams:
-                # Extract team name with fallbacks
-                team_name = (
-                    getattr(team, 'team_name', None) or
-                    getattr(team, 'team_abbrev', None) or
-                    f"Team {getattr(team, 'team_id', 'Unknown')}"
-                )
+                # Use team name with fallbacks (team_name is primary, team_abbrev as backup)
+                team_name = team.team_name or team.team_abbrev or f"Team {team.team_id}"
 
-                # Extract owner name with comprehensive logic
+                # Extract owner name
                 owner = self._extract_owner_name(team)
 
                 teams.append(TeamStats(
                     name=team_name,
                     owner=owner,
-                    points_for=float(getattr(team, 'points_for', 0.0)),
-                    points_against=float(getattr(team, 'points_against', 0.0)),
-                    wins=int(getattr(team, 'wins', 0)),
-                    losses=int(getattr(team, 'losses', 0)),
+                    points_for=team.points_for,
+                    points_against=team.points_against,
+                    wins=team.wins,
+                    losses=team.losses,
                     division=division_name
                 ))
 
@@ -145,12 +141,12 @@ class ESPNService:
                 f"Failed to extract teams from {division_name}: {e}",
             ) from e
 
-    def _extract_owner_name(self, team: Any) -> str:
+    def _extract_owner_name(self, team: Team) -> str:
         """
-        Extract owner name from team object with fallbacks.
+        Extract owner name from team object.
 
-        This method implements the complex owner name extraction logic
-        from the original script, prioritizing real names over usernames.
+        Uses the typed Team.owners attribute to get the first owner's name,
+        prioritizing real names over usernames.
 
         Args:
             team: ESPN team object
@@ -158,95 +154,36 @@ class ESPNService:
         Returns:
             Owner name string
         """
-        owner = "Unknown Owner"
-
         try:
-            # Try multiple owner attributes
-            owner_obj = getattr(team, 'owner', None) or getattr(team, 'owners', None)
+            # ESPN API provides owners as list[dict[str, Any]]
+            if not team.owners or len(team.owners) == 0:
+                return "Unknown Owner"
 
-            if not owner_obj:
-                return owner
+            # Get first owner (teams typically have one owner)
+            owner_data = team.owners[0]
 
-            if isinstance(owner_obj, str):
-                return owner_obj
+            # Extract name fields with safe defaults
+            first_name = str(owner_data.get('firstName', '')).strip()
+            last_name = str(owner_data.get('lastName', '')).strip()
+            display_name = str(owner_data.get('displayName', '')).strip()
 
-            # Handle dict-like objects with get method
-            if hasattr(owner_obj, 'get') and callable(owner_obj.get):
-                first_name = str(owner_obj.get('firstName', '')).strip()
-                last_name = str(owner_obj.get('lastName', '')).strip()
-                display_name = str(owner_obj.get('displayName', '')).strip()
+            # Prefer first/last name combination over display name
+            if first_name and last_name:
+                return f"{first_name} {last_name}"
+            elif first_name:
+                return first_name
+            elif last_name:
+                return last_name
+            elif display_name and not self._looks_like_username(display_name):
+                return display_name
+            elif display_name:
+                return display_name
+            else:
+                return "Unknown Owner"
 
-                # Prefer first/last name combination over display name
-                if first_name and last_name:
-                    return f"{first_name} {last_name}"
-                elif first_name:
-                    return first_name
-                elif last_name:
-                    return last_name
-                elif display_name and not self._looks_like_username(display_name):
-                    return display_name
-                elif display_name:
-                    return display_name
-
-            # Handle list-like objects
-            elif hasattr(owner_obj, '__len__') and len(owner_obj) > 0:
-                first_owner = owner_obj[0]
-                if hasattr(first_owner, 'get') and callable(first_owner.get):
-                    first_name = str(first_owner.get('firstName', '')).strip()
-                    last_name = str(first_owner.get('lastName', '')).strip()
-                    display_name = str(first_owner.get('displayName', '')).strip()
-
-                    if first_name and last_name:
-                        return f"{first_name} {last_name}"
-                    elif first_name:
-                        return first_name
-                    elif last_name:
-                        return last_name
-                    elif display_name:
-                        return display_name
-
-                return str(first_owner)
-
-            # Handle objects with direct attributes
-            elif hasattr(owner_obj, 'firstName') or hasattr(owner_obj, 'lastName'):
-                first_name = str(getattr(owner_obj, 'firstName', '')).strip()
-                last_name = str(getattr(owner_obj, 'lastName', '')).strip()
-                display_name = str(getattr(owner_obj, 'displayName', '')).strip()
-
-                if first_name and last_name:
-                    return f"{first_name} {last_name}"
-                elif first_name:
-                    return first_name
-                elif last_name:
-                    return last_name
-                elif display_name:
-                    return display_name
-
-            # Handle objects with __dict__
-            elif hasattr(owner_obj, '__dict__'):
-                attrs = owner_obj.__dict__
-                first_name = str(attrs.get('firstName', '')).strip()
-                last_name = str(attrs.get('lastName', '')).strip()
-                display_name = str(attrs.get('displayName', '')).strip()
-
-                if first_name and last_name:
-                    return f"{first_name} {last_name}"
-                elif first_name:
-                    return first_name
-                elif last_name:
-                    return last_name
-                elif display_name:
-                    return display_name
-
-            # Final fallback
-            owner_str = str(owner_obj)
-            if owner_str and owner_str != 'None':
-                return owner_str
-
-        except Exception:
-            logger.warning("Error extracting owner name from team, using fallback")
-
-        return owner
+        except Exception as e:
+            logger.warning(f"Error extracting owner name from team: {e}")
+            return "Unknown Owner"
 
     def _looks_like_username(self, name: str) -> bool:
         """Check if a name looks like a username rather than a real name."""
@@ -289,18 +226,15 @@ class ESPNService:
 
         try:
             # Determine week range to process
-            current_week = getattr(league, 'current_week', 1)
+            current_week = league.current_week
 
             # Store current week from first league processed (for display purposes)
             if self.current_week is None:
                 self.current_week = current_week
                 logger.info(f"Set current week to {current_week} from {division_name}")
 
-            settings = getattr(league, 'settings', None)
-            reg_season_count = 14  # Default fallback
-
-            if settings:
-                reg_season_count = getattr(settings, 'reg_season_count', 14)
+            # Get regular season count from league settings
+            reg_season_count = league.settings.reg_season_count
 
             # Auto-detect max week if not provided
             if max_week is None:
@@ -340,8 +274,8 @@ class ESPNService:
                 current_box_scores = league.box_scores(current_week)
                 if current_box_scores:
                     for box_score in current_box_scores:
-                        home_score = float(getattr(box_score, 'home_score', 0.0))
-                        away_score = float(getattr(box_score, 'away_score', 0.0))
+                        home_score = box_score.home_score
+                        away_score = box_score.away_score
 
                         # If either team has very low score, week is likely incomplete
                         if (home_score > 0 and home_score < 30) or (away_score > 0 and away_score < 30):
@@ -365,23 +299,17 @@ class ESPNService:
 
             for box_score in box_scores:
                 try:
-                    home_team = getattr(box_score, 'home_team', None)
-                    away_team = getattr(box_score, 'away_team', None)
-                    home_score = float(getattr(box_score, 'home_score', 0.0))
-                    away_score = float(getattr(box_score, 'away_score', 0.0))
+                    home_team = box_score.home_team
+                    away_team = box_score.away_team
+                    home_score = box_score.home_score
+                    away_score = box_score.away_score
 
                     if not home_team or not away_team or home_score <= 0 or away_score <= 0:
                         continue
 
-                    # Get team names
-                    home_name = (
-                        getattr(home_team, 'team_name', None) or
-                        f"Team {getattr(home_team, 'team_id', 'Unknown')}"
-                    )
-                    away_name = (
-                        getattr(away_team, 'team_name', None) or
-                        f"Team {getattr(away_team, 'team_id', 'Unknown')}"
-                    )
+                    # Get team names with fallbacks
+                    home_name = home_team.team_name or f"Team {home_team.team_id}"
+                    away_name = away_team.team_name or f"Team {away_team.team_id}"
 
                     margin = abs(home_score - away_score)
 
@@ -434,12 +362,8 @@ class ESPNService:
         """
         league = self.connect_to_league(league_id)
 
-        # Determine league name
-        try:
-            settings = getattr(league, 'settings', None)
-            league_name = getattr(settings, 'name', f"League {league_id}") if settings else f"League {league_id}"
-        except Exception:
-            league_name = f"League {league_id}"
+        # Get league name from settings
+        league_name = league.settings.name or f"League {league_id}"
 
         logger.info(f"Loading data for {league_name}")
 
