@@ -68,10 +68,10 @@ def detect_fantasy_year(override_year: Optional[int] = None) -> int:
 - **Snake Case**: `override_year` vs `overrideYear`
 
 **✅ Success Criteria:**
-- [ ] Function correctly detects fantasy year based on current date
-- [ ] Proper type hints throughout
-- [ ] Good docstring explaining the logic
-- [ ] Integration with existing config system
+- [X] Function correctly detects fantasy year based on current date
+- [X] Proper type hints throughout
+- [X] Good docstring explaining the logic
+- [X] Integration with existing config system
 
 ---
 
@@ -512,7 +512,7 @@ class PluginLoader:
 ## Progress Tracking 📊
 
 ### Phase 1: Fundamentals ✅
-- [ ] Current Week Detection
+- [X] Current Week Detection
 - [ ] Enhanced Username Detection
 - [ ] JSON Export Formatter
 

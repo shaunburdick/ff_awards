@@ -144,9 +144,8 @@ def create_config(
     else:
         raise ConfigurationError("League IDs must be provided via --env flag or as arguments")
 
-    # Determine year (could be enhanced to auto-detect current fantasy year)
-    import datetime
-    resolved_year = year if year is not None else datetime.datetime.now().year
+    # Determine year
+    resolved_year = detect_fantasy_year() if year is None else year
 
     # Load ESPN credentials if needed
     espn_credentials = load_espn_credentials() if private else None
@@ -157,3 +156,15 @@ def create_config(
         private=private,
         espn_credentials=espn_credentials
     )
+
+def detect_fantasy_year() -> int:
+    """
+    Detect the current fantasy football year.
+
+    Fantasy seasons run from August to December, so:
+    - If the current month is August (8) or later, return the current year.
+    - If the current month is before August, return the previous year.
+    """
+    import datetime
+    now = datetime.datetime.now()
+    return now.year if now.month >= 8 else now.year - 1
