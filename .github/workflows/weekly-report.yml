@@ -1,0 +1,117 @@
+name: Weekly Fantasy Football Report
+
+on:
+  schedule:
+    # Run every Tuesday at 9:00 AM ET (13:00 UTC)
+    # During daylight saving time (March-November), ET is UTC-4, so 9 AM ET = 13:00 UTC
+    # During standard time (November-March), ET is UTC-5, so 9 AM ET = 14:00 UTC
+    # Using 13:00 UTC as it covers most of the fantasy season (DST period)
+    - cron: '0 13 * * 2'
+
+  # Allow manual triggering for testing
+  workflow_dispatch:
+
+env:
+  PYTHONUNBUFFERED: 1
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Install dependencies
+      run: uv sync
+
+    - name: Create .env file from secrets
+      run: |
+        echo "LEAGUE_IDS=${{ secrets.LEAGUE_IDS }}" > .env
+        if [ -n "${{ secrets.ESPN_SWID }}" ]; then
+          echo "ESPN_SWID=${{ secrets.ESPN_SWID }}" >> .env
+        fi
+        if [ -n "${{ secrets.ESPN_S2 }}" ]; then
+          echo "ESPN_S2=${{ secrets.ESPN_S2 }}" >> .env
+        fi
+
+    - name: Generate fantasy football report
+      id: generate-report
+      run: |
+        # Determine if private leagues are needed
+        if [ -n "${{ secrets.ESPN_SWID }}" ] && [ -n "${{ secrets.ESPN_S2 }}" ]; then
+          PRIVATE_FLAG="--private"
+        else
+          PRIVATE_FLAG=""
+        fi
+
+        # Generate the report and save to file
+        uv run ff-multi --env $PRIVATE_FLAG --sheets --output weekly-report.tsv
+
+        # Also capture the console output for email body
+        uv run ff-multi --env $PRIVATE_FLAG > weekly-report.txt
+
+        # Set outputs for the email step
+        echo "report_generated=true" >> $GITHUB_OUTPUT
+
+    # Read report content for email body
+    - name: Read report content
+      id: read-report
+      if: steps.generate-report.outputs.report_generated == 'true'
+      run: |
+        {
+          echo "content<<EOF"
+          cat weekly-report.txt
+          echo "EOF"
+        } >> $GITHUB_OUTPUT
+
+    # Try second most popular email action to bypass obfuscation issues
+    - name: Send email report
+      if: steps.generate-report.outputs.report_generated == 'true'
+      uses: hilarion5/send-mail@v1
+      with:
+        smtp-server: ${{ secrets.SMTP_SERVER }}
+        smtp-port: ${{ secrets.SMTP_PORT || '2525' }}
+        smtp-secure: ${{ secrets.SMTP_SECURE || 'false' }}
+        from-email: ${{ secrets.EMAIL_FROM }}
+        to-email: ${{ secrets.EMAIL_RECIPIENTS }}
+        username: ${{ secrets.SMTP_USERNAME }}
+        password: ${{ secrets.SMTP_PASSWORD }}
+        subject: "Weekly Fantasy Football Report - Week ${{ github.run_number }}"
+        html: |
+          <h2>🏈 Weekly Fantasy Football Challenge Update!</h2>
+          <p>Here's your latest fantasy football report with current standings and challenge leaders.</p>
+          <hr style="margin: 20px 0;">
+          <pre style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.4; white-space: pre-wrap; overflow-x: auto; border: 1px solid #e1e5e9;">
+          ${{ steps.read-report.outputs.content }}
+          </pre>
+          <hr style="margin: 20px 0;">
+          <p><strong>📊 This report includes:</strong></p>
+          <ul>
+            <li>Current standings for all divisions</li>
+            <li>Overall top performers across all leagues</li>
+            <li>Season challenge leaders ($30 each)</li>
+          </ul>
+          <p><strong>📁 Download spreadsheet version:</strong><br>
+          <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">Click here to download the TSV file</a> (go to "Artifacts" section)</p>
+          <p style="margin-top: 30px;"><small><em>Generated automatically by the FF Awards tracker</em></small></p>
+
+    - name: Upload report artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: weekly-report-${{ github.run_number }}
+        path: |
+          weekly-report.txt
+          weekly-report.tsv
+        retention-days: 30

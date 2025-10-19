@@ -2,20 +2,24 @@
 """
 Fantasy Football Challenge Tracker
 
-A simple CLI tool to track 5 specific fantasy football challenges for cash payouts.
+A CLI tool to track 5 specific fantasy football challenges across multiple divisions.
 
 Usage:
-    python ff_tracker.py <league_id> [--year YEAR] [--private]
+    python ff_tracker.py <league_id> [league_id2 ...] [--year YEAR] [--private]
+    python ff_tracker.py --env [--year YEAR] [--private]
 
 Examples:
-    # Public league
+    # Single public league
     python ff_tracker.py 123456789
 
-    # Private league (requires .env file with ESPN_SWID and ESPN_S2)
-    python ff_tracker.py 123456789 --private
+    # Multiple leagues (divisions)
+    python ff_tracker.py 123456789 987654321 555444333
 
-    # Specific year
-    python ff_tracker.py 123456789 --year 2023
+    # Use league IDs from .env file
+    python ff_tracker.py --env
+
+    # Private leagues (requires .env file with ESPN_SWID and ESPN_S2)
+    python ff_tracker.py 123456789 --private
 """
 
 import argparse
@@ -65,17 +69,40 @@ class TeamStats:
     points_against: float
     wins: int
     losses: int
+    division: str  # Division/league name
+
+
+@dataclass
+class DivisionData:
+    """Container for division (league) data"""
+    league_id: int
+    name: str
+    teams: List[TeamStats]
+    games: List[GameResult]
 
 
 class FantasyLeagueAnalyzer:
     """Analyzes fantasy football league data for challenges"""
 
-    def __init__(self, league_id: int, year: int = 2024, private: bool = False):
+    def __init__(self, league_id: int, year: int = 2024, private: bool = False, division_name: str = ""):
         self.league_id = league_id
         self.year = year
         self.private = private
+        self.division_name = division_name or f"League {league_id}"
         self.league: Optional[Any] = None
         self.game_results: List[GameResult] = []
+
+
+class MultiDivisionAnalyzer:
+    """Analyzes multiple fantasy football leagues as divisions"""
+
+    def __init__(self, league_ids: List[int], year: int = 2024, private: bool = False):
+        self.league_ids = league_ids
+        self.year = year
+        self.private = private
+        self.divisions: List[DivisionData] = []
+        self.all_teams: List[TeamStats] = []
+        self.all_games: List[GameResult] = []
 
     def connect_to_league(self) -> bool:
         """Connect to ESPN Fantasy Football league"""
@@ -141,16 +168,21 @@ class FantasyLeagueAnalyzer:
                         # Method 1: Direct string
                         if isinstance(owner_obj, str):
                             owner = owner_obj
-                        # Method 2: Dict-like with get method
+                        # Method 2: Dict-like with get method - PRIORITIZE REAL NAMES
                         elif hasattr(owner_obj, 'get') and callable(owner_obj.get):
-                            display_name = owner_obj.get('displayName', '')
-                            first_name = owner_obj.get('firstName', '')
-                            last_name = owner_obj.get('lastName', '')
+                            first_name = str(owner_obj.get('firstName', '')).strip()
+                            last_name = str(owner_obj.get('lastName', '')).strip()
+                            display_name = str(owner_obj.get('displayName', '')).strip()
 
-                            if display_name:
+                            # Prefer first/last name combination over display name
+                            if first_name and last_name:
+                                owner = f"{first_name} {last_name}"
+                            elif first_name:
+                                owner = first_name
+                            elif last_name:
+                                owner = last_name
+                            elif display_name:
                                 owner = display_name
-                            elif first_name or last_name:
-                                owner = f"{first_name} {last_name}".strip()
                         # Method 3: List-like objects
                         elif hasattr(owner_obj, '__len__') and len(owner_obj) > 0:
                             first_owner = owner_obj[0]
@@ -206,13 +238,14 @@ class FantasyLeagueAnalyzer:
                     points_for=float(getattr(team, 'points_for', 0.0)),
                     points_against=float(getattr(team, 'points_against', 0.0)),
                     wins=int(getattr(team, 'wins', 0)),
-                    losses=int(getattr(team, 'losses', 0))
+                    losses=int(getattr(team, 'losses', 0)),
+                    division=self.division_name
                 ))
 
         except Exception as e:
             print(f"Warning: Error getting team stats: {e}")
 
-        return sorted(stats, key=lambda x: x.points_for, reverse=True)
+        return sorted(stats, key=lambda x: (x.wins, x.points_for), reverse=True)
 
     def extract_game_results(self) -> None:
         """Extract individual game results from league data"""
@@ -391,10 +424,14 @@ class FantasyLeagueAnalyzer:
 
         return results
 
-    def display_results(self) -> None:
+    def display_results(self, sheets_format: bool = False, output_file: Optional[str] = None) -> None:
         """Display formatted results"""
         if not self.league:
             print("Error: Not connected to league")
+            return
+
+        if sheets_format:
+            self._output_sheets_format(output_file)
             return
 
         # Display league info
@@ -449,6 +486,72 @@ class FantasyLeagueAnalyzer:
             else:
                 print("⚠️  Game data: Limited - some challenges may be incomplete")
 
+    def _output_sheets_format(self, output_file: Optional[str] = None) -> None:
+        """Output results in Google Sheets compatible TSV format"""
+        if not self.league:
+            print("Error: Not connected to league")
+            return
+
+        output_lines = []
+
+        # Header
+        try:
+            settings = getattr(self.league, 'settings', None)
+            league_name = getattr(settings, 'name', f"League {self.league_id}") if settings else f"League {self.league_id}"
+            output_lines.append(f"{league_name} ({self.year})")
+        except Exception:
+            output_lines.append(f"League {self.league_id} ({self.year})")
+
+        output_lines.append("")
+
+        # Team standings
+        team_stats = self.get_team_stats()
+        if team_stats:
+            output_lines.append("LEAGUE STANDINGS")
+            output_lines.append("Rank\tTeam\tOwner\tPoints For\tRecord")
+
+            for i, team in enumerate(team_stats, 1):
+                output_lines.append(f"{i}\t{team.name}\t{team.owner}\t{team.points_for:.1f}\t{team.wins}-{team.losses}")
+
+            output_lines.append("")
+
+        # Challenge results
+        challenges = self.calculate_challenges()
+        if challenges:
+            output_lines.append("SEASON CHALLENGES ($30 Each)")
+            output_lines.append("Challenge\tWinner\tValue\tDetails")
+
+            for challenge in challenges:
+                output_lines.append(f"{challenge.challenge_name}\t{challenge.winner}\t{challenge.value}\t{challenge.description}")
+
+            total_payout = len([c for c in challenges if c.winner != "Data Unavailable" and c.winner != "No losses found" and c.winner != "No wins found"]) * 30
+            output_lines.append("")
+            output_lines.append(f"Total Payout Pool: ${total_payout}")
+
+            output_lines.append("")
+            if self.game_results:
+                output_lines.append(f"Game data: {len(self.game_results)} individual results processed")
+            else:
+                output_lines.append("Game data: Limited - some challenges may be incomplete")
+
+        # Output to file or console
+        output_text = "\n".join(output_lines)
+
+        if output_file:
+            try:
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    f.write(output_text)
+                print(f"✅ Google Sheets format saved to: {output_file}")
+                print("💡 You can now copy the contents of this file and paste directly into Google Sheets")
+            except Exception as e:
+                print(f"❌ Error writing to file {output_file}: {e}")
+        else:
+            print("📋 GOOGLE SHEETS FORMAT (Copy and paste into Google Sheets)")
+            print("=" * 70)
+            print(output_text)
+            print("=" * 70)
+            print("💡 Copy the content above and paste directly into Google Sheets")
+
 
 def main() -> None:
     """Main CLI entry point"""
@@ -472,7 +575,11 @@ For private leagues, create a .env file with:
     parser.add_argument("--year", type=int, default=datetime.now().year,
                        help="Fantasy season year (default: current year)")
     parser.add_argument("--private", action="store_true",
-                       help="Private league (requires ESPN_SWID and ESPN_S2 in .env file)")
+                       help="Private leagues (requires ESPN_SWID and ESPN_S2 in .env file)")
+    parser.add_argument("--sheets", action="store_true",
+                       help="Output in Google Sheets compatible format (TSV)")
+    parser.add_argument("--output", type=str,
+                       help="Save sheets output to file instead of printing to console")
 
     args = parser.parse_args()
 
@@ -491,7 +598,7 @@ For private leagues, create a .env file with:
         sys.exit(1)
 
     print("✅ Successfully connected to league!")
-    analyzer.display_results()
+    analyzer.display_results(sheets_format=args.sheets, output_file=args.output)
 
 
 if __name__ == "__main__":
