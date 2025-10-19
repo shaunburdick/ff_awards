@@ -848,19 +848,33 @@ class MultiDivisionAnalyzer:
       background: #3498db;
       color: white;
       border-radius: 50%;
-      width: 25px;
-      height: 25px;
+      width: 28px;
+      height: 28px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.8em;
+      font-size: 0.85em;
       font-weight: bold;
       margin-right: 10px;
       flex-shrink: 0;
+      min-width: 28px;
     }}
     .top-rank {{
-      background: #f1c40f;
-      color: #2c3e50;
+      background: #f39c12;
+      color: white;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85em;
+      font-weight: bold;
+      margin-right: 10px;
+      flex-shrink: 0;
+      min-width: 28px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      border: 2px solid #e67e22;
     }}
     @media (max-width: 600px) {{
       .container {{ padding: 10px; }}
