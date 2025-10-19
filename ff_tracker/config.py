@@ -48,7 +48,7 @@ class FFTrackerConfig:
                 "Set ESPN_SWID and ESPN_S2 environment variables."
             )
 
-        if self.year < 2000 or self.year > 2030:
+        if self.year < 2000:
             raise ConfigurationError(f"Invalid year: {self.year}")
 
 
