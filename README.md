@@ -444,8 +444,8 @@ The automated email includes:
 
 To change when reports are sent, edit `.github/workflows/weekly-report.yml` and modify the cron schedule:
 ```yaml
-# Currently: Tuesdays at 9 AM ET (13:00 UTC)
-- cron: '0 13 * * 2'
+# Currently: Tuesdays at 6 AM ET (10:00 UTC)
+- cron: '0 10 * * 2'
 
 # Examples:
 # Mondays at 8 AM ET: '0 12 * * 1'

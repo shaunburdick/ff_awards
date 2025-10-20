@@ -2,11 +2,8 @@ name: Weekly Fantasy Football Report
 
 on:
   schedule:
-    # Run every Tuesday at 9:00 AM ET (13:00 UTC)
-    # During daylight saving time (March-November), ET is UTC-4, so 9 AM ET = 13:00 UTC
-    # During standard time (November-March), ET is UTC-5, so 9 AM ET = 14:00 UTC
-    # Using 13:00 UTC as it covers most of the fantasy season (DST period)
-    - cron: '0 13 * * 2'
+    # Run every Tuesday at 10:00 UTC (6am EDT or 5am EST)
+    - cron: '0 10 * * 2'
 
   # Allow manual triggering for testing
   workflow_dispatch:

@@ -237,39 +237,7 @@ uv run ff-tracker --help  # Test CLI
 ### For Documentation Maintenance
 
 #### Table of Contents (TOC) Generation
-The README.md Table of Contents should only show H2 (##) level headers for clean navigation:
-
-**✅ Correct TOC Format:**
-```markdown
-## Table of Contents
-
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Examples](#examples)
-- [Configuration](#configuration)
-- [Sample Output](#sample-output)
-- [The 5 Season Challenges](#the-5-season-challenges)
-- [Requirements](#requirements)
-- [Google Sheets Export](#google-sheets-export)
-- [Automated Weekly Reports (GitHub Actions)](#automated-weekly-reports-github-actions)
-- [Contributing](#contributing)
-- [License](#license)
-```
-
-**❌ Avoid Multi-Level TOCs:**
-- Do not include H3 (###) subsections in the TOC
-- Do not include self-referential links to the main title or TOC itself
-- Keep it simple and scannable - only major sections
-
-**TOC Regeneration Issue:**
-Many Markdown TOC generators automatically include all header levels and self-references. If using automated tools:
-1. Generate the full TOC first
-2. Manually edit to remove H3+ subsections and self-references
-3. Keep only the main H2 section links
-4. Test that all links work correctly
-
-This maintains a professional, clean documentation structure that's easy to navigate without being overwhelming.
+The README.md Table of Contents should only show H2 (##) level headers for clean navigation
 
 ## Success Criteria ✅ ALL MET
 - ✅ Tool connects to ESPN leagues successfully (single and multiple)
