@@ -148,7 +148,7 @@ class EmailFormatter(BaseFormatter):
 
         # Division standings
         for division in divisions:
-            html_content += f'<h2>{division.name} Standings</h2>\n'
+            html_content += f'<h2><a href="https://fantasy.espn.com/football/league?leagueId={division.league_id}" style="color: #34495e; text-decoration: none;">{division.name}</a> Standings</h2>\n'
             html_content += '<table>\n'
             html_content += '<tr><th>Rank</th><th>Team</th><th>Owner</th><th class="number">PF</th><th class="number">PA</th><th>Record</th></tr>\n'
 
@@ -164,8 +164,8 @@ class EmailFormatter(BaseFormatter):
                     f'<td>{i}</td>'
                     f'<td>{self._escape_html(team_name)}</td>'
                     f'<td>{self._escape_html(team.owner)}</td>'
-                    f'<td class="number">{team.points_for:.1f}</td>'
-                    f'<td class="number">{team.points_against:.1f}</td>'
+                    f'<td class="number">{team.points_for:.2f}</td>'
+                    f'<td class="number">{team.points_against:.2f}</td>'
                     f'<td>{team.wins}-{team.losses}</td>'
                     f'</tr>\n'
                 )
@@ -192,8 +192,8 @@ class EmailFormatter(BaseFormatter):
                 f'<td>{self._escape_html(team_name)}</td>'
                 f'<td>{self._escape_html(team.owner)}</td>'
                 f'<td>{self._escape_html(team.division)}</td>'
-                f'<td class="number">{team.points_for:.1f}</td>'
-                f'<td class="number">{team.points_against:.1f}</td>'
+                f'<td class="number">{team.points_for:.2f}</td>'
+                f'<td class="number">{team.points_against:.2f}</td>'
                 f'<td>{team.wins}-{team.losses}</td>'
                 f'</tr>\n'
             )
