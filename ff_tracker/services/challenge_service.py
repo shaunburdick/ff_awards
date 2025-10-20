@@ -11,7 +11,7 @@ import logging
 from collections.abc import Sequence
 
 from ..exceptions import InsufficientDataError
-from ..models import ChallengeResult, DivisionData, GameResult, TeamStats
+from ..models import ChallengeResult, DivisionData, GameResult, Owner, TeamStats
 
 # Logger for this module
 logger = logging.getLogger(__name__)
@@ -93,12 +93,27 @@ class ChallengeCalculator:
             games.extend(division.games)
         return games
 
-    def _find_owner_for_team(self, team_name: str, division: str, all_teams: list[TeamStats]) -> str:
-        """Find the owner name for a given team name and division."""
+    def _find_owner_for_team(self, team_name: str, division: str, all_teams: list[TeamStats]) -> Owner:
+        """Find the owner for a given team name and division."""
         for team in all_teams:
             if team.name == team_name and team.division == division:
                 return team.owner
-        return "Unknown Owner"
+        # Return a default Owner object for unknown teams
+        return Owner(
+            display_name="Unknown Owner",
+            first_name="",
+            last_name="",
+            id="unknown"
+        )
+
+    def _create_na_owner(self) -> Owner:
+        """Create an Owner object for N/A cases."""
+        return Owner(
+            display_name="N/A",
+            first_name="",
+            last_name="",
+            id="na"
+        )
 
     def _calculate_most_points_overall(self, teams: list[TeamStats]) -> ChallengeResult:
         """Calculate Challenge 1: Most Points Overall."""
@@ -146,7 +161,7 @@ class ChallengeCalculator:
             return ChallengeResult(
                 challenge_name="Most Points in a Loss",
                 winner="No losses found",
-                owner="N/A",
+                owner=self._create_na_owner(),
                 division="N/A",
                 value="",
                 description="No losing games recorded yet"
@@ -173,7 +188,7 @@ class ChallengeCalculator:
             return ChallengeResult(
                 challenge_name="Least Points in a Win",
                 winner="No wins found",
-                owner="N/A",
+                owner=self._create_na_owner(),
                 division="N/A",
                 value="",
                 description="No winning games recorded yet"
@@ -200,7 +215,7 @@ class ChallengeCalculator:
             return ChallengeResult(
                 challenge_name="Closest Victory",
                 winner="No wins found",
-                owner="N/A",
+                owner=self._create_na_owner(),
                 division="N/A",
                 value="",
                 description="No winning games recorded yet"
@@ -231,7 +246,7 @@ class ChallengeCalculator:
             results.append(ChallengeResult(
                 challenge_name=challenge_name,
                 winner="Data Unavailable",
-                owner="N/A",
+                owner=self._create_na_owner(),
                 division="N/A",
                 value="",
                 description=description

@@ -13,10 +13,11 @@ from typing import TYPE_CHECKING, Any
 # Import League type only for type checking to avoid runtime import issues
 if TYPE_CHECKING:
     from espn_api.football import League, Team
+    from espn_api.football import Owner as ESPNOwner
 
 from ..config import FFTrackerConfig
 from ..exceptions import ESPNAPIError, LeagueConnectionError, PrivateLeagueError
-from ..models import DivisionData, GameResult, TeamStats
+from ..models import DivisionData, GameResult, Owner, TeamStats
 
 # Logger for this module
 logger = logging.getLogger(__name__)
@@ -149,8 +150,9 @@ class ESPNService:
                 # Use team name with fallbacks (team_name is primary, team_abbrev as backup)
                 team_name = team.team_name or team.team_abbrev or f"Team {team.team_id}"
 
-                # Extract owner name
-                owner = self._extract_owner_name(team)
+                # Extract owner object
+                owners = self.convert_team_owners(team)
+                owner = owners[0] if owners else self._create_unknown_owner()
 
                 temp_teams.append(TeamStats(
                     name=team_name,
@@ -247,6 +249,50 @@ class ESPNService:
         ]
 
         return any(username_indicators)
+
+    def _create_unknown_owner(self) -> Owner:
+        """Create an Owner object for when owner information is missing."""
+        return Owner(
+            display_name="Unknown Owner",
+            first_name="",
+            last_name="",
+            id="unknown"
+        )
+
+    def _convert_owner(self, raw_owner: ESPNOwner) -> Owner:
+        """
+        Convert raw ESPN owner data to typed Owner object.
+
+        Args:
+            raw_owner: Raw owner dict from ESPN API
+
+        Returns:
+            Typed Owner object
+        """
+        return Owner(
+            display_name=raw_owner.get('displayName', ''),
+            first_name=raw_owner.get('firstName', ''),
+            last_name=raw_owner.get('lastName', ''),
+            id=raw_owner.get('id', ''),
+        )
+
+    def convert_team_owners(self, team: Team) -> list[Owner]:
+        """
+        Convert team's raw owners data to typed Owner objects.
+
+        Args:
+            team: ESPN team object with raw owners data
+
+        Returns:
+            List of typed Owner objects
+        """
+        if not team.owners:
+            return []
+
+        return [
+            self._convert_owner(raw_owner)
+            for raw_owner in team.owners
+        ]
 
     def extract_games(
         self,

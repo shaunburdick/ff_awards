@@ -3,7 +3,22 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypedDict
+
+class NotificationSetting(TypedDict):
+    """ESPN notification setting structure from API."""
+    enabled: bool
+    id: str
+    type: str
+
+
+class Owner(TypedDict):
+    """ESPN owner structure from API."""
+    displayName: str
+    firstName: str
+    lastName: str
+    id: str
+    notificationSettings: list[NotificationSetting]
 
 class League:
     def __init__(
@@ -44,7 +59,7 @@ class Team:
     team_abbrev: str
     division_id: int
     division_name: str
-    owners: list[dict[str, Any]]
+    owners: list[Owner]
     wins: int
     losses: int
     ties: int

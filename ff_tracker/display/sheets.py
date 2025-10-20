@@ -49,7 +49,7 @@ class SheetsFormatter(BaseFormatter):
             for i, team in enumerate(sorted_teams, 1):
                 playoff_indicator = "Y" if team.in_playoff_position else "N"
                 output_lines.append(
-                    f"{i}\t{team.name}\t{team.owner}\t{team.points_for:.1f}\t"
+                    f"{i}\t{team.name}\t{team.owner.full_name}\t{team.points_for:.1f}\t"
                     f"{team.points_against:.1f}\t{team.wins}-{team.losses}\t{playoff_indicator}"
                 )
 
@@ -63,7 +63,7 @@ class SheetsFormatter(BaseFormatter):
         for i, team in enumerate(top_teams, 1):
             playoff_indicator = "Y" if team.in_playoff_position else "N"
             output_lines.append(
-                f"{i}\t{team.name}\t{team.owner}\t{team.division}\t{team.points_for:.1f}\t"
+                f"{i}\t{team.name}\t{team.owner.full_name}\t{team.division}\t{team.points_for:.1f}\t"
                 f"{team.points_against:.1f}\t{team.wins}-{team.losses}\t{playoff_indicator}"
             )
 
@@ -76,7 +76,7 @@ class SheetsFormatter(BaseFormatter):
 
             for challenge in challenges:
                 output_lines.append(
-                    f"{challenge.challenge_name}\t{challenge.winner}\t{challenge.owner}\t"
+                    f"{challenge.challenge_name}\t{challenge.winner}\t{challenge.owner.full_name}\t"
                     f"{challenge.division}\t{challenge.description}"
                 )
 

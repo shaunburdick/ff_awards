@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 
-from ..models import ChallengeResult, DivisionData
+from ..models import ChallengeResult, DivisionData, Owner
 from .base import BaseFormatter
 
 
@@ -19,6 +19,17 @@ class JsonFormatter(BaseFormatter):
         """
         super().__init__()
         self.year = year
+
+    def _serialize_owner(self, owner: Owner) -> dict[str, object]:
+        """Convert Owner object to dictionary for JSON serialization."""
+        return {
+            "display_name": owner.display_name,
+            "first_name": owner.first_name,
+            "last_name": owner.last_name,
+            "full_name": owner.full_name,
+            "id": owner.id,
+            "is_likely_username": owner.is_likely_username
+        }
 
     def format_output(
         self,
@@ -37,7 +48,7 @@ class JsonFormatter(BaseFormatter):
                     "teams": [
                         {
                             "name": team.name,
-                            "owner": team.owner,
+                            "owner": self._serialize_owner(team.owner),
                             "points_for": team.points_for,
                             "points_against": team.points_against,
                             "wins": team.wins,
@@ -53,7 +64,7 @@ class JsonFormatter(BaseFormatter):
                 {
                     "name": challenge.challenge_name,
                     "winner": challenge.winner,
-                    "owner": challenge.owner,
+                    "owner": self._serialize_owner(challenge.owner),
                     "division": challenge.division,
                     "description": challenge.description,
                 }

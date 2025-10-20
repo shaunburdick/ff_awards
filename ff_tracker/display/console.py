@@ -87,7 +87,7 @@ class ConsoleFormatter(BaseFormatter):
             division_table.append([
                 str(i),
                 self._truncate_text(team_name, 25),
-                self._truncate_text(team.owner, 20),
+                self._truncate_text(team.owner.full_name, 20),
                 f"{team.points_for:.2f}",
                 f"{team.points_against:.2f}",
                 f"{team.wins}-{team.losses}"
@@ -113,7 +113,7 @@ class ConsoleFormatter(BaseFormatter):
             overall_table.append([
                 str(i),
                 self._truncate_text(team_name, 20),
-                self._truncate_text(team.owner, 15),
+                self._truncate_text(team.owner.full_name, 15),
                 self._truncate_text(team.division, 15),
                 f"{team.points_for:.2f}",
                 f"{team.points_against:.2f}",
@@ -134,7 +134,7 @@ class ConsoleFormatter(BaseFormatter):
             challenge_table.append([
                 challenge.challenge_name,
                 self._truncate_text(challenge.winner, 25),
-                self._truncate_text(challenge.owner, 20),
+                self._truncate_text(challenge.owner.full_name, 20),
                 self._truncate_text(challenge.division, 15),
                 self._truncate_text(challenge.description, 35)
             ])

@@ -294,7 +294,14 @@ Structured data format perfect for API integrations and custom processing (use `
       "teams": [
         {
           "name": "Lightning Bolts",
-          "owner": "Team Owner A",
+          "owner": {
+            "display_name": "fantasy_pro_2024",
+            "first_name": "John",
+            "last_name": "Smith",
+            "full_name": "John Smith",
+            "id": "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}",
+            "is_likely_username": false
+          },
           "points_for": 799.28,
           "points_against": 716.78,
           "wins": 4,
@@ -303,7 +310,14 @@ Structured data format perfect for API integrations and custom processing (use `
         },
         {
           "name": "Thunder Hawks",
-          "owner": "Team Owner B",
+          "owner": {
+            "display_name": "ESPNFAN12345678",
+            "first_name": "Sarah",
+            "last_name": "Johnson",
+            "full_name": "Sarah Johnson",
+            "id": "{B2C3D4E5-F6G7-8901-BCDE-F23456789012}",
+            "is_likely_username": true
+          },
           "points_for": 847.78,
           "points_against": 830.22,
           "wins": 3,
@@ -312,7 +326,14 @@ Structured data format perfect for API integrations and custom processing (use `
         },
         {
           "name": "Fire Dragons",
-          "owner": "Team Owner C",
+          "owner": {
+            "display_name": "mike_fantasy",
+            "first_name": "Michael",
+            "last_name": "Davis",
+            "full_name": "Michael Davis",
+            "id": "{C3D4E5F6-G7H8-9012-CDEF-345678901234}",
+            "is_likely_username": false
+          },
           "points_for": 675.84,
           "points_against": 805.34,
           "wins": 3,
@@ -326,35 +347,70 @@ Structured data format perfect for API integrations and custom processing (use `
     {
       "name": "Most Points Overall",
       "winner": "Victory Seekers",
-      "owner": "Team Owner J",
+      "owner": {
+        "display_name": "lisa_champ",
+        "first_name": "Lisa",
+        "last_name": "Anderson",
+        "full_name": "Lisa Anderson",
+        "id": "{D4E5F6G7-H8I9-0123-DEFG-456789012345}",
+        "is_likely_username": false
+      },
       "division": "Example Fantasy League Division",
       "description": "867.0 total points"
     },
     {
       "name": "Most Points in One Game",
       "winner": "Flame Riders",
-      "owner": "Team Owner I",
+      "owner": {
+        "display_name": "ESPNFAN87654321",
+        "first_name": "Robert",
+        "last_name": "Wilson",
+        "full_name": "Robert Wilson",
+        "id": "{E5F6G7H8-I9J0-1234-EFGH-567890123456}",
+        "is_likely_username": true
+      },
       "division": "Example Fantasy League Division",
       "description": "186.5 points (Week 2)"
     },
     {
       "name": "Most Points in a Loss",
       "winner": "Cosmic Eagles",
-      "owner": "Team Owner G",
+      "owner": {
+        "display_name": "eagle_eye_99",
+        "first_name": "Jennifer",
+        "last_name": "Brown",
+        "full_name": "Jennifer Brown",
+        "id": "{F6G7H8I9-J0K1-2345-FGHI-678901234567}",
+        "is_likely_username": false
+      },
       "division": "Example Fantasy League Division",
       "description": "157.6 points in loss (Week 5)"
     },
     {
       "name": "Least Points in a Win",
       "winner": "Steel Panthers",
-      "owner": "Team Owner F",
+      "owner": {
+        "display_name": "steel_defense",
+        "first_name": "David",
+        "last_name": "Miller",
+        "full_name": "David Miller",
+        "id": "{G7H8I9J0-K1L2-3456-GHIJ-789012345678}",
+        "is_likely_username": false
+      },
       "division": "Example Fantasy League Division",
       "description": "67.8 points in win (Week 7)"
     },
     {
       "name": "Closest Victory",
       "winner": "Shadow Hunters",
-      "owner": "Team Owner H",
+      "owner": {
+        "display_name": "shadow_master",
+        "first_name": "Amanda",
+        "last_name": "Taylor",
+        "full_name": "Amanda Taylor",
+        "id": "{H8I9J0K1-L2M3-4567-HIJK-890123456789}",
+        "is_likely_username": false
+      },
       "division": "Example Fantasy League Division",
       "description": "Won by 0.4 points (Week 5)"
     }
