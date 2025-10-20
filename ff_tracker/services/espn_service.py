@@ -97,6 +97,33 @@ class ESPNService:
                     league_id=league_id
                 ) from e
 
+    def _calculate_playoff_status(self, teams: list[TeamStats]) -> dict[str, bool]:
+        """
+        Calculate playoff qualification for teams in a division.
+
+        Top 4 teams qualify based on record (wins-losses), with points_for as tiebreaker.
+
+        Args:
+            teams: List of team statistics for the division
+
+        Returns:
+            Dictionary mapping team names to playoff qualification status
+        """
+        # Sort teams by record (wins desc, losses asc), then by points_for desc
+        sorted_teams = sorted(
+            teams,
+            key=lambda t: (t.wins, -t.losses, t.points_for),
+            reverse=True
+        )
+
+        # Top 4 teams make playoffs
+        playoff_teams: set[str] = set()
+        for i, team in enumerate(sorted_teams):
+            if i < 4:  # Top 4 teams qualify
+                playoff_teams.add(team.name)
+
+        return {team.name: team.name in playoff_teams for team in teams}
+
     def extract_teams(self, league: League, division_name: str) -> list[TeamStats]:
         """
         Extract team statistics from ESPN league.
@@ -116,6 +143,8 @@ class ESPNService:
         try:
             logger.debug(f"Extracting teams from {division_name}")
 
+            # First, build teams without playoff status
+            temp_teams: list[TeamStats] = []
             for team in league.teams:
                 # Use team name with fallbacks (team_name is primary, team_abbrev as backup)
                 team_name = team.team_name or team.team_abbrev or f"Team {team.team_id}"
@@ -123,14 +152,31 @@ class ESPNService:
                 # Extract owner name
                 owner = self._extract_owner_name(team)
 
-                teams.append(TeamStats(
+                temp_teams.append(TeamStats(
                     name=team_name,
                     owner=owner,
                     points_for=team.points_for,
                     points_against=team.points_against,
                     wins=team.wins,
                     losses=team.losses,
-                    division=division_name
+                    division=division_name,
+                    in_playoff_position=False  # Will be updated below
+                ))
+
+            # Calculate playoff status for all teams
+            playoff_status = self._calculate_playoff_status(temp_teams)
+
+            # Rebuild teams with correct playoff status
+            for temp_team in temp_teams:
+                teams.append(TeamStats(
+                    name=temp_team.name,
+                    owner=temp_team.owner,
+                    points_for=temp_team.points_for,
+                    points_against=temp_team.points_against,
+                    wins=temp_team.wins,
+                    losses=temp_team.losses,
+                    division=temp_team.division,
+                    in_playoff_position=playoff_status[temp_team.name]
                 ))
 
             logger.info(f"Extracted {len(teams)} teams from {division_name}")

@@ -43,26 +43,28 @@ class SheetsFormatter(BaseFormatter):
         # Division standings
         for division in divisions:
             output_lines.append(f"{division.name} STANDINGS")
-            output_lines.append("Rank\tTeam\tOwner\tPoints For\tPoints Against\tRecord")
+            output_lines.append("Rank\tTeam\tOwner\tPoints For\tPoints Against\tRecord\tPlayoffs")
 
             sorted_teams = self._get_sorted_teams_by_division(division)
             for i, team in enumerate(sorted_teams, 1):
+                playoff_indicator = "Y" if team.in_playoff_position else "N"
                 output_lines.append(
                     f"{i}\t{team.name}\t{team.owner}\t{team.points_for:.1f}\t"
-                    f"{team.points_against:.1f}\t{team.wins}-{team.losses}"
+                    f"{team.points_against:.1f}\t{team.wins}-{team.losses}\t{playoff_indicator}"
                 )
 
             output_lines.append("")
 
         # Overall top teams
         output_lines.append("OVERALL TOP TEAMS (Across All Divisions)")
-        output_lines.append("Rank\tTeam\tOwner\tDivision\tPoints For\tPoints Against\tRecord")
+        output_lines.append("Rank\tTeam\tOwner\tDivision\tPoints For\tPoints Against\tRecord\tPlayoffs")
 
         top_teams = self._get_overall_top_teams(divisions, limit=20)
         for i, team in enumerate(top_teams, 1):
+            playoff_indicator = "Y" if team.in_playoff_position else "N"
             output_lines.append(
                 f"{i}\t{team.name}\t{team.owner}\t{team.division}\t{team.points_for:.1f}\t"
-                f"{team.points_against:.1f}\t{team.wins}-{team.losses}"
+                f"{team.points_against:.1f}\t{team.wins}-{team.losses}\t{playoff_indicator}"
             )
 
         output_lines.append("")

@@ -90,6 +90,7 @@ class TeamStats:
     wins: int
     losses: int
     division: str
+    in_playoff_position: bool = False
 
     def __post_init__(self) -> None:
         """Validate team stats after construction."""

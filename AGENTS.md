@@ -24,14 +24,16 @@ ff_tracker/
     ├── base.py              # Base formatter protocol
     ├── console.py           # Console table output
     ├── sheets.py            # TSV for Google Sheets
-    └── email.py             # Mobile-friendly HTML
+    ├── email.py             # Mobile-friendly HTML
+    └── json.py              # Structured JSON output
 ```
 
 ### Core Functionality
 - **Input**: Single league ID or multiple leagues via `LEAGUE_IDS` environment variable
-- **Output**: Three formats (console tables, TSV for sheets, HTML for email)
+- **Output**: Four formats (console tables, TSV for sheets, HTML for email, JSON for APIs)
 - **Data Source**: ESPN Fantasy Football API (via espn-api Python library)
 - **Multi-League Support**: Handles 3-4 leagues typically, tested with 30+ teams
+- **Playoff Positioning**: Shows current playoff qualification status (top 4 by record, points-for tiebreaker)
 
 ### The 5 Challenges ✅ All Working
 1. **Most Points Overall** - Team with most total regular season points
@@ -64,6 +66,7 @@ uv run ff-tracker --env --private --format sheets
 --format console   # Human-readable tables (default)
 --format sheets    # TSV for Google Sheets
 --format email     # Mobile-friendly HTML
+--format json      # Structured JSON for APIs
 ```
 
 ### Environment Configuration
@@ -80,7 +83,7 @@ SWID=your_swid_cookie
 
 ### 1. Data Models (`ff_tracker/models/__init__.py`)
 - **GameResult**: Individual game data with validation
-- **TeamStats**: Season statistics with computed properties
+- **TeamStats**: Season statistics with computed properties and playoff positioning
 - **ChallengeResult**: Challenge winners with details
 - **DivisionData**: Complete league information
 - All models use modern typing and validation
@@ -88,6 +91,7 @@ SWID=your_swid_cookie
 ### 2. ESPN Service (`ff_tracker/services/espn_service.py`)
 - **Connection Management**: Handles public/private league authentication
 - **Data Extraction**: Teams, games, owner names with error handling
+- **Playoff Calculation**: Determines top 4 teams by record with points_for tiebreaker
 - **Context Manager**: Proper resource cleanup
 - **Fail-Fast Strategy**: Clear errors on API failures
 
@@ -99,9 +103,10 @@ SWID=your_swid_cookie
 
 ### 4. Display System (`ff_tracker/display/`)
 - **Extensible Architecture**: Protocol-based formatter pattern
-- **Console Output**: Beautiful tables with emojis and formatting
-- **Sheets Export**: Clean TSV format for Google Sheets import
-- **Email Format**: Mobile-friendly HTML with responsive design
+- **Console Output**: Beautiful tables with emojis and playoff indicators (*)
+- **Sheets Export**: Clean TSV format with Playoffs column for Google Sheets import
+- **Email Format**: Mobile-friendly HTML with responsive design and playoff indicators
+- **JSON Export**: Structured data with in_playoff_position field
 
 ### 5. Configuration (`ff_tracker/config.py`)
 - **Environment Loading**: Automatic .env file detection
@@ -120,7 +125,8 @@ SWID=your_swid_cookie
 - **Single League**: 10 teams, 60 games processed
 - **Multi-League**: 3 divisions, 30 teams, 180+ games processed
 - **All Challenges**: Accurate calculations across all game data
-- **Output Formats**: Console, TSV, and HTML all working perfectly
+- **Output Formats**: Console, TSV, HTML, and JSON all working perfectly
+- **Playoff Positioning**: Accurate top 4 calculation with proper tiebreaking
 - **Private Leagues**: Authentication and data extraction working
 - **Error Handling**: Proper validation and user-friendly messages
 

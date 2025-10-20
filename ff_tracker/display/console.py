@@ -57,6 +57,9 @@ class ConsoleFormatter(BaseFormatter):
         overall_table = self._format_overall_table(divisions)
         output_lines.append(overall_table)
 
+        # Playoff legend
+        output_lines.append("\n📋 * = Currently in playoff position (Top 4 by record, points-for tiebreaker)")
+
         # Challenge results
         if challenges:
             output_lines.append("\n💰 OVERALL SEASON CHALLENGES")
@@ -78,9 +81,13 @@ class ConsoleFormatter(BaseFormatter):
 
         division_table: list[list[str]] = []
         for i, team in enumerate(sorted_teams, 1):
+            # Add asterisk to beginning of team name if in playoffs
+            team_name = team.name
+            if team.in_playoff_position:
+                team_name = f"* {team.name}"
             division_table.append([
                 str(i),
-                self._truncate_text(team.name, 25),
+                self._truncate_text(team_name, 25),
                 self._truncate_text(team.owner, 20),
                 f"{team.points_for:.1f}",
                 f"{team.points_against:.1f}",
@@ -99,9 +106,14 @@ class ConsoleFormatter(BaseFormatter):
 
         overall_table: list[list[str]] = []
         for i, team in enumerate(top_teams, 1):
+            # Add asterisk to beginning of team name if in playoffs
+            team_name = team.name
+            if team.in_playoff_position:
+                team_name = f"* {team.name}"
+
             overall_table.append([
                 str(i),
-                self._truncate_text(team.name, 20),
+                self._truncate_text(team_name, 20),
                 self._truncate_text(team.owner, 15),
                 self._truncate_text(team.division, 15),
                 f"{team.points_for:.1f}",

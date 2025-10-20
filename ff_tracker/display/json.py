@@ -42,6 +42,7 @@ class JsonFormatter(BaseFormatter):
                             "points_against": team.points_against,
                             "wins": team.wins,
                             "losses": team.losses,
+                            "in_playoff_position": team.in_playoff_position,
                         }
                         for team in div.teams  # List comprehension inside dict
                     ]

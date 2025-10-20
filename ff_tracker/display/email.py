@@ -154,10 +154,15 @@ class EmailFormatter(BaseFormatter):
 
             sorted_teams = self._get_sorted_teams_by_division(division)
             for i, team in enumerate(sorted_teams, 1):
+                # Add asterisk to beginning of team name if in playoffs
+                team_name = team.name
+                if team.in_playoff_position:
+                    team_name = f"* {team.name}"
+
                 html_content += (
                     f'<tr>'
                     f'<td>{i}</td>'
-                    f'<td>{self._escape_html(team.name)}</td>'
+                    f'<td>{self._escape_html(team_name)}</td>'
                     f'<td>{self._escape_html(team.owner)}</td>'
                     f'<td class="number">{team.points_for:.1f}</td>'
                     f'<td class="number">{team.points_against:.1f}</td>'
@@ -174,10 +179,15 @@ class EmailFormatter(BaseFormatter):
 
         top_teams = self._get_overall_top_teams(divisions, limit=20)
         for i, team in enumerate(top_teams, 1):
+            # Add asterisk to beginning of team name if in playoffs
+            team_name = team.name
+            if team.in_playoff_position:
+                team_name = f"* {team.name}"
+
             html_content += (
                 f'<tr>'
                 f'<td>{i}</td>'
-                f'<td>{self._escape_html(team.name)}</td>'
+                f'<td>{self._escape_html(team_name)}</td>'
                 f'<td>{self._escape_html(team.owner)}</td>'
                 f'<td>{self._escape_html(team.division)}</td>'
                 f'<td class="number">{team.points_for:.1f}</td>'
@@ -187,6 +197,9 @@ class EmailFormatter(BaseFormatter):
             )
 
         html_content += '</table>\n'
+
+        # Playoff legend
+        html_content += '<p style="margin-top: 15px; font-style: italic; color: #666;"><strong>*</strong> = Currently in playoff position (Top 4 by record, points-for tiebreaker)</p>\n'
 
         # Challenge results
         if challenges:

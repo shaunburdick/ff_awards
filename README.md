@@ -24,7 +24,8 @@ A modern, type-safe command-line tool to analyze ESPN Fantasy Football leagues a
 ## Features
 
 - **🏆 5 Season Challenges**: Track Most Points Overall, Most Points in One Game, Most Points in a Loss, Least Points in a Win, and Closest Victory
-- **🏢 Multi-Division Support**: Analyze multiple leagues as divisions with overall rankings
+- **� Playoff Positioning**: Shows current playoff qualification (top 4 by record, points-for tiebreaker) with visual indicators
+- **�🏢 Multi-Division Support**: Analyze multiple leagues as divisions with overall rankings
 - **🔒 Private League Support**: Works with both public and private ESPN leagues
 - **📊 Multiple Output Formats**: Console tables, Google Sheets TSV, and mobile-friendly HTML email
 - **🛡️ Type Safety**: Comprehensive type annotations with modern Python syntax
@@ -198,10 +199,14 @@ Sample Fantasy League STANDINGS
 ╭──────┬─────────────────────┬──────────────┬────────────┬─────────────────┬────────╮
 │ Rank │ Team                │ Owner        │ Points For │ Points Against  │ Record │
 ├──────┼─────────────────────┼──────────────┼────────────┼─────────────────┼────────┤
-│    1 │ Lightning Bolts     │ Team Owner A │     1267.0 │          1098.4 │ 8-2    │
-│    2 │ Thunder Hawks       │ Team Owner B │     1199.3 │          1156.7 │ 7-3    │
-│    3 │ Fire Dragons        │ Team Owner C │     1156.8 │          1201.2 │ 6-4    │
+│    1 │ * Lightning Bolts   │ Team Owner A │     1267.0 │          1098.4 │ 8-2    │
+│    2 │ * Thunder Hawks     │ Team Owner B │     1199.3 │          1156.7 │ 7-3    │
+│    3 │ * Fire Dragons      │ Team Owner C │     1156.8 │          1201.2 │ 6-4    │
+│    4 │ * Storm Chasers     │ Team Owner D │     1134.2 │          1189.8 │ 6-4    │
+│    5 │ Ice Wolves          │ Team Owner E │     1089.7 │          1145.3 │ 5-5    │
 ╰──────┴─────────────────────┴──────────────┴────────────┴─────────────────┴────────╯
+
+📋 * = Currently in playoff position (Top 4 by record, points-for tiebreaker)
 
 OVERALL SEASON CHALLENGES
 ╭─────────────────────────┬─────────────────┬──────────────┬───────────┬──────────────────────────╮
@@ -226,10 +231,12 @@ Fantasy Football Multi-Division Challenge Tracker (2024)
 1 divisions, 10 teams total
 
 Sample Fantasy League STANDINGS
-Rank	Team	Owner	Points For	Points Against	Record
-1	Lightning Bolts	Team Owner A	1267.0	1098.4	8-2
-2	Thunder Hawks	Team Owner B	1199.3	1156.7	7-3
-3	Fire Dragons	Team Owner C	1156.8	1201.2	6-4
+Rank	Team	Owner	Points For	Points Against	Record	Playoffs
+1	Lightning Bolts	Team Owner A	1267.0	1098.4	8-2	Y
+2	Thunder Hawks	Team Owner B	1199.3	1156.7	7-3	Y
+3	Fire Dragons	Team Owner C	1156.8	1201.2	6-4	Y
+4	Storm Chasers	Team Owner D	1134.2	1189.8	6-4	Y
+5	Ice Wolves	Team Owner E	1089.7	1145.3	5-5	N
 
 OVERALL SEASON CHALLENGES
 Challenge	Winner	Owner	Division	Details
@@ -291,7 +298,8 @@ Structured data format perfect for API integrations and custom processing (use `
           "points_for": 799.28,
           "points_against": 716.78,
           "wins": 4,
-          "losses": 2
+          "losses": 2,
+          "in_playoff_position": true
         },
         {
           "name": "Thunder Hawks",
@@ -299,7 +307,8 @@ Structured data format perfect for API integrations and custom processing (use `
           "points_for": 847.78,
           "points_against": 830.22,
           "wins": 3,
-          "losses": 3
+          "losses": 3,
+          "in_playoff_position": true
         },
         {
           "name": "Fire Dragons",
@@ -307,63 +316,8 @@ Structured data format perfect for API integrations and custom processing (use `
           "points_for": 675.84,
           "points_against": 805.34,
           "wins": 3,
-          "losses": 3
-        },
-        {
-          "name": "Storm Chasers",
-          "owner": "Team Owner D",
-          "points_for": 640.6,
-          "points_against": 757.46,
-          "wins": 2,
-          "losses": 4
-        },
-        {
-          "name": "Ice Wolves",
-          "owner": "Team Owner E",
-          "points_for": 780.16,
-          "points_against": 718.3,
-          "wins": 3,
-          "losses": 3
-        },
-        {
-          "name": "Steel Panthers",
-          "owner": "Team Owner F",
-          "points_for": 817.86,
-          "points_against": 773.24,
-          "wins": 3,
-          "losses": 3
-        },
-        {
-          "name": "Cosmic Eagles",
-          "owner": "Team Owner G",
-          "points_for": 784.98,
-          "points_against": 838.94,
-          "wins": 2,
-          "losses": 4
-        },
-        {
-          "name": "Shadow Hunters",
-          "owner": "Team Owner H",
-          "points_for": 776.5,
-          "points_against": 810.46,
-          "wins": 3,
-          "losses": 3
-        },
-        {
-          "name": "Flame Riders",
-          "owner": "Team Owner I",
-          "points_for": 785.4,
-          "points_against": 760.6,
-          "wins": 2,
-          "losses": 4
-        },
-        {
-          "name": "Victory Seekers",
-          "owner": "Team Owner J",
-          "points_for": 867.02,
-          "points_against": 764.08,
-          "wins": 5,
-          "losses": 1
+          "losses": 3,
+          "in_playoff_position": false
         }
       ]
     }
