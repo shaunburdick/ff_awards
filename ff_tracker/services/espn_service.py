@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any
 # Import League type only for type checking to avoid runtime import issues
 if TYPE_CHECKING:
     from espn_api.football import League, Team
-    from espn_api.football import Owner as ESPNOwner
 
 from ..config import FFTrackerConfig
 from ..exceptions import ESPNAPIError, LeagueConnectionError, PrivateLeagueError
@@ -104,6 +103,9 @@ class ESPNService:
 
         Top 4 teams qualify based on record (wins-losses), with points_for as tiebreaker.
 
+        Note: Could potentially use league.standings() method from ESPN API in the future
+        for optimization, but current implementation gives us full control over tiebreakers.
+
         Args:
             teams: List of team statistics for the division
 
@@ -144,13 +146,13 @@ class ESPNService:
         try:
             logger.debug(f"Extracting teams from {division_name}")
 
-            # First, build teams without playoff status
+            # Build teams efficiently with typed ESPN data
             temp_teams: list[TeamStats] = []
             for team in league.teams:
                 # Use team name with fallbacks (team_name is primary, team_abbrev as backup)
                 team_name = team.team_name or team.team_abbrev or f"Team {team.team_id}"
 
-                # Extract owner object
+                # Extract owner object efficiently with typed owners
                 owners = self.convert_team_owners(team)
                 owner = owners[0] if owners else self._create_unknown_owner()
 
@@ -168,9 +170,9 @@ class ESPNService:
             # Calculate playoff status for all teams
             playoff_status = self._calculate_playoff_status(temp_teams)
 
-            # Rebuild teams with correct playoff status
-            for temp_team in temp_teams:
-                teams.append(TeamStats(
+            # Create final teams with correct playoff status
+            teams = [
+                TeamStats(
                     name=temp_team.name,
                     owner=temp_team.owner,
                     points_for=temp_team.points_for,
@@ -179,7 +181,9 @@ class ESPNService:
                     losses=temp_team.losses,
                     division=temp_team.division,
                     in_playoff_position=playoff_status[temp_team.name]
-                ))
+                )
+                for temp_team in temp_teams
+            ]
 
             logger.info(f"Extracted {len(teams)} teams from {division_name}")
             return teams
@@ -189,49 +193,7 @@ class ESPNService:
                 f"Failed to extract teams from {division_name}: {e}",
             ) from e
 
-    def _extract_owner_name(self, team: Team) -> str:
-        """
-        Extract owner name from team object.
 
-        Uses the typed Team.owners attribute to get the first owner's name,
-        prioritizing real names over usernames.
-
-        Args:
-            team: ESPN team object
-
-        Returns:
-            Owner name string
-        """
-        try:
-            # ESPN API provides owners as list[dict[str, Any]]
-            if not team.owners or len(team.owners) == 0:
-                return "Unknown Owner"
-
-            # Get first owner (teams typically have one owner)
-            owner_data = team.owners[0]
-
-            # Extract name fields with safe defaults
-            first_name = str(owner_data.get('firstName', '')).strip()
-            last_name = str(owner_data.get('lastName', '')).strip()
-            display_name = str(owner_data.get('displayName', '')).strip()
-
-            # Prefer first/last name combination over display name
-            if first_name and last_name:
-                return f"{first_name} {last_name}"
-            elif first_name:
-                return first_name
-            elif last_name:
-                return last_name
-            elif display_name and not self._looks_like_username(display_name):
-                return display_name
-            elif display_name:
-                return display_name
-            else:
-                return "Unknown Owner"
-
-        except Exception as e:
-            logger.warning(f"Error extracting owner name from team: {e}")
-            return "Unknown Owner"
 
     def _looks_like_username(self, name: str) -> bool:
         """Check if a name looks like a username rather than a real name."""
@@ -259,39 +221,28 @@ class ESPNService:
             id="unknown"
         )
 
-    def _convert_owner(self, raw_owner: ESPNOwner) -> Owner:
-        """
-        Convert raw ESPN owner data to typed Owner object.
-
-        Args:
-            raw_owner: Raw owner dict from ESPN API
-
-        Returns:
-            Typed Owner object
-        """
-        return Owner(
-            display_name=raw_owner.get('displayName', ''),
-            first_name=raw_owner.get('firstName', ''),
-            last_name=raw_owner.get('lastName', ''),
-            id=raw_owner.get('id', ''),
-        )
-
     def convert_team_owners(self, team: Team) -> list[Owner]:
         """
-        Convert team's raw owners data to typed Owner objects.
+        Convert team's owners data to our typed Owner objects.
 
         Args:
-            team: ESPN team object with raw owners data
+            team: ESPN team object with typed owners data
 
         Returns:
-            List of typed Owner objects
+            List of our typed Owner objects
         """
         if not team.owners:
             return []
 
+        # Convert ESPN Owner TypedDict to our Owner model
         return [
-            self._convert_owner(raw_owner)
-            for raw_owner in team.owners
+            Owner(
+                display_name=espn_owner.get('displayName', ''),
+                first_name=espn_owner.get('firstName', ''),
+                last_name=espn_owner.get('lastName', ''),
+                id=espn_owner.get('id', ''),
+            )
+            for espn_owner in team.owners
         ]
 
     def extract_games(
@@ -391,12 +342,16 @@ class ESPNService:
 
             for box_score in box_scores:
                 try:
-                    home_team = box_score.home_team
-                    away_team = box_score.away_team
-                    home_score = box_score.home_score
-                    away_score = box_score.away_score
+                    # Extract typed data from BoxScore - now we know exact types
+                    home_team = box_score.home_team  # Team
+                    away_team = box_score.away_team  # Team
+                    home_score = box_score.home_score  # float
+                    away_score = box_score.away_score  # float
 
+                    # Validate game data with better type awareness
                     if not home_team or not away_team or home_score <= 0 or away_score <= 0:
+                        logger.debug(f"Skipping invalid game in week {week}: "
+                                   f"home_score={home_score}, away_score={away_score}")
                         continue
 
                     # Get team names with fallbacks
