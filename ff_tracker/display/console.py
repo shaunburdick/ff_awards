@@ -88,8 +88,8 @@ class ConsoleFormatter(BaseFormatter):
                 str(i),
                 self._truncate_text(team_name, 25),
                 self._truncate_text(team.owner, 20),
-                f"{team.points_for:.1f}",
-                f"{team.points_against:.1f}",
+                f"{team.points_for:.2f}",
+                f"{team.points_against:.2f}",
                 f"{team.wins}-{team.losses}"
             ])
 
@@ -115,8 +115,8 @@ class ConsoleFormatter(BaseFormatter):
                 self._truncate_text(team_name, 20),
                 self._truncate_text(team.owner, 15),
                 self._truncate_text(team.division, 15),
-                f"{team.points_for:.1f}",
-                f"{team.points_against:.1f}",
+                f"{team.points_for:.2f}",
+                f"{team.points_against:.2f}",
                 f"{team.wins}-{team.losses}"
             ])
 
