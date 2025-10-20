@@ -171,6 +171,8 @@ class EmailFormatter(BaseFormatter):
                 )
 
             html_content += '</table>\n'
+            html_content += '<p style="margin-top: 15px; font-style: italic; color: #666;"><strong>*</strong> = Currently in playoff position</p>\n'
+
 
         # Overall top teams
         html_content += '<h2>Overall Top Teams (Across All Divisions)</h2>\n'
@@ -197,9 +199,7 @@ class EmailFormatter(BaseFormatter):
             )
 
         html_content += '</table>\n'
-
-        # Playoff legend
-        html_content += '<p style="margin-top: 15px; font-style: italic; color: #666;"><strong>*</strong> = Currently in playoff position (Top 4 by record, points-for tiebreaker)</p>\n'
+        html_content += '<p style="margin-top: 15px; font-style: italic; color: #666;"><strong>*</strong> = Currently in playoff position</p>\n'
 
         # Challenge results
         if challenges:

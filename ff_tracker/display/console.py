@@ -51,14 +51,13 @@ class ConsoleFormatter(BaseFormatter):
             output_lines.append(f"\n🏆 {division.name} STANDINGS")
             division_table = self._format_division_table(division)
             output_lines.append(division_table)
+            output_lines.append("  * = Currently in playoff position")
 
         # Overall top teams
         output_lines.append("\n🌟 OVERALL TOP TEAMS (Across All Divisions)")
         overall_table = self._format_overall_table(divisions)
         output_lines.append(overall_table)
-
-        # Playoff legend
-        output_lines.append("\n📋 * = Currently in playoff position (Top 4 by record, points-for tiebreaker)")
+        output_lines.append("  * = Currently in playoff position")
 
         # Challenge results
         if challenges:
