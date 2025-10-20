@@ -115,7 +115,7 @@ class ChallengeCalculator:
             owner=highest_scorer.owner,
             division=highest_scorer.division,
             value="",
-            description=f"{highest_scorer.points_for:.1f} total points"
+            description=f"{highest_scorer.points_for:.2f} total points"
         )
 
     def _calculate_most_points_one_game(self, teams: list[TeamStats], games: list[GameResult]) -> ChallengeResult:
@@ -133,7 +133,7 @@ class ChallengeCalculator:
             owner=self._find_owner_for_team(highest_game.team_name, highest_game.division, teams),
             division=highest_game.division,
             value="",
-            description=f"{highest_game.score:.1f} points (Week {highest_game.week})"
+            description=f"{highest_game.score:.2f} points (Week {highest_game.week})"
         )
 
     def _calculate_most_points_in_loss(self, teams: list[TeamStats], games: list[GameResult]) -> ChallengeResult:
@@ -160,7 +160,7 @@ class ChallengeCalculator:
             owner=self._find_owner_for_team(highest_loss.team_name, highest_loss.division, teams),
             division=highest_loss.division,
             value="",
-            description=f"{highest_loss.score:.1f} points in loss (Week {highest_loss.week})"
+            description=f"{highest_loss.score:.2f} points in loss (Week {highest_loss.week})"
         )
 
     def _calculate_least_points_in_win(self, teams: list[TeamStats], games: list[GameResult]) -> ChallengeResult:
@@ -187,7 +187,7 @@ class ChallengeCalculator:
             owner=self._find_owner_for_team(lowest_win.team_name, lowest_win.division, teams),
             division=lowest_win.division,
             value="",
-            description=f"{lowest_win.score:.1f} points in win (Week {lowest_win.week})"
+            description=f"{lowest_win.score:.2f} points in win (Week {lowest_win.week})"
         )
 
     def _calculate_closest_victory(self, teams: list[TeamStats], games: list[GameResult]) -> ChallengeResult:
@@ -214,7 +214,7 @@ class ChallengeCalculator:
             owner=self._find_owner_for_team(closest_win.team_name, closest_win.division, teams),
             division=closest_win.division,
             value="",
-            description=f"Won by {closest_win.margin:.1f} points (Week {closest_win.week})"
+            description=f"Won by {closest_win.margin:.2f} points (Week {closest_win.week})"
         )
 
     def _create_no_data_placeholders(self) -> list[ChallengeResult]:
