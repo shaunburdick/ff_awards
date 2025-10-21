@@ -96,20 +96,20 @@ jobs:
           echo "EOF"
         } >> $GITHUB_OUTPUT
 
-    # Try second most popular email action to bypass obfuscation issues
     - name: Send email report
       if: steps.generate-report.outputs.report_generated == 'true'
-      uses: hilarion5/send-mail@v1
+      uses: dawidd6/action-send-mail@v3
       with:
-        smtp-server: ${{ secrets.SMTP_SERVER }}
-        smtp-port: ${{ secrets.SMTP_PORT || '2525' }}
-        smtp-secure: ${{ secrets.SMTP_SECURE || 'false' }}
-        from-email: ${{ secrets.EMAIL_FROM }}
-        to-email: ${{ secrets.EMAIL_RECIPIENTS }}
+        server_address: ${{ secrets.SMTP_SERVER }}
+        server_port: ${{ secrets.SMTP_PORT || '2525' }}
+        secure: ${{ secrets.SMTP_SECURE || 'false' }}
         username: ${{ secrets.SMTP_USERNAME }}
         password: ${{ secrets.SMTP_PASSWORD }}
         subject: "Weekly Fantasy Football Report - Week ${{ steps.generate-report.outputs.current_week }}"
-        html: ${{ steps.generate-html.outputs.html_content }}
+        from: "MM Fantasy Football League <${{ secrets.EMAIL_FROM }}>"
+        to: ${{ secrets.EMAIL_FROM }}
+        bcc: ${{ secrets.EMAIL_RECIPIENTS }}
+        html_body: ${{ steps.generate-html.outputs.html_content }}
 
     - name: Upload report artifacts
       if: always()
