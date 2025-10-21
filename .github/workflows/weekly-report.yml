@@ -74,11 +74,11 @@ jobs:
       id: prepare-email
       if: steps.generate-report.outputs.report_generated == 'true'
       run: |
-        # Read the generated HTML content
+        # Use a unique delimiter that won't appear in HTML content
         {
-          echo "html_content<<EOF"
+          echo "html_content<<FANTASY_FOOTBALL_EMAIL_DELIMITER_EOF"
           cat ./reports/standings.html
-          echo "EOF"
+          echo "FANTASY_FOOTBALL_EMAIL_DELIMITER_EOF"
         } >> $GITHUB_OUTPUT
 
     - name: Send email report
