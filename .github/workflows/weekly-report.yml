@@ -52,14 +52,11 @@ jobs:
           PRIVATE_FLAG=""
         fi
 
-        # Generate the TSV report for Google Sheets using --env flag
-        uv run ff-tracker --env $PRIVATE_FLAG --format sheets > weekly-report.tsv
+        # Generate all output formats in one execution using --output-dir
+        uv run ff-tracker --env $PRIVATE_FLAG --output-dir ./reports
 
-        # Generate console output for reference and extract current week
-        uv run ff-tracker --env $PRIVATE_FLAG --format console > weekly-report.txt
-
-        # Extract current week from console output (looks for CURRENT_WEEK=X line)
-        CURRENT_WEEK=$(grep "^CURRENT_WEEK=" weekly-report.txt | cut -d'=' -f2)
+        # Extract current week from console output
+        CURRENT_WEEK=$(grep "^CURRENT_WEEK=" ./reports/standings.txt | cut -d'=' -f2)
 
         # Fallback to date-based calculation if parsing fails
         if [ -z "$CURRENT_WEEK" ] || [ "$CURRENT_WEEK" = "unknown" ]; then
@@ -70,29 +67,17 @@ jobs:
         fi
 
         echo "current_week=${CURRENT_WEEK}" >> $GITHUB_OUTPUT
-
-        # Set outputs for the email step
         echo "report_generated=true" >> $GITHUB_OUTPUT
 
-    # Read report content for email body
-    - name: Generate mobile-friendly HTML email
-      id: generate-html
+    # Read HTML report content for email body
+    - name: Prepare email content
+      id: prepare-email
       if: steps.generate-report.outputs.report_generated == 'true'
       run: |
-        # Determine if private leagues are needed
-        if [ -n "${{ secrets.ESPN_SWID }}" ] && [ -n "${{ secrets.ESPN_S2 }}" ]; then
-          PRIVATE_FLAG="--private"
-        else
-          PRIVATE_FLAG=""
-        fi
-
-        # Generate mobile-friendly HTML email content using --env flag
-        uv run ff-tracker --env $PRIVATE_FLAG --format email > email_content.html
-
         # Read the generated HTML content
         {
           echo "html_content<<EOF"
-          cat email_content.html
+          cat ./reports/standings.html
           echo "EOF"
         } >> $GITHUB_OUTPUT
 
@@ -109,7 +94,7 @@ jobs:
         from: "MM Fantasy Football League <${{ secrets.EMAIL_FROM }}>"
         to: ${{ secrets.EMAIL_FROM }}
         bcc: ${{ secrets.EMAIL_RECIPIENTS }}
-        html_body: ${{ steps.generate-html.outputs.html_content }}
+        html_body: ${{ steps.prepare-email.outputs.html_content }}
 
     - name: Upload report artifacts
       if: always()
@@ -117,6 +102,8 @@ jobs:
       with:
         name: weekly-report-week-${{ steps.generate-report.outputs.current_week }}
         path: |
-          weekly-report.txt
-          weekly-report.tsv
+          ./reports/standings.txt
+          ./reports/standings.tsv
+          ./reports/standings.html
+          ./reports/standings.json
         retention-days: 30

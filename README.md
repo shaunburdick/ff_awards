@@ -2,8 +2,6 @@
 
 A modern, type-safe command-line tool to analyze ESPN Fantasy Football leagues and track 5 specific season challenges across single leagues or multiple divisions.
 
-**New in v2.0**: Complete rewrite with modern Python patterns, modular architecture, comprehensive type safety, and improved error handling.
-
 ## Table of Contents
 
 - [Fantasy Football Challenge Tracker](#fantasy-football-challenge-tracker)
@@ -23,15 +21,16 @@ A modern, type-safe command-line tool to analyze ESPN Fantasy Football leagues a
 
 ## Features
 
-- **🏆 5 Season Challenges**: Track Most Points Overall, Most Points in One Game, Most Points in a Loss, Least Points in a Win, and Closest Victory
-- **� Playoff Positioning**: Shows current playoff qualification (top 4 by record, points-for tiebreaker) with visual indicators
-- **�🏢 Multi-Division Support**: Analyze multiple leagues as divisions with overall rankings
-- **🔒 Private League Support**: Works with both public and private ESPN leagues
-- **📊 Multiple Output Formats**: Console tables, Google Sheets TSV, and mobile-friendly HTML email
-- **🛡️ Type Safety**: Comprehensive type annotations with modern Python syntax
-- **⚡ Fast Error Handling**: Fail-fast approach with clear error messages
-- **🏗️ Modular Architecture**: Clean separation of concerns for easy maintenance and extension
-- **📱 Mobile-Friendly**: HTML email format optimized for mobile devices
+- **5 Season Challenges**: Track Most Points Overall, Most Points in One Game, Most Points in a Loss, Least Points in a Win, and Closest Victory
+- **Playoff Positioning**: Shows current playoff qualification (top 4 by record, points-for tiebreaker) with visual indicators
+- **Multi-Division Support**: Analyze multiple leagues as divisions with overall rankings
+- **Private League Support**: Works with both public and private ESPN leagues
+- **Multiple Output Formats**: Console tables, Google Sheets TSV, mobile-friendly HTML email, and JSON
+- **Multi-Output Mode**: Generate all formats in one execution with `--output-dir`
+- **Type Safety**: Comprehensive type annotations with modern Python syntax
+- **Fast Error Handling**: Fail-fast approach with clear error messages
+- **Modular Architecture**: Clean separation of concerns for easy maintenance and extension
+- **Mobile-Friendly**: HTML email format optimized for mobile devices
 
 ## Installation
 
@@ -116,7 +115,30 @@ uv run ff-tracker 123456 --format sheets > results.tsv
 
 # HTML email format
 uv run ff-tracker 123456 --format email > report.html
+
+# JSON data export
+uv run ff-tracker 123456 --format json > data.json
 ```
+
+### Multi-Output Mode
+
+Generate all formats in a single execution with `--output-dir`:
+
+```bash
+# Generate all 4 formats at once (single ESPN API call)
+uv run ff-tracker --env --output-dir ./reports
+
+# Creates:
+#   ./reports/standings.txt   (console format)
+#   ./reports/standings.tsv   (sheets format)
+#   ./reports/standings.html  (email format)
+#   ./reports/standings.json  (json format)
+```
+
+**Benefits**:
+- ⚡ **Faster**: Single ESPN API call instead of multiple
+- 🎯 **Efficient**: Perfect for CI/CD workflows and automated reports
+- 📦 **Complete**: All formats available for different use cases
 
 ## Examples
 
@@ -133,8 +155,11 @@ uv run ff-tracker 123456 --format sheets > weekly_report.tsv
 # Create HTML email report
 uv run ff-tracker 123456 --format email > email_report.html
 
+# Generate all formats at once (recommended for automation)
+uv run ff-tracker --env --private --output-dir ./reports
+
 # Multiple leagues (requires .env setup - see Configuration)
-# Note: Multi-league support requires configuration file setup
+uv run ff-tracker --env --format console
 ```
 
 ## Configuration
@@ -459,6 +484,8 @@ The output uses tab-separated values (TSV) format which Google Sheets automatica
 
 This repository includes a GitHub Actions workflow that automatically generates and emails weekly fantasy football reports every Tuesday at 9 AM ET.
 
+The workflow uses the efficient `--output-dir` mode to generate all formats (console, TSV, HTML, JSON) in a single execution with just one ESPN API call.
+
 ### Setup GitHub Actions Workflow
 
 1. **Fork this repository** to your GitHub account
@@ -489,12 +516,15 @@ You can also manually trigger the workflow:
 
 ### What Gets Emailed
 
-The automated email includes:
+The automated workflow generates:
+- **HTML Email**: Mobile-friendly report with complete standings and challenge results
+- **Artifacts**: All 4 formats (TXT, TSV, HTML, JSON) saved for 30 days in GitHub Actions artifacts
+
+The email includes:
 - **Subject**: "Weekly Fantasy Football Report - Week [X]"
-- **Body**:
-  - Beautiful HTML formatting with the complete report
-  - All standings tables and challenge results
-  - Easy-to-read monospace formatting
+- **Body**: Beautiful HTML formatting with complete standings and challenge results
+
+**Efficiency**: The workflow uses `--output-dir` to generate all formats in a single execution, reducing API calls and execution time by ~66%.
 
 ### Customizing the Schedule
 

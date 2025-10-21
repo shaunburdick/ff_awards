@@ -34,12 +34,20 @@ Examples:
   %(prog)s --env                            # Multiple leagues from LEAGUE_IDS in .env
   %(prog)s 123456 --format email            # HTML email output
   %(prog)s 123456 --format sheets           # TSV for Google Sheets
+  %(prog)s --env --output-dir ./reports     # Generate all formats at once
 
 Output Formats:
   console   Human-readable tables (default)
   sheets    Tab-separated values for Google Sheets
   email     Mobile-friendly HTML for email reports
   json      Structured JSON data for further processing
+
+Multi-Output Mode:
+  Use --output-dir to generate all formats in a single execution:
+    - standings.txt  (console format)
+    - standings.tsv  (sheets format)
+    - standings.html (email format)
+    - standings.json (json format)
 
 Private League Setup:
   Create a .env file with:
@@ -77,7 +85,13 @@ Private League Setup:
         "--format",
         choices=["console", "sheets", "email", "json"],
         default="console",
-        help="Output format (default: console)"
+        help="Output format (default: console). Ignored if --output-dir is specified."
+    )
+
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Directory to write all output formats. When specified, generates all formats automatically."
     )
 
     parser.add_argument(
@@ -176,19 +190,39 @@ def main() -> int:
         espn_service = ESPNService(config)
         challenge_calculator = ChallengeCalculator()
 
-        # Create formatter
-        formatter = create_formatter(args.format, config.year)
-
-        # Connect to ESPN and extract data
+        # Connect to ESPN and extract data (single API call)
         with espn_service:
             divisions = espn_service.load_all_divisions()
             challenges = challenge_calculator.calculate_all_challenges(divisions)
 
-        # Generate and display output
-        output = formatter.format_output(divisions, challenges, espn_service.current_week)
-        print(output)
+        # Handle output based on mode
+        if args.output_dir:
+            # Multi-output mode: generate all formats to files
+            output_dir = args.output_dir
+            output_dir.mkdir(parents=True, exist_ok=True)
 
-        return 0
+            # Define format-to-filename mapping
+            format_files = {
+                "console": output_dir / "standings.txt",
+                "sheets": output_dir / "standings.tsv",
+                "email": output_dir / "standings.html",
+                "json": output_dir / "standings.json",
+            }
+
+            # Generate each format and write to file
+            for format_name, file_path in format_files.items():
+                formatter = create_formatter(format_name, config.year)
+                output = formatter.format_output(divisions, challenges, espn_service.current_week)
+                file_path.write_text(output, encoding="utf-8")
+                print(f"Generated {format_name} output: {file_path}")
+
+            return 0
+        else:
+            # Single output mode: print to stdout
+            formatter = create_formatter(args.format, config.year)
+            output = formatter.format_output(divisions, challenges, espn_service.current_week)
+            print(output)
+            return 0
 
     except FFTrackerError as e:
         print(f"Error: {e}", file=sys.stderr)
