@@ -143,12 +143,12 @@ class EmailFormatter(BaseFormatter):
 <body>
     <div class="container">
         <h1>Fantasy Football Multi-Division Challenge Tracker ({self.year})</h1>
-        <div class="summary">{total_divisions} divisions • {total_teams} teams total</div>
+        <div class="summary">{total_divisions} divisions • {total_teams} teams total • Week {current_week or "Not Found"}</div>
 """
 
         # Division standings
         for division in divisions:
-            html_content += f'<h2><a href="https://fantasy.espn.com/football/league?leagueId={division.league_id}" style="color: #34495e; text-decoration: none;">{division.name}</a> Standings</h2>\n'
+            html_content += f'<h2><a href="https://fantasy.espn.com/football/league?leagueId={division.league_id}" style="color: #3498db; text-decoration: none;">{division.name} 🔗</a> Standings</h2>\n'
             html_content += '<table>\n'
             html_content += '<tr><th>Rank</th><th>Team</th><th>Owner</th><th class="number">PF</th><th class="number">PA</th><th>Record</th></tr>\n'
 
@@ -221,10 +221,15 @@ class EmailFormatter(BaseFormatter):
             html_content += '</table>\n'
 
             total_games = self._calculate_total_games(divisions)
-            if total_games > 0:
-                html_content += f'<div class="footer">Game data: {total_games} individual results processed</div>\n'
-            else:
-                html_content += '<div class="footer">Game data: Limited - some challenges may be incomplete</div>\n'
+            game_data_text = f'Game data: {total_games} individual results processed' if total_games > 0 else 'Game data: Limited - some challenges may be incomplete'
+
+            html_content += f"""
+        <div class="footer">
+            {game_data_text}<br>
+            <strong>Fantasy Football Challenge Tracker</strong><br>
+            <a href="https://github.com/shaunburdick/ff-awards" style="color: #3498db; text-decoration: none;">View on GitHub 🔗</a>
+        </div>
+"""
 
         html_content += """
     </div>
