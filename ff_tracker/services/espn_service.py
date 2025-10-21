@@ -271,17 +271,18 @@ class ESPNService:
             # Determine week range to process
             current_week = league.current_week
 
-            # Store current week from first league processed (for display purposes)
-            if self.current_week is None:
-                self.current_week = current_week
-                logger.info(f"Set current week to {current_week} from {division_name}")
-
             # Get regular season count from league settings
             reg_season_count = league.settings.reg_season_count
 
             # Auto-detect max week if not provided
             if max_week is None:
                 max_week = self._determine_max_week(league, current_week, reg_season_count)
+
+            # Store the actual last complete week from first league processed (for display purposes)
+            # This is the max_week we're actually processing, not ESPN's current_week
+            if self.current_week is None:
+                self.current_week = max_week
+                logger.info(f"Set current week to {max_week} (last complete week) from {division_name}")
 
             logger.info(f"Processing weeks 1-{max_week} for {division_name}")
 
@@ -306,27 +307,55 @@ class ESPNService:
         """
         Determine the maximum week to process based on current state.
 
-        This implements the logic from the original script to exclude
-        incomplete weeks.
+        Checks if the current week has been played by examining box scores.
+        A week is considered incomplete if any game has both teams with 0 points.
+
+        Args:
+            league: ESPN League object
+            current_week: The week ESPN reports as current
+            reg_season_count: Total number of regular season weeks
+
+        Returns:
+            The last complete week number to process
         """
         max_week_candidate = min(reg_season_count, current_week)
 
-        # Check if current week seems incomplete
+        # Check if current week has been played
         if current_week <= reg_season_count:
             try:
                 current_box_scores = league.box_scores(current_week)
                 if current_box_scores:
+                    # If ANY game has both teams at 0 points, the week hasn't started
                     for box_score in current_box_scores:
                         home_score = box_score.home_score
                         away_score = box_score.away_score
 
-                        # If either team has very low score, week is likely incomplete
-                        if (home_score > 0 and home_score < 30) or (away_score > 0 and away_score < 30):
-                            logger.info(f"Week {current_week} appears incomplete, excluding it")
+                        # Both teams at 0 means game hasn't been played
+                        if home_score == 0 and away_score == 0:
+                            logger.info(f"Week {current_week} has unplayed games (0-0), using week {max_week_candidate - 1}")
                             return max_week_candidate - 1
-            except Exception:
-                # If we can't check, assume it's incomplete
-                logger.info(f"Unable to verify week {current_week}, excluding it")
+
+                        # Very low scores might indicate incomplete/in-progress games
+                        # But we need at least one team to have scored something
+                        if home_score > 0 and away_score > 0:
+                            # Both teams have scored, so at least some games are complete
+                            continue
+                        elif home_score == 0 or away_score == 0:
+                            # One team at 0 while the other has points likely means incomplete
+                            logger.info(f"Week {current_week} appears in progress (partial scores), using week {max_week_candidate - 1}")
+                            return max_week_candidate - 1
+
+                    # All games appear to have valid scores
+                    logger.info(f"Week {current_week} appears complete, including it")
+                    return max_week_candidate
+                else:
+                    # No box scores available, week hasn't started
+                    logger.info(f"No box scores for week {current_week}, using week {max_week_candidate - 1}")
+                    return max_week_candidate - 1
+
+            except Exception as e:
+                # If we can't check, assume it's incomplete to be safe
+                logger.info(f"Unable to verify week {current_week} ({e}), using week {max_week_candidate - 1}")
                 return max_week_candidate - 1
 
         return max_week_candidate
