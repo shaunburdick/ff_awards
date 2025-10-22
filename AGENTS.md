@@ -29,7 +29,7 @@ ff_tracker/
 ```
 
 ### Core Functionality
-- **Input**: Single league ID or multiple leagues via `LEAGUE_IDS` environment variable
+- **Input**: Single league ID, multiple leagues via comma-separated CLI argument, or `LEAGUE_IDS` environment variable
 - **Output**: Four formats (console tables, TSV for sheets, HTML for email, JSON for APIs)
 - **Multi-Output Mode**: Generate all formats at once with `--output-dir` (single API call)
 - **Data Source**: ESPN Fantasy Football API (via espn-api Python library)
@@ -59,12 +59,17 @@ ff_tracker/
 uv run ff-tracker 123456 --format console
 uv run ff-tracker 123456 --year 2024 --private
 
+# Multiple leagues via CLI (comma-separated)
+uv run ff-tracker 123456789,987654321,678998765
+uv run ff-tracker 123456789,987654321 --private --format email
+
 # Multiple leagues from environment
 uv run ff-tracker --env --format email
 uv run ff-tracker --env --private --format sheets
 
 # Multi-output mode (generates all formats in one execution)
 uv run ff-tracker --env --private --output-dir ./reports
+uv run ff-tracker 123456789,987654321 --output-dir ./reports
 # Creates: standings.txt, standings.tsv, standings.html, standings.json
 
 # Output formats

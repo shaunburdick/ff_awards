@@ -20,6 +20,7 @@ A modern, type-safe command-line tool to analyze ESPN Fantasy Football leagues a
 - **5 Season Challenges**: Track Most Points Overall, Most Points in One Game, Most Points in a Loss, Least Points in a Win, and Closest Victory
 - **Playoff Positioning**: Shows current playoff qualification (top 4 by record, points-for tiebreaker) with visual indicators
 - **Multi-Division Support**: Analyze multiple leagues as divisions with overall rankings
+- **Flexible League Input**: Pass league IDs via CLI (comma-separated), environment variable, or .env file
 - **Private League Support**: Works with both public and private ESPN leagues
 - **Multiple Output Formats**: Console tables, Google Sheets TSV, mobile-friendly HTML email, and JSON
 - **Multi-Output Mode**: Generate all formats in one execution with `--output-dir`
@@ -81,6 +82,9 @@ cp .env.example .env
 # Single league (public)
 uv run ff-tracker <league_id>
 
+# Multiple leagues via CLI (comma-separated)
+uv run ff-tracker <league_id1>,<league_id2>,<league_id3>
+
 # Single private league
 uv run ff-tracker <league_id> --private
 
@@ -135,8 +139,17 @@ uv run ff-tracker --env --output-dir ./reports
 # Basic single league analysis
 uv run ff-tracker 123456
 
+# Multiple leagues via CLI (comma-separated)
+uv run ff-tracker 123456789,987654321,678998765
+
+# Multiple leagues with spaces (also supported)
+uv run ff-tracker "123456, 789012, 345678"
+
 # Private league with specific year
 uv run ff-tracker 123456 --private --year 2024
+
+# Multiple private leagues via CLI
+uv run ff-tracker 123456789,987654321 --private --format email
 
 # Generate Google Sheets compatible output
 uv run ff-tracker 123456 --format sheets > weekly_report.tsv
@@ -147,36 +160,34 @@ uv run ff-tracker 123456 --format email > email_report.html
 # Generate all formats at once (recommended for automation)
 uv run ff-tracker --env --private --output-dir ./reports
 
-# Multiple leagues (requires .env setup - see Configuration)
+# Multiple leagues from environment variable (alternative to CLI)
 uv run ff-tracker --env --format console
 ```
 
 ## Configuration
 
-### Multi-Division Setup (.env file)
+### Multiple League Input Options
 
-For analyzing multiple leagues as divisions, create a `.env` file:
+There are three ways to provide league IDs:
 
-```bash
-# Copy the example
-cp .env.example .env
-```
+1. **CLI Comma-Separated** (Quick and easy):
+   ```bash
+   uv run ff-tracker 123456789,987654321,678998765
+   ```
 
-Example `.env` content:
-```env
-# Multiple league IDs (comma-separated)
-LEAGUE_IDS=123456789,987654321,555444333
+2. **Environment Variable** (Using `--env` flag):
+   ```bash
+   # In .env file:
+   LEAGUE_IDS=123456789,987654321,555444333
 
-# Private league authentication (if needed)
-ESPN_S2=your_espn_s2_cookie_here
-SWID=your_swid_value_here
-```
+   # Then run:
+   uv run ff-tracker --env
+   ```
 
-**Example**: Analyze multiple leagues as divisions:
-```bash
-uv run ff-tracker --env --format console   # Console output for all leagues
-uv run ff-tracker --env --format sheets    # TSV output for Google Sheets
-```
+3. **Single League** (Simplest):
+   ```bash
+   uv run ff-tracker 123456
+   ```
 
 ### ESPN Authentication (Private Leagues Only)
 

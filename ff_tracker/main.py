@@ -3,10 +3,12 @@ Main CLI entry point for Fantasy Football Challenge Tracker.
 
 Usage:
     uv run ff-tracker LEAGUE_ID [--year YEAR] [--private] [--format FORMAT]
+    uv run ff-tracker LEAGUE_ID1,LEAGUE_ID2,LEAGUE_ID3 [--year YEAR] [--private] [--format FORMAT]
 
 Examples:
     uv run ff-tracker 123456 --year 2024
     uv run ff-tracker 123456 --private --format email
+    uv run ff-tracker 123456789,987654321,678998765 --format sheets
 """
 
 from __future__ import annotations
@@ -21,6 +23,31 @@ from .exceptions import FFTrackerError
 from .services import ChallengeCalculator, ESPNService
 
 
+def parse_league_ids_from_arg(league_id_arg: str) -> list[int]:
+    """
+    Parse league IDs from command line argument.
+
+    Args:
+        league_id_arg: Single ID or comma-separated IDs (e.g., "123456" or "123456,789012,345678")
+
+    Returns:
+        List of league IDs parsed from the argument.
+
+    Raises:
+        ValueError: If any league ID is not a valid integer.
+    """
+    try:
+        league_ids = [int(id_str.strip()) for id_str in league_id_arg.split(",") if id_str.strip()]
+        if not league_ids:
+            raise ValueError("No valid league IDs found")
+        return league_ids
+    except ValueError as e:
+        raise ValueError(
+            f"Error parsing league IDs: {e}. "
+            f"Format should be a single ID (123456) or comma-separated IDs (123456,789012,345678)"
+        ) from e
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create and configure argument parser."""
     parser = argparse.ArgumentParser(
@@ -28,13 +55,14 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s 123456                           # Single public league
-  %(prog)s 123456 --year 2024               # Specific year
-  %(prog)s 123456 --private                 # Private league (requires .env)
-  %(prog)s --env                            # Multiple leagues from LEAGUE_IDS in .env
-  %(prog)s 123456 --format email            # HTML email output
-  %(prog)s 123456 --format sheets           # TSV for Google Sheets
-  %(prog)s --env --output-dir ./reports     # Generate all formats at once
+  %(prog)s 123456                                      # Single public league
+  %(prog)s 123456 --year 2024                          # Specific year
+  %(prog)s 123456 --private                            # Private league (requires .env)
+  %(prog)s 123456789,987654321,678998765               # Multiple leagues via CLI
+  %(prog)s --env                                       # Multiple leagues from LEAGUE_IDS in .env
+  %(prog)s 123456 --format email                       # HTML email output
+  %(prog)s 123456 --format sheets                      # TSV for Google Sheets
+  %(prog)s 123456789,987654321 --output-dir ./reports  # Multiple leagues, all formats
 
 Output Formats:
   console   Human-readable tables (default)
@@ -58,9 +86,9 @@ Private League Setup:
 
     parser.add_argument(
         "league_id",
-        type=int,
+        type=str,
         nargs='?',  # Make league_id optional
-        help="ESPN Fantasy Football League ID (or use --env for multiple leagues)"
+        help="ESPN Fantasy Football League ID(s) - single ID or comma-separated (e.g., 123456 or 123456,789012,345678). Alternative: use --env for LEAGUE_IDS from environment"
     )
 
     parser.add_argument(
@@ -178,9 +206,10 @@ def main() -> int:
                 private=args.private
             )
         else:
-            # Single league from command line
+            # Parse league IDs from command line (single or comma-separated)
+            league_ids = parse_league_ids_from_arg(args.league_id)
             config = create_config(
-                league_ids=[args.league_id],
+                league_ids=league_ids,
                 year=args.year,
                 private=args.private,
                 use_env=False
