@@ -227,7 +227,7 @@ class EmailFormatter(BaseFormatter):
         <div class="footer">
             {game_data_text}<br>
             <strong>Fantasy Football Challenge Tracker</strong><br>
-            <a href="https://github.com/shaunburdick/ff-awards" style="color: #3498db; text-decoration: none;">View on GitHub 🔗</a>
+            <a href="https://github.com/shaunburdick/ff_awards" style="color: #3498db; text-decoration: none;">View on GitHub 🔗</a>
         </div>
 """
 
