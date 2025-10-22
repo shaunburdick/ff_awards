@@ -4,20 +4,16 @@ A modern, type-safe command-line tool to analyze ESPN Fantasy Football leagues a
 
 ## Table of Contents
 
-- [Fantasy Football Challenge Tracker](#fantasy-football-challenge-tracker)
-  - [Table of Contents](#table-of-contents)
-  - [Features](#features)
-  - [Installation](#installation)
-  - [Usage](#usage)
-  - [Examples](#examples)
-  - [Configuration](#configuration)
-  - [Sample Output](#sample-output)
-  - [The 5 Season Challenges](#the-5-season-challenges)
-  - [Requirements](#requirements)
-  - [Google Sheets Export](#google-sheets-export)
-  - [Automated Weekly Reports (GitHub Actions)](#automated-weekly-reports-github-actions)
-  - [Contributing](#contributing)
-  - [License](#license)
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Examples](#examples)
+- [Configuration](#configuration)
+- [Sample Output](#sample-output)
+- [The 5 Season Challenges](#the-5-season-challenges)
+- [Automated Weekly Reports (GitHub Actions)](#automated-weekly-reports-github-actions)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Features
 
@@ -34,9 +30,7 @@ A modern, type-safe command-line tool to analyze ESPN Fantasy Football leagues a
 
 ## Installation
 
-### Quick Start with uv (Recommended)
-
-[uv](https://docs.astral.sh/uv/) is a fast, modern Python package manager that handles virtual environments automatically.
+### Quick Start with uv
 
 1. **Install uv**
    ```bash
@@ -99,7 +93,7 @@ uv run ff-tracker <league_id> --format sheets
 
 ### Output Formats
 
-The new modular architecture supports multiple output formats:
+The script supports multiple output formats:
 
 - **`console`** (default): Human-readable tables for terminal display
 - **`sheets`**: Tab-separated values for easy import into Google Sheets
@@ -134,11 +128,6 @@ uv run ff-tracker --env --output-dir ./reports
 #   ./reports/standings.html  (email format)
 #   ./reports/standings.json  (json format)
 ```
-
-**Benefits**:
-- ⚡ **Faster**: Single ESPN API call instead of multiple
-- 🎯 **Efficient**: Perfect for CI/CD workflows and automated reports
-- 📦 **Complete**: All formats available for different use cases
 
 ## Examples
 
@@ -456,35 +445,11 @@ Structured data format perfect for API integrations and custom processing (use `
 - Ties go to the first team to achieve the result
 - If still tied after that, the award splits between tied teams
 
-## Requirements
-
-- Python 3.9+
-- ESPN Fantasy Football league (public or private access)
-- Internet connection for API access
-
-## Google Sheets Export
-
-The tool supports exporting results in a format that can be easily copied into Google Sheets:
-
-**Console Output (for copy-paste):**
-```bash
-uv run ff-tracker 123456789 --format sheets        # Single league
-uv run ff-tracker --env --format sheets            # Multiple leagues
-```
-
-**File Output (save to file first):**
-```bash
-uv run ff-tracker 123456789 --format sheets > results.tsv
-uv run ff-tracker --env --format sheets > multi_results.tsv
-```
-
-The output uses tab-separated values (TSV) format which Google Sheets automatically recognizes when pasting. Simply copy the output and paste it directly into a Google Sheets document.
-
 ## Automated Weekly Reports (GitHub Actions)
 
-This repository includes a GitHub Actions workflow that automatically generates and emails weekly fantasy football reports every Tuesday at 9 AM ET.
+This repository includes a GitHub Actions workflow that automatically generates and emails weekly fantasy football reports every Tuesday at 6 AM ET.
 
-The workflow uses the efficient `--output-dir` mode to generate all formats (console, TSV, HTML, JSON) in a single execution with just one ESPN API call.
+The workflow uses the `--output-dir` mode to generate all formats (console, TSV, HTML, JSON) in a single execution.
 
 ### Setup GitHub Actions Workflow
 
@@ -513,18 +478,6 @@ You can also manually trigger the workflow:
 1. Go to your repository's "Actions" tab
 2. Select "Weekly Fantasy Football Report"
 3. Click "Run workflow"
-
-### What Gets Emailed
-
-The automated workflow generates:
-- **HTML Email**: Mobile-friendly report with complete standings and challenge results
-- **Artifacts**: All 4 formats (TXT, TSV, HTML, JSON) saved for 30 days in GitHub Actions artifacts
-
-The email includes:
-- **Subject**: "Weekly Fantasy Football Report - Week [X]"
-- **Body**: Beautiful HTML formatting with complete standings and challenge results
-
-**Efficiency**: The workflow uses `--output-dir` to generate all formats in a single execution, reducing API calls and execution time by ~66%.
 
 ### Customizing the Schedule
 
