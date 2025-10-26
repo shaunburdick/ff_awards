@@ -86,7 +86,7 @@ jobs:
 
     - name: Send email report
       if: steps.generate-report.outputs.report_generated == 'true'
-      uses: dawidd6/action-send-mail@v3
+      uses: dawidd6/action-send-mail@v6
       with:
         server_address: ${{ secrets.SMTP_SERVER }}
         server_port: ${{ secrets.SMTP_PORT || '2525' }}
