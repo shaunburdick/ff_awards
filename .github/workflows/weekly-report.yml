@@ -144,4 +144,5 @@ jobs:
           ./reports/standings.tsv
           ./reports/standings.html
           ./reports/standings.json
+          ./reports/standings.md
         retention-days: 30
