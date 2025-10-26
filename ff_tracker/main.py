@@ -9,6 +9,7 @@ Examples:
     uv run ff-tracker 123456 --year 2024
     uv run ff-tracker 123456 --private --format email
     uv run ff-tracker 123456789,987654321,678998765 --format sheets
+    uv run ff-tracker 123456 --format markdown > report.md
 """
 
 from __future__ import annotations
@@ -18,7 +19,14 @@ import logging
 import sys
 from pathlib import Path
 
-from .display import BaseFormatter, ConsoleFormatter, EmailFormatter, JsonFormatter, SheetsFormatter
+from .display import (
+    BaseFormatter,
+    ConsoleFormatter,
+    EmailFormatter,
+    JsonFormatter,
+    MarkdownFormatter,
+    SheetsFormatter,
+)
 from .exceptions import FFTrackerError
 from .services import ChallengeCalculator, ESPNService
 
@@ -69,6 +77,7 @@ Output Formats:
   sheets    Tab-separated values for Google Sheets
   email     Mobile-friendly HTML for email reports
   json      Structured JSON data for further processing
+  markdown  Markdown format for GitHub, Slack, Discord, etc.
 
 Multi-Output Mode:
   Use --output-dir to generate all formats in a single execution:
@@ -76,6 +85,7 @@ Multi-Output Mode:
     - standings.tsv  (sheets format)
     - standings.html (email format)
     - standings.json (json format)
+    - standings.md   (markdown format)
 
 Private League Setup:
   Create a .env file with:
@@ -111,7 +121,7 @@ Private League Setup:
 
     parser.add_argument(
         "--format",
-        choices=["console", "sheets", "email", "json"],
+        choices=["console", "sheets", "email", "json", "markdown"],
         default="console",
         help="Output format (default: console). Ignored if --output-dir is specified."
     )
@@ -176,6 +186,8 @@ def create_formatter(format_name: str, year: int) -> BaseFormatter:
         return EmailFormatter(year)
     elif format_name == "json":
         return JsonFormatter(year)
+    elif format_name == "markdown":
+        return MarkdownFormatter(year)
     else:
         raise ValueError(f"Unknown format: {format_name}")
 
@@ -236,6 +248,7 @@ def main() -> int:
                 "sheets": output_dir / "standings.tsv",
                 "email": output_dir / "standings.html",
                 "json": output_dir / "standings.json",
+                "markdown": output_dir / "standings.md",
             }
 
             # Generate each format and write to file

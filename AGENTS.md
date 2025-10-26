@@ -25,12 +25,13 @@ ff_tracker/
     ├── console.py           # Console table output
     ├── sheets.py            # TSV for Google Sheets
     ├── email.py             # Mobile-friendly HTML
-    └── json.py              # Structured JSON output
+    ├── json.py              # Structured JSON output
+    └── markdown.py          # Markdown for GitHub/Slack/Discord
 ```
 
 ### Core Functionality
 - **Input**: Single league ID, multiple leagues via comma-separated CLI argument, or `LEAGUE_IDS` environment variable
-- **Output**: Four formats (console tables, TSV for sheets, HTML for email, JSON for APIs)
+- **Output**: Five formats (console tables, TSV for sheets, HTML for email, JSON for APIs, Markdown for GitHub/Slack/Discord)
 - **Multi-Output Mode**: Generate all formats at once with `--output-dir` (single API call)
 - **Data Source**: ESPN Fantasy Football API (via espn-api Python library)
 - **Multi-League Support**: Handles 3-4 leagues typically, tested with 30+ teams
@@ -70,13 +71,14 @@ uv run ff-tracker --env --private --format sheets
 # Multi-output mode (generates all formats in one execution)
 uv run ff-tracker --env --private --output-dir ./reports
 uv run ff-tracker 123456789,987654321 --output-dir ./reports
-# Creates: standings.txt, standings.tsv, standings.html, standings.json
+# Creates: standings.txt, standings.tsv, standings.html, standings.json, standings.md
 
 # Output formats
 --format console   # Human-readable tables (default)
 --format sheets    # TSV for Google Sheets
 --format email     # Mobile-friendly HTML
 --format json      # Structured JSON for APIs
+--format markdown  # Markdown for GitHub/Slack/Discord
 --output-dir DIR   # Generate all formats to directory (single API call)
 ```
 
@@ -118,6 +120,7 @@ SWID=your_swid_cookie
 - **Sheets Export**: Clean TSV format with Playoffs column for Google Sheets import
 - **Email Format**: Mobile-friendly HTML with responsive design and playoff indicators
 - **JSON Export**: Structured data with in_playoff_position field
+- **Markdown Format**: GitHub/Slack/Discord-ready tables with proper formatting
 
 ### 5. Configuration (`ff_tracker/config.py`)
 - **Environment Loading**: Automatic .env file detection
@@ -136,7 +139,7 @@ SWID=your_swid_cookie
 - **Single League**: 10 teams, 60 games processed
 - **Multi-League**: 3 divisions, 30 teams, 180+ games processed
 - **All Challenges**: Accurate calculations across all game data
-- **Output Formats**: Console, TSV, HTML, and JSON all working perfectly
+- **Output Formats**: Console, TSV, HTML, JSON, and Markdown all working perfectly
 - **Playoff Positioning**: Accurate top 4 calculation with proper tiebreaking
 - **Private Leagues**: Authentication and data extraction working
 - **Error Handling**: Proper validation and user-friendly messages
@@ -159,9 +162,9 @@ uv run ff-tracker --env --private --output-dir ./reports
 # uv run ff-tracker --env --private --format email > email_content.html
 ```
 
-- **Multi-Output Mode (v2.1)**: Single execution generates all 4 formats with one API call
+- **Multi-Output Mode (v2.1)**: Single execution generates all 5 formats with one API call
 - **Efficiency Improvement**: Reduced from 3 API calls to 1 (~66% faster)
-- **Output Files**: `standings.txt`, `standings.tsv`, `standings.html`, `standings.json`
+- **Output Files**: `standings.txt`, `standings.tsv`, `standings.html`, `standings.json`, `standings.md`
 - **Environment Integration**: Loads leagues from `LEAGUE_IDS` secret
 - **Email Reports**: Mobile-friendly HTML with comprehensive league data
 - **Artifacts**: All formats saved for 30 days in GitHub Actions

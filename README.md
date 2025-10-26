@@ -22,7 +22,7 @@ A modern, type-safe command-line tool to analyze ESPN Fantasy Football leagues a
 - **Multi-Division Support**: Analyze multiple leagues as divisions with overall rankings
 - **Flexible League Input**: Pass league IDs via CLI (comma-separated), environment variable, or .env file
 - **Private League Support**: Works with both public and private ESPN leagues
-- **Multiple Output Formats**: Console tables, Google Sheets TSV, mobile-friendly HTML email, and JSON
+- **Multiple Output Formats**: Console tables, Google Sheets TSV, mobile-friendly HTML email, JSON, and Markdown
 - **Multi-Output Mode**: Generate all formats in one execution with `--output-dir`
 - **Type Safety**: Comprehensive type annotations with modern Python syntax
 - **Fast Error Handling**: Fail-fast approach with clear error messages
@@ -103,6 +103,7 @@ The script supports multiple output formats:
 - **`sheets`**: Tab-separated values for easy import into Google Sheets
 - **`email`**: Mobile-friendly HTML format perfect for email reports
 - **`json`**: Structured JSON data for further processing
+- **`markdown`**: Markdown format for GitHub, Slack, Discord, wikis, etc.
 
 ```bash
 # Console output (default)
@@ -116,6 +117,9 @@ uv run ff-tracker 123456 --format email > report.html
 
 # JSON data export
 uv run ff-tracker 123456 --format json > data.json
+
+# Markdown format
+uv run ff-tracker 123456 --format markdown > report.md
 ```
 
 ### Multi-Output Mode
@@ -123,7 +127,7 @@ uv run ff-tracker 123456 --format json > data.json
 Generate all formats in a single execution with `--output-dir`:
 
 ```bash
-# Generate all 4 formats at once (single ESPN API call)
+# Generate all 5 formats at once (single ESPN API call)
 uv run ff-tracker --env --output-dir ./reports
 
 # Creates:
@@ -131,6 +135,7 @@ uv run ff-tracker --env --output-dir ./reports
 #   ./reports/standings.tsv   (sheets format)
 #   ./reports/standings.html  (email format)
 #   ./reports/standings.json  (json format)
+#   ./reports/standings.md    (markdown format)
 ```
 
 ## Examples
