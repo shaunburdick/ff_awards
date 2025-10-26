@@ -52,8 +52,15 @@ jobs:
           PRIVATE_FLAG=""
         fi
 
+        # Capture start time
+        START_TIME=$(date +%s)
+
         # Generate all output formats in one execution using --output-dir
         uv run ff-tracker --env $PRIVATE_FLAG --output-dir ./reports
+
+        # Calculate execution time
+        END_TIME=$(date +%s)
+        EXECUTION_TIME=$((END_TIME - START_TIME))
 
         # Extract current week from console output
         CURRENT_WEEK=$(grep "^CURRENT_WEEK=" ./reports/standings.txt | cut -d'=' -f2)
@@ -67,6 +74,7 @@ jobs:
         fi
 
         echo "current_week=${CURRENT_WEEK}" >> $GITHUB_OUTPUT
+        echo "execution_time=${EXECUTION_TIME}" >> $GITHUB_OUTPUT
         echo "report_generated=true" >> $GITHUB_OUTPUT
 
     # Read HTML report content for email body
@@ -74,10 +82,23 @@ jobs:
       id: prepare-email
       if: steps.generate-report.outputs.report_generated == 'true'
       run: |
-        # GitHub Actions multiline outputs can be problematic with large HTML
-        # So we'll just verify the file exists and use it directly in the email step
+        # Inject metadata into HTML report
+        GENERATED_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        EXECUTION_TIME="${{ steps.generate-report.outputs.execution_time }}"
+        RUN_ID="${{ github.run_id }}"
+        REPO="${{ github.repository }}"
+        
+        # Create metadata HTML
+        METADATA_HTML="Generated: ${GENERATED_TIME} (took ${EXECUTION_TIME}s)<br>"
+        METADATA_HTML+="<a href=\"https://github.com/${REPO}/actions/runs/${RUN_ID}\" style=\"color: #3498db; text-decoration: none;\">Download Full Report Artifacts 📦</a><br>"
+        
+        # Inject metadata between comment markers using sed
+        sed -i "s|<!-- GENERATED_METADATA_START --><!-- GENERATED_METADATA_END -->|<!-- GENERATED_METADATA_START -->${METADATA_HTML}<!-- GENERATED_METADATA_END -->|g" ./reports/standings.html
+        
+        # Verify the file exists and was modified
         if [ -f ./reports/standings.html ]; then
           echo "html_ready=true" >> $GITHUB_OUTPUT
+          echo "Successfully injected metadata into HTML report"
         else
           echo "html_ready=false" >> $GITHUB_OUTPUT
           echo "Error: HTML file not found" >&2

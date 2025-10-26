@@ -2,6 +2,21 @@
 Email HTML formatter for Fantasy Football Challenge Tracker.
 
 Provides mobile-friendly HTML email format suitable for weekly reports.
+
+Template Injection Support:
+    The HTML output includes invisible comment markers that can be used for
+    metadata injection (e.g., by GitHub Actions):
+
+    <!-- GENERATED_METADATA_START --><!-- GENERATED_METADATA_END -->
+
+    To inject metadata (generation time, execution duration, artifact links):
+    1. Generate the HTML normally (markers will be adjacent/empty)
+    2. Use sed or similar to replace the marker pair with content:
+       sed -i "s|<!-- GENERATED_METADATA_START --><!-- GENERATED_METADATA_END -->|
+               <!-- GENERATED_METADATA_START -->YOUR_HTML_HERE<!-- GENERATED_METADATA_END -->|g" file.html
+    3. Injected content will appear in the footer, markers remain for debugging
+
+    When markers are not replaced, they are invisible in rendered HTML/email.
 """
 
 from __future__ import annotations
@@ -220,13 +235,14 @@ class EmailFormatter(BaseFormatter):
 
             html_content += '</table>\n'
 
-            total_games = self._calculate_total_games(divisions)
-            game_data_text = f'Game data: {total_games} individual results processed' if total_games > 0 else 'Game data: Limited - some challenges may be incomplete'
+        # Footer section (always present)
+        total_games = self._calculate_total_games(divisions)
+        game_data_text = f'Game data: {total_games} individual results processed' if total_games > 0 else 'Game data: Limited - some challenges may be incomplete'
 
-            html_content += f"""
+        html_content += f"""
         <div class="footer">
             {game_data_text}<br>
-            <strong>Fantasy Football Challenge Tracker</strong><br>
+            <!-- GENERATED_METADATA_START --><!-- GENERATED_METADATA_END --><strong>Fantasy Football Challenge Tracker</strong><br>
             <a href="https://github.com/shaunburdick/ff_awards" style="color: #3498db; text-decoration: none;">View on GitHub 🔗</a>
         </div>
 """
