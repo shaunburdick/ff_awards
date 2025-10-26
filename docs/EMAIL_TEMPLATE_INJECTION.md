@@ -37,10 +37,10 @@ The workflow automatically injects metadata:
     EXECUTION_TIME="${{ steps.generate-report.outputs.execution_time }}"
     RUN_ID="${{ github.run_id }}"
     REPO="${{ github.repository }}"
-    
+
     METADATA_HTML="Generated: ${GENERATED_TIME} (took ${EXECUTION_TIME}s)<br>"
     METADATA_HTML+="<a href=\"https://github.com/${REPO}/actions/runs/${RUN_ID}\">Download Full Report Artifacts 📦</a><br>"
-    
+
     sed -i "s|<!-- GENERATED_METADATA_START --><!-- GENERATED_METADATA_END -->|<!-- GENERATED_METADATA_START -->${METADATA_HTML}<!-- GENERATED_METADATA_END -->|g" ./reports/standings.html
 ```
 

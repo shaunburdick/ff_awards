@@ -87,14 +87,14 @@ jobs:
         EXECUTION_TIME="${{ steps.generate-report.outputs.execution_time }}"
         RUN_ID="${{ github.run_id }}"
         REPO="${{ github.repository }}"
-        
+
         # Create metadata HTML
         METADATA_HTML="Generated: ${GENERATED_TIME} (took ${EXECUTION_TIME}s)<br>"
         METADATA_HTML+="<a href=\"https://github.com/${REPO}/actions/runs/${RUN_ID}\" style=\"color: #3498db; text-decoration: none;\">Download Full Report Artifacts 📦</a><br>"
-        
+
         # Inject metadata between comment markers using sed
         sed -i "s|<!-- GENERATED_METADATA_START --><!-- GENERATED_METADATA_END -->|<!-- GENERATED_METADATA_START -->${METADATA_HTML}<!-- GENERATED_METADATA_END -->|g" ./reports/standings.html
-        
+
         # Verify the file exists and was modified
         if [ -f ./reports/standings.html ]; then
           echo "html_ready=true" >> $GITHUB_OUTPUT
