@@ -7,6 +7,20 @@ on:
 
   # Allow manual triggering for testing
   workflow_dispatch:
+    inputs:
+      email_recipients:
+        description: 'Email recipients (comma-separated, leave empty to use default from secrets)'
+        required: false
+        type: string
+      email_from:
+        description: 'Email sender (leave empty to use default from secrets)'
+        required: false
+        type: string
+      skip_email:
+        description: 'Skip sending email (useful for testing report generation only)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   PYTHONUNBUFFERED: 1
@@ -106,7 +120,7 @@ jobs:
         fi
 
     - name: Send email report
-      if: steps.generate-report.outputs.report_generated == 'true'
+      if: steps.generate-report.outputs.report_generated == 'true' && inputs.skip_email != true
       uses: dawidd6/action-send-mail@v6
       with:
         server_address: ${{ secrets.SMTP_SERVER }}
@@ -115,9 +129,9 @@ jobs:
         username: ${{ secrets.SMTP_USERNAME }}
         password: ${{ secrets.SMTP_PASSWORD }}
         subject: "Weekly Fantasy Football Report - Week ${{ steps.generate-report.outputs.current_week }}"
-        from: "MM Fantasy Football League <${{ secrets.EMAIL_FROM }}>"
-        to: ${{ secrets.EMAIL_FROM }}
-        bcc: ${{ secrets.EMAIL_RECIPIENTS }}
+        from: "MM Fantasy Football League <${{ inputs.email_from || secrets.EMAIL_FROM }}>"
+        to: ${{ inputs.email_from || secrets.EMAIL_FROM }}
+        bcc: ${{ inputs.email_recipients || secrets.EMAIL_RECIPIENTS }}
         html_body: file://./reports/standings.html
 
     - name: Upload report artifacts
