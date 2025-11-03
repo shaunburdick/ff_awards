@@ -17,6 +17,7 @@ A modern, type-safe command-line tool to analyze ESPN Fantasy Football leagues a
 
 ## Features
 
+- **11 Weekly Highlights**: Track current week's top performances including team challenges (highest/lowest scores, biggest win, closest game) and player highlights (top scorers by position)
 - **5 Season Challenges**: Track Most Points Overall, Most Points in One Game, Most Points in a Loss, Least Points in a Win, and Closest Victory
 - **Playoff Positioning**: Shows current playoff qualification (top 4 by record, points-for tiebreaker) with visual indicators
 - **Multi-Division Support**: Analyze multiple leagues as divisions with overall rankings
@@ -447,6 +448,31 @@ Structured data format perfect for API integrations and custom processing (use `
   ]
 }
 ```
+
+## Weekly Highlights (11 Challenges)
+
+Automatically tracks the current week's top performances across team and player categories:
+
+**Team Challenges (4):**
+1. **Highest Score This Week** - Team with the most points this week
+2. **Lowest Score This Week** - Team with the fewest points this week
+3. **Biggest Win This Week** - Largest margin of victory (shows both scores and margin)
+4. **Closest Game This Week** - Smallest margin between two teams (shows both scores and margin)
+
+**Player Highlights (7):**
+5. **Top Scorer (Player)** - Highest scoring player across all positions
+6. **Best QB** - Top quarterback performance
+7. **Best RB** - Top running back performance
+8. **Best WR** - Top wide receiver performance
+9. **Best TE** - Top tight end performance
+10. **Best K** - Top kicker performance
+11. **Best D/ST** - Top defense/special teams performance
+
+**Display Features:**
+- Team challenges show division and detailed scores (e.g., "148.78 - 49.00 (Δ99.78)")
+- Player highlights show which fantasy team started each top performer
+- Separated into two clear tables for better readability
+- Only includes players in starting lineups (bench players excluded)
 
 ## The 5 Season Challenges
 

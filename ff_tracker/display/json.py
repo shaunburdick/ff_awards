@@ -69,6 +69,7 @@ class JsonFormatter(BaseFormatter):
                     "division": challenge.division,
                     "value": challenge.value,
                     "description": challenge.description,
+                    "challenge_type": "player" if "position" in challenge.additional_info else "team",
                     "additional_info": challenge.additional_info,
                 }
                 for challenge in weekly_challenges

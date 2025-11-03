@@ -76,20 +76,41 @@ class SheetsFormatter(BaseFormatter):
 
         # Weekly challenges (appears before season challenges)
         if weekly_challenges and current_week:
-            output_lines.append(f"WEEK {current_week} HIGHLIGHTS")
-            output_lines.append("Challenge\tWinner\tDivision\tValue\tDetails")
+            # Split into team and player challenges
+            team_challenges = [c for c in weekly_challenges if "position" not in c.additional_info]
+            player_challenges = [c for c in weekly_challenges if "position" in c.additional_info]
 
-            for challenge in weekly_challenges:
-                # For player challenges, include position in winner display
-                winner_display = challenge.winner
-                if "position" in challenge.additional_info:
-                    position = challenge.additional_info["position"]
+            output_lines.append(f"WEEK {current_week} HIGHLIGHTS")
+            output_lines.append("")
+
+            # Team challenges
+            if team_challenges:
+                output_lines.append("Team Challenges")
+                output_lines.append("Challenge\tTeam\tDivision\tValue")
+
+                for challenge in team_challenges:
+                    output_lines.append(
+                        f"{challenge.challenge_name}\t{challenge.winner}\t{challenge.division}\t"
+                        f"{challenge.value}"
+                    )
+
+                output_lines.append("")
+
+            # Player highlights
+            if player_challenges:
+                output_lines.append("Player Highlights")
+                output_lines.append("Challenge\tPlayer\tPoints")
+
+                for challenge in player_challenges:
+                    # Include position in player display
+                    position = challenge.additional_info.get("position", "")
                     winner_display = f"{challenge.winner} ({position})"
 
-                output_lines.append(
-                    f"{challenge.challenge_name}\t{winner_display}\t{challenge.division}\t"
-                    f"{challenge.value}\t{challenge.description}"
-                )
+                    output_lines.append(
+                        f"{challenge.challenge_name}\t{winner_display}\t{challenge.value}"
+                    )
+
+                output_lines.append("")
 
             output_lines.append("")
 

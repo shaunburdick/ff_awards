@@ -1,7 +1,7 @@
 # Fantasy Football Challenge Tracker - Agent Summary
 
 ## Project Overview
-A CLI tool to track 5 specific fantasy football challenges across multiple ESPN leagues for end-of-season awards. Originally built as a single 1000+ line script, it has been completely refactored into a modern Python package demonstrating best practices.
+A CLI tool to track 11 weekly highlights and 5 season-long fantasy football challenges across multiple ESPN leagues for end-of-season awards. Originally built as a single 1000+ line script, it has been completely refactored into a modern Python package demonstrating best practices.
 
 ## Current Architecture
 
@@ -14,11 +14,21 @@ ff_tracker/
 ├── config.py                # Configuration management
 ├── exceptions.py            # Custom exception hierarchy
 ├── models/
-│   └── __init__.py          # Type-safe data models
+│   ├── __init__.py          # Type-safe data models
+│   ├── base.py              # Base model classes
+│   ├── challenge.py         # ChallengeResult model
+│   ├── division.py          # DivisionData model
+│   ├── game.py              # GameResult model
+│   ├── owner.py             # Owner model
+│   ├── team.py              # TeamStats model
+│   ├── week.py              # WeeklyGameResult model
+│   ├── player.py            # WeeklyPlayerStats model
+│   └── weekly_challenge.py  # WeeklyChallenge model
 ├── services/
 │   ├── __init__.py          # Service exports
 │   ├── espn_service.py      # ESPN API integration
-│   └── challenge_service.py # Challenge calculation logic
+│   ├── challenge_service.py # Season challenge calculation
+│   └── weekly_challenge_service.py  # Weekly challenge calculation
 └── display/
     ├── __init__.py          # Formatter exports
     ├── base.py              # Base formatter protocol
@@ -36,8 +46,25 @@ ff_tracker/
 - **Data Source**: ESPN Fantasy Football API (via espn-api Python library)
 - **Multi-League Support**: Handles 3-4 leagues typically, tested with 30+ teams
 - **Playoff Positioning**: Shows current playoff qualification status (top 4 by record, points-for tiebreaker)
+- **Weekly Highlights**: Tracks current week's top team and player performances (11 total challenges)
 
-### The 5 Challenges ✅ All Working
+### The 11 Weekly Highlights ✅ All Working (v2.1)
+**Team Challenges (4):**
+1. **Highest Score This Week** - Team with most points this week
+2. **Lowest Score This Week** - Team with fewest points this week
+3. **Biggest Win This Week** - Largest margin of victory (displays: "148.78 - 49.00 (Δ99.78)")
+4. **Closest Game This Week** - Smallest margin (displays: "107.00 - 98.92 (Δ8.08)")
+
+**Player Highlights (7):**
+5. **Top Scorer (Player)** - Highest scoring player across all positions
+6. **Best QB** - Top quarterback performance
+7. **Best RB** - Top running back performance
+8. **Best WR** - Top wide receiver performance
+9. **Best TE** - Top tight end performance
+10. **Best K** - Top kicker performance
+11. **Best D/ST** - Top defense/special teams performance
+
+### The 5 Season Challenges ✅ All Working
 1. **Most Points Overall** - Team with most total regular season points
 2. **Most Points in One Game** - Highest single week score
 3. **Most Points in a Loss** - Highest score in a losing effort
@@ -96,25 +123,43 @@ SWID=your_swid_cookie
 
 ### 1. Data Models (`ff_tracker/models/__init__.py`)
 - **GameResult**: Individual game data with validation
+- **WeeklyGameResult**: Single week matchup data (team scores, margins, projections)
+- **WeeklyPlayerStats**: Individual player weekly performance (points, position, team)
 - **TeamStats**: Season statistics with computed properties and playoff positioning
-- **ChallengeResult**: Challenge winners with details
-- **DivisionData**: Complete league information
+- **ChallengeResult**: Season challenge winners with details
+- **WeeklyChallenge**: Weekly challenge winners with flexible additional_info
+- **DivisionData**: Complete league information including weekly data
 - All models use modern typing and validation
 
 ### 2. ESPN Service (`ff_tracker/services/espn_service.py`)
 - **Connection Management**: Handles public/private league authentication
 - **Data Extraction**: Teams, games, owner names with error handling
+- **Weekly Data**: Extracts current week game results and player stats via BoxScore API
 - **Playoff Calculation**: Determines top 4 teams by record with points_for tiebreaker
 - **Context Manager**: Proper resource cleanup
 - **Fail-Fast Strategy**: Clear errors on API failures
 
-### 3. Challenge Calculator (`ff_tracker/services/challenge_service.py`)
-- **Business Logic**: Implements all 5 challenge calculations
+### 3. Challenge Calculators
+**Season Challenges** (`ff_tracker/services/challenge_service.py`)
+- **Business Logic**: Implements all 5 season challenge calculations
 - **Game Analysis**: Processes individual game results for accuracy
 - **Tie Handling**: First-to-achieve wins, with split support
 - **Data Validation**: Ensures complete game data before calculation
 
+**Weekly Challenges** (`ff_tracker/services/weekly_challenge_service.py`)
+- **Team Challenges**: Highest/lowest scores, biggest win, closest game
+- **Player Highlights**: Top scorer overall and by position (QB/RB/WR/TE/K/D/ST)
+- **Starter Filtering**: Only includes players in starting lineups (excludes bench)
+- **Detailed Scoring**: Shows both team scores and margins for context
+
 ### 4. Display System (`ff_tracker/display/`)
+- **Extensible Architecture**: Protocol-based formatter pattern
+- **Separated Weekly Tables**: Team challenges and player highlights in distinct tables
+- **Console Output**: Beautiful tables with emojis and playoff indicators (*)
+- **Sheets Export**: Clean TSV format with separate sections for team/player challenges
+- **Email Format**: Mobile-friendly HTML with responsive design and h3 subheadings
+- **JSON Export**: Structured data with challenge_type field ("team" or "player")
+- **Markdown Format**: GitHub/Slack/Discord-ready tables with bold subheadings
 - **Extensible Architecture**: Protocol-based formatter pattern
 - **Console Output**: Beautiful tables with emojis and playoff indicators (*)
 - **Sheets Export**: Clean TSV format with Playoffs column for Google Sheets import
@@ -138,7 +183,8 @@ SWID=your_swid_cookie
 ### Functionality Verified ✅
 - **Single League**: 10 teams, 60 games processed
 - **Multi-League**: 3 divisions, 30 teams, 180+ games processed
-- **All Challenges**: Accurate calculations across all game data
+- **All Challenges**: Accurate calculations across all game data (11 weekly + 5 season)
+- **Weekly Highlights**: Team challenges and player highlights working correctly
 - **Output Formats**: Console, TSV, HTML, JSON, and Markdown all working perfectly
 - **Playoff Positioning**: Accurate top 4 calculation with proper tiebreaking
 - **Private Leagues**: Authentication and data extraction working
@@ -146,8 +192,10 @@ SWID=your_swid_cookie
 
 ### Performance Metrics
 - **Game Processing**: Successfully handles 180+ individual game results
+- **Weekly Data**: Processes current week's BoxScore data for all teams
+- **Player Stats**: Filters and ranks starters across all positions
 - **Team Rankings**: Accurate sorting across divisions and overall
-- **Challenge Accuracy**: All 5 challenges calculated from real game data
+- **Challenge Accuracy**: All 11 weekly + 5 season challenges calculated from real game data
 - **Memory Usage**: Efficient processing with minimal memory footprint
 
 ## GitHub Actions Integration
@@ -224,20 +272,28 @@ uv run ff-tracker --help  # Test CLI
 - **Result**: 66% reduction in API calls and execution time, more reliable workflows
 - **Architecture**: Leverages existing modular formatter system with minimal changes
 
+### 7. Weekly Highlights Feature ✅ IMPLEMENTED (v2.1)
+- **Need**: Real-time weekly performance tracking alongside season-long challenges
+- **Solution**: Added 11 weekly challenges (4 team + 7 player) with separate data models and calculator
+- **Challenges Removed**: 4 projection-based challenges due to ESPN real-time projection updates
+- **Display Innovation**: Separated team and player tables for clarity, shows detailed margins (Δ) for wins/losses
+- **Result**: Comprehensive weekly insights with clean, intuitive presentation across all 5 output formats
+
 ## Future Enhancement Opportunities
 
 ### Potential Improvements
 1. **Owner Name Extraction**: Some challenge results show "Unknown Owner"
 2. **Current Week Detection**: Could auto-detect fantasy football week
 3. **Caching**: Add optional caching for faster repeated runs
-4. **Additional Challenges**: Framework ready for new challenge types
+4. **Historical Tracking**: Store weekly results for season-long trends
 5. **Web Interface**: Could add simple web UI using current modular design
 
 ### Extension Points
 - **New Output Formats**: Add PDF, Slack, Discord formatters
 - **Additional Data Sources**: Framework supports other fantasy platforms
-- **Enhanced Analytics**: More sophisticated challenge calculations
+- **Enhanced Analytics**: More sophisticated challenge calculations (e.g., consistency metrics)
 - **Database Storage**: Optional persistence layer for historical tracking
+- **Pre-Game Projections**: Capture projections before games start for accurate boom/bust tracking
 
 ## How to Work With This Project
 
@@ -267,6 +323,7 @@ The README.md Table of Contents should only show H2 (##) level headers for clean
 ## Success Criteria ✅ ALL MET
 - ✅ Tool connects to ESPN leagues successfully (single and multiple)
 - ✅ Displays comprehensive league standings and challenge results
+- ✅ Weekly highlights feature tracking current week's top performances (v2.1)
 - ✅ Clean, maintainable codebase (modular, well-organized)
 - ✅ Proper typing without suppressions (100% type coverage)
 - ✅ Clear error messages for all failure modes
@@ -274,4 +331,4 @@ The README.md Table of Contents should only show H2 (##) level headers for clean
 - ✅ Preserved all original functionality while improving architecture
 - ✅ Efficient multi-output mode for automated workflows (v2.1)
 
-**Current Status**: Production-ready, fully functional, and serving as excellent example of modern Python development practices.
+**Current Status**: Production-ready, fully functional with 11 weekly highlights and 5 season challenges, serving as excellent example of modern Python development practices.

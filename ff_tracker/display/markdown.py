@@ -161,23 +161,43 @@ class MarkdownFormatter(BaseFormatter):
 
     def _format_weekly_table(self, weekly_challenges: Sequence[WeeklyChallenge]) -> str:
         """Format weekly challenge results table in Markdown."""
-        # Table header
-        lines = [
-            "| Challenge | Winner | Division | Value |",
-            "|-----------|--------|----------|-------|"
-        ]
+        # Split into team and player challenges
+        team_challenges = [c for c in weekly_challenges if "position" not in c.additional_info]
+        player_challenges = [c for c in weekly_challenges if "position" in c.additional_info]
 
-        # Table rows
-        for challenge in weekly_challenges:
-            # For player challenges, include position in winner display
-            winner_display = challenge.winner
-            if "position" in challenge.additional_info:
-                position = challenge.additional_info["position"]
+        lines: list[str] = []
+
+        # Team challenges table
+        if team_challenges:
+            lines.append("**Team Challenges:**")
+            lines.append("")
+            lines.append("| Challenge | Team | Division | Value |")
+            lines.append("|-----------|------|----------|-------|")
+
+            for challenge in team_challenges:
+                lines.append(
+                    f"| {challenge.challenge_name} | {challenge.winner} | "
+                    f"{challenge.division} | {challenge.value} |"
+                )
+
+            lines.append("")
+
+        # Player highlights table
+        if player_challenges:
+            lines.append("**Player Highlights:**")
+            lines.append("")
+            lines.append("| Challenge | Player | Points |")
+            lines.append("|-----------|--------|--------|")
+
+            for challenge in player_challenges:
+                # Include position in player display
+                position = challenge.additional_info.get("position", "")
                 winner_display = f"{challenge.winner} ({position})"
 
-            lines.append(
-                f"| {challenge.challenge_name} | {winner_display} | "
-                f"{challenge.division} | {challenge.value} |"
-            )
+                lines.append(
+                    f"| {challenge.challenge_name} | {winner_display} | {challenge.value} |"
+                )
+
+            lines.append("")
 
         return "\n".join(lines)

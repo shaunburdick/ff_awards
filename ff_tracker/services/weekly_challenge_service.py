@@ -27,14 +27,14 @@ class WeeklyChallengeCalculator:
     2. Lowest Score This Week
     3. Biggest Win This Week
     4. Closest Game This Week
-    5. Most Over Projection
-    6. Most Under Projection
 
     Player Challenges:
-    7. Top Scorer (Overall)
-    8. Top Scorer by Position (QB, RB, WR, TE, K, D/ST)
-    9. Biggest Boom (exceeded projection most)
-    10. Biggest Bust (underperformed projection most)
+    5. Top Scorer (Overall)
+    6. Top Scorer by Position (QB, RB, WR, TE, K, D/ST)
+
+    Note: Projection-based challenges (over/under projection, boom/bust) are not
+    included because ESPN updates projections in real-time as games progress,
+    making post-game projection comparisons unreliable.
     """
 
     def __init__(self) -> None:
@@ -73,8 +73,6 @@ class WeeklyChallengeCalculator:
             results.append(self._calculate_lowest_score(weekly_games, week))
             results.append(self._calculate_biggest_win(weekly_games, week))
             results.append(self._calculate_closest_game(weekly_games, week))
-            results.append(self._calculate_most_over_projection(weekly_games, week))
-            results.append(self._calculate_most_under_projection(weekly_games, week))
         else:
             logger.warning(f"No weekly game data for week {week}, skipping team challenges")
 
@@ -90,8 +88,6 @@ class WeeklyChallengeCalculator:
             if starters:
                 results.append(self._calculate_top_player(starters, week))
                 results.extend(self._calculate_top_by_position(starters, week))
-                results.append(self._calculate_biggest_boom(starters, week))
-                results.append(self._calculate_biggest_bust(starters, week))
             else:
                 logger.warning(f"No starter data for week {week}, skipping player challenges")
         else:
@@ -167,12 +163,13 @@ class WeeklyChallengeCalculator:
             winner=winner.team_name,
             owner=None,
             division=winner.division,
-            value=f"{winner.margin:.2f} pts",
+            value=f"{winner.score:.2f} - {winner.opponent_score:.2f} (Δ{winner.margin:.2f})",
             description=f"{winner.team_name} won by {winner.margin:.2f} points",
             additional_info={
                 "score": winner.score,
                 "opponent": winner.opponent_name,
-                "opponent_score": winner.opponent_score
+                "opponent_score": winner.opponent_score,
+                "margin": winner.margin
             }
         )
 
@@ -192,65 +189,14 @@ class WeeklyChallengeCalculator:
             winner=winner.team_name,
             owner=None,
             division=winner.division,
-            value=f"{winner.margin:.2f} pts",
+            value=f"{winner.score:.2f} - {winner.opponent_score:.2f} (Δ{winner.margin:.2f})",
             description=f"{winner.team_name} {result_type} by only {winner.margin:.2f} points",
             additional_info={
                 "score": winner.score,
                 "opponent": winner.opponent_name,
                 "opponent_score": winner.opponent_score,
-                "won": winner.won
-            }
-        )
-
-    def _calculate_most_over_projection(
-        self,
-        games: Sequence[WeeklyGameResult],
-        week: int
-    ) -> WeeklyChallenge:
-        """Find team that exceeded projection by most."""
-        winner = max(games, key=lambda g: g.projection_diff)
-
-        return WeeklyChallenge(
-            challenge_name="Most Over Projection",
-            week=week,
-            winner=winner.team_name,
-            owner=None,
-            division=winner.division,
-            value=f"+{winner.projection_diff:.2f}",
-            description=(
-                f"{winner.team_name} exceeded projection by {winner.projection_diff:.2f} "
-                f"({winner.score:.2f} actual vs {winner.projected_score:.2f} projected)"
-            ),
-            additional_info={
-                "score": winner.score,
-                "projected": winner.projected_score,
-                "won": winner.won
-            }
-        )
-
-    def _calculate_most_under_projection(
-        self,
-        games: Sequence[WeeklyGameResult],
-        week: int
-    ) -> WeeklyChallenge:
-        """Find team that underperformed projection by most."""
-        winner = min(games, key=lambda g: g.projection_diff)
-
-        return WeeklyChallenge(
-            challenge_name="Most Under Projection",
-            week=week,
-            winner=winner.team_name,
-            owner=None,
-            division=winner.division,
-            value=f"{winner.projection_diff:.2f}",
-            description=(
-                f"{winner.team_name} underperformed projection by {abs(winner.projection_diff):.2f} "
-                f"({winner.score:.2f} actual vs {winner.projected_score:.2f} projected)"
-            ),
-            additional_info={
-                "score": winner.score,
-                "projected": winner.projected_score,
-                "won": winner.won
+                "won": winner.won,
+                "margin": winner.margin
             }
         )
 
@@ -267,15 +213,14 @@ class WeeklyChallengeCalculator:
             week=week,
             winner=winner.name,
             owner=None,
-            division=winner.division,
+            division="N/A",  # Not applicable for player challenges
             value=f"{winner.points:.2f}",
             description=f"{winner.name} ({winner.position}) scored {winner.points:.2f} points",
             additional_info={
                 "position": winner.position,
                 "team": winner.team_name,
                 "pro_team": winner.pro_team,
-                "projected": winner.projected_points,
-                "projection_diff": winner.projection_diff
+                "league_division": winner.division
             }
         )
 
@@ -303,74 +248,18 @@ class WeeklyChallengeCalculator:
                 week=week,
                 winner=winner.name,
                 owner=None,
-                division=winner.division,
+                division="N/A",  # Not applicable for player challenges
                 value=f"{winner.points:.2f}",
                 description=f"{winner.name} scored {winner.points:.2f} points",
                 additional_info={
                     "position": winner.position,
                     "team": winner.team_name,
                     "pro_team": winner.pro_team,
-                    "projected": winner.projected_points
+                    "league_division": winner.division
                 }
             ))
 
         return results
-
-    def _calculate_biggest_boom(
-        self,
-        players: Sequence[WeeklyPlayerStats],
-        week: int
-    ) -> WeeklyChallenge:
-        """Find player who exceeded projection by most (starters only)."""
-        winner = max(players, key=lambda p: p.projection_diff)
-
-        return WeeklyChallenge(
-            challenge_name="Biggest Boom (Player)",
-            week=week,
-            winner=winner.name,
-            owner=None,
-            division=winner.division,
-            value=f"+{winner.projection_diff:.2f}",
-            description=(
-                f"{winner.name} ({winner.position}) exceeded projection by {winner.projection_diff:.2f} "
-                f"({winner.points:.2f} actual vs {winner.projected_points:.2f} projected)"
-            ),
-            additional_info={
-                "position": winner.position,
-                "team": winner.team_name,
-                "pro_team": winner.pro_team,
-                "points": winner.points,
-                "projected": winner.projected_points
-            }
-        )
-
-    def _calculate_biggest_bust(
-        self,
-        players: Sequence[WeeklyPlayerStats],
-        week: int
-    ) -> WeeklyChallenge:
-        """Find player who underperformed projection by most (starters only)."""
-        winner = min(players, key=lambda p: p.projection_diff)
-
-        return WeeklyChallenge(
-            challenge_name="Biggest Bust (Player)",
-            week=week,
-            winner=winner.name,
-            owner=None,
-            division=winner.division,
-            value=f"{winner.projection_diff:.2f}",
-            description=(
-                f"{winner.name} ({winner.position}) underperformed projection by {abs(winner.projection_diff):.2f} "
-                f"({winner.points:.2f} actual vs {winner.projected_points:.2f} projected)"
-            ),
-            additional_info={
-                "position": winner.position,
-                "team": winner.team_name,
-                "pro_team": winner.pro_team,
-                "points": winner.points,
-                "projected": winner.projected_points
-            }
-        )
 
     def _create_no_data_placeholder(
         self,

@@ -175,28 +175,52 @@ class EmailFormatter(BaseFormatter):
 
         # Weekly highlights (at the top for email - most relevant)
         if weekly_challenges and current_week:
+            # Split into team and player challenges
+            team_challenges = [c for c in weekly_challenges if "position" not in c.additional_info]
+            player_challenges = [c for c in weekly_challenges if "position" in c.additional_info]
+
             html_content += '<div class="weekly-highlight">\n'
             html_content += f'<h2>🔥 Week {current_week} Highlights</h2>\n'
-            html_content += '<table>\n'
-            html_content += '<tr><th>Challenge</th><th>Winner</th><th>Division</th><th>Value</th></tr>\n'
 
-            for challenge in weekly_challenges:
-                # For player challenges, include position in winner display
-                winner_display = challenge.winner
-                if "position" in challenge.additional_info:
-                    position = challenge.additional_info["position"]
+            # Team challenges
+            if team_challenges:
+                html_content += '<h3>Team Challenges</h3>\n'
+                html_content += '<table>\n'
+                html_content += '<tr><th>Challenge</th><th>Team</th><th>Division</th><th>Value</th></tr>\n'
+
+                for challenge in team_challenges:
+                    html_content += (
+                        f'<tr>'
+                        f'<td class="challenge-name">{self._escape_html(challenge.challenge_name)}</td>'
+                        f'<td class="winner">{self._escape_html(challenge.winner)}</td>'
+                        f'<td>{self._escape_html(challenge.division)}</td>'
+                        f'<td class="number">{self._escape_html(challenge.value)}</td>'
+                        f'</tr>\n'
+                    )
+
+                html_content += '</table>\n'
+
+            # Player highlights
+            if player_challenges:
+                html_content += '<h3>Player Highlights</h3>\n'
+                html_content += '<table>\n'
+                html_content += '<tr><th>Challenge</th><th>Player</th><th>Points</th></tr>\n'
+
+                for challenge in player_challenges:
+                    # Include position in player display
+                    position = challenge.additional_info.get("position", "")
                     winner_display = f"{challenge.winner} ({position})"
 
-                html_content += (
-                    f'<tr>'
-                    f'<td class="challenge-name">{self._escape_html(challenge.challenge_name)}</td>'
-                    f'<td class="winner">{self._escape_html(winner_display)}</td>'
-                    f'<td>{self._escape_html(challenge.division)}</td>'
-                    f'<td class="number">{self._escape_html(challenge.value)}</td>'
-                    f'</tr>\n'
-                )
+                    html_content += (
+                        f'<tr>'
+                        f'<td class="challenge-name">{self._escape_html(challenge.challenge_name)}</td>'
+                        f'<td class="winner">{self._escape_html(winner_display)}</td>'
+                        f'<td class="number">{self._escape_html(challenge.value)}</td>'
+                        f'</tr>\n'
+                    )
 
-            html_content += '</table>\n'
+                html_content += '</table>\n'
+
             html_content += '</div>\n'
 
         # Division standings
