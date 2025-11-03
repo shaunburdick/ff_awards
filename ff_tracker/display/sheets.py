@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ..models import ChallengeResult, DivisionData
+from ..models import ChallengeResult, DivisionData, WeeklyChallenge
 from .base import BaseFormatter
 
 
@@ -29,6 +29,7 @@ class SheetsFormatter(BaseFormatter):
         self,
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
+        weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None
     ) -> str:
         """Format complete output for Google Sheets TSV."""
@@ -38,6 +39,10 @@ class SheetsFormatter(BaseFormatter):
         total_divisions, total_teams = self._calculate_total_stats(divisions)
         output_lines.append(f"Fantasy Football Multi-Division Challenge Tracker ({self.year})")
         output_lines.append(f"{total_divisions} divisions, {total_teams} teams total")
+
+        if current_week is not None:
+            output_lines.append(f"Current Week: {current_week}")
+
         output_lines.append("")
 
         # Division standings
@@ -68,6 +73,25 @@ class SheetsFormatter(BaseFormatter):
             )
 
         output_lines.append("")
+
+        # Weekly challenges (appears before season challenges)
+        if weekly_challenges and current_week:
+            output_lines.append(f"WEEK {current_week} HIGHLIGHTS")
+            output_lines.append("Challenge\tWinner\tDivision\tValue\tDetails")
+
+            for challenge in weekly_challenges:
+                # For player challenges, include position in winner display
+                winner_display = challenge.winner
+                if "position" in challenge.additional_info:
+                    position = challenge.additional_info["position"]
+                    winner_display = f"{challenge.winner} ({position})"
+
+                output_lines.append(
+                    f"{challenge.challenge_name}\t{winner_display}\t{challenge.division}\t"
+                    f"{challenge.value}\t{challenge.description}"
+                )
+
+            output_lines.append("")
 
         # Challenge results
         if challenges:

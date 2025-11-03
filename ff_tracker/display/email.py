@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ..models import ChallengeResult, DivisionData
+from ..models import ChallengeResult, DivisionData, WeeklyChallenge
 from .base import BaseFormatter
 
 
@@ -44,6 +44,7 @@ class EmailFormatter(BaseFormatter):
         self,
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
+        weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None
     ) -> str:
         """Format complete output for mobile-friendly HTML email."""
@@ -120,6 +121,17 @@ class EmailFormatter(BaseFormatter):
             font-weight: bold;
             color: #2980b9;
         }}
+        .weekly-highlight {{
+            background-color: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ffc107;
+        }}
+        .weekly-highlight h2 {{
+            color: #856404;
+            margin-top: 0;
+        }}
         .winner {{
             color: #27ae60;
             font-weight: bold;
@@ -160,6 +172,32 @@ class EmailFormatter(BaseFormatter):
         <h1>Fantasy Football Multi-Division Challenge Tracker ({self.year})</h1>
         <div class="summary">{total_divisions} divisions • {total_teams} teams total • Week {current_week or "Not Found"}</div>
 """
+
+        # Weekly highlights (at the top for email - most relevant)
+        if weekly_challenges and current_week:
+            html_content += '<div class="weekly-highlight">\n'
+            html_content += f'<h2>🔥 Week {current_week} Highlights</h2>\n'
+            html_content += '<table>\n'
+            html_content += '<tr><th>Challenge</th><th>Winner</th><th>Division</th><th>Value</th></tr>\n'
+
+            for challenge in weekly_challenges:
+                # For player challenges, include position in winner display
+                winner_display = challenge.winner
+                if "position" in challenge.additional_info:
+                    position = challenge.additional_info["position"]
+                    winner_display = f"{challenge.winner} ({position})"
+
+                html_content += (
+                    f'<tr>'
+                    f'<td class="challenge-name">{self._escape_html(challenge.challenge_name)}</td>'
+                    f'<td class="winner">{self._escape_html(winner_display)}</td>'
+                    f'<td>{self._escape_html(challenge.division)}</td>'
+                    f'<td class="number">{self._escape_html(challenge.value)}</td>'
+                    f'</tr>\n'
+                )
+
+            html_content += '</table>\n'
+            html_content += '</div>\n'
 
         # Division standings
         for division in divisions:

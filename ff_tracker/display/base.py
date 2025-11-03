@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import Protocol
 
-from ..models import ChallengeResult, DivisionData, TeamStats
+from ..models import ChallengeResult, DivisionData, TeamStats, WeeklyChallenge
 
 
 class OutputFormatter(Protocol):
@@ -21,6 +21,7 @@ class OutputFormatter(Protocol):
         self,
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
+        weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None
     ) -> str:
         """
@@ -28,7 +29,8 @@ class OutputFormatter(Protocol):
 
         Args:
             divisions: List of division data
-            challenges: List of challenge results
+            challenges: List of season challenge results
+            weekly_challenges: List of weekly challenge results (optional)
             current_week: Current fantasy week number
 
         Returns:
@@ -45,6 +47,7 @@ class BaseFormatter(ABC):
         self,
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
+        weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None
     ) -> str:
         """Format the complete output for display."""

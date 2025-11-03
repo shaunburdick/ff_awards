@@ -10,7 +10,7 @@ from collections.abc import Sequence
 
 from tabulate import tabulate
 
-from ..models import ChallengeResult, DivisionData
+from ..models import ChallengeResult, DivisionData, WeeklyChallenge
 from .base import BaseFormatter
 
 
@@ -31,6 +31,7 @@ class ConsoleFormatter(BaseFormatter):
         self,
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
+        weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None
     ) -> str:
         """Format complete output for console display."""
@@ -58,6 +59,12 @@ class ConsoleFormatter(BaseFormatter):
         overall_table = self._format_overall_table(divisions)
         output_lines.append(overall_table)
         output_lines.append("  * = Currently in playoff position")
+
+        # Weekly challenges (NEW - appears before season challenges)
+        if weekly_challenges and current_week:
+            output_lines.append(f"\n🔥 WEEK {current_week} HIGHLIGHTS")
+            weekly_table = self._format_weekly_table(weekly_challenges)
+            output_lines.append(weekly_table)
 
         # Challenge results
         if challenges:
@@ -142,5 +149,33 @@ class ConsoleFormatter(BaseFormatter):
         return tabulate(
             challenge_table,
             headers=["Challenge", "Winner", "Owner", "Division", "Details"],
+            tablefmt="grid"
+        )
+
+    def _format_weekly_table(self, weekly_challenges: Sequence[WeeklyChallenge]) -> str:
+        """Format the weekly challenges results table."""
+        weekly_table: list[list[str]] = []
+
+        for challenge in weekly_challenges:
+            # For player challenges, show player name + position
+            # For team challenges, show team name
+            winner_display = challenge.winner
+            if "position" in challenge.additional_info:
+                position = challenge.additional_info["position"]
+                winner_display = f"{challenge.winner} ({position})"
+
+            # Shorten the value display
+            value_display = challenge.value
+
+            weekly_table.append([
+                challenge.challenge_name,
+                self._truncate_text(winner_display, 30),
+                self._truncate_text(challenge.division, 15),
+                value_display
+            ])
+
+        return tabulate(
+            weekly_table,
+            headers=["Challenge", "Winner", "Division", "Value"],
             tablefmt="grid"
         )

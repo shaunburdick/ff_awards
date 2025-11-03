@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 from ..config import FFTrackerConfig
 from ..exceptions import ESPNAPIError, LeagueConnectionError, PrivateLeagueError
-from ..models import DivisionData, GameResult, Owner, TeamStats
+from ..models import DivisionData, GameResult, Owner, TeamStats, WeeklyGameResult, WeeklyPlayerStats
 
 # Logger for this module
 logger = logging.getLogger(__name__)
@@ -422,6 +422,200 @@ class ESPNService:
 
         return games
 
+    def extract_weekly_games(
+        self,
+        league: League,
+        division_name: str,
+        week: int
+    ) -> list[WeeklyGameResult]:
+        """
+        Extract game results for a specific week with projections.
+
+        Args:
+            league: ESPN League object
+            division_name: Name of this division
+            week: Week number to extract data for
+
+        Returns:
+            List of weekly game results with projections
+
+        Raises:
+            ESPNAPIError: If weekly game extraction fails
+        """
+        weekly_games: list[WeeklyGameResult] = []
+
+        try:
+            logger.debug(f"Extracting weekly games for {division_name} week {week}")
+
+            box_scores = league.box_scores(week)
+            if not box_scores:
+                logger.warning(f"No box scores available for week {week}")
+                return weekly_games
+
+            for box_score in box_scores:
+                try:
+                    # Extract team information
+                    home_team = box_score.home_team
+                    away_team = box_score.away_team
+
+                    home_name = home_team.team_name or home_team.team_abbrev or f"Team {home_team.team_id}"
+                    away_name = away_team.team_name or away_team.team_abbrev or f"Team {away_team.team_id}"
+
+                    home_score = box_score.home_score
+                    away_score = box_score.away_score
+                    home_projected = box_score.home_projected
+                    away_projected = box_score.away_projected
+
+                    # Calculate margins
+                    margin = abs(home_score - away_score)
+
+                    # Create WeeklyGameResult for both teams
+                    weekly_games.extend([
+                        WeeklyGameResult(
+                            team_name=home_name,
+                            score=home_score,
+                            projected_score=home_projected,
+                            opponent_name=away_name,
+                            opponent_score=away_score,
+                            opponent_projected_score=away_projected,
+                            won=home_score > away_score,
+                            week=week,
+                            margin=margin,
+                            projection_diff=home_score - home_projected,
+                            division=division_name
+                        ),
+                        WeeklyGameResult(
+                            team_name=away_name,
+                            score=away_score,
+                            projected_score=away_projected,
+                            opponent_name=home_name,
+                            opponent_score=home_score,
+                            opponent_projected_score=home_projected,
+                            won=away_score > home_score,
+                            week=week,
+                            margin=margin,
+                            projection_diff=away_score - away_projected,
+                            division=division_name
+                        )
+                    ])
+
+                except Exception as e:
+                    logger.warning(f"Error processing box score for week {week}: {e}")
+                    continue
+
+            logger.info(f"Extracted {len(weekly_games)} weekly game results for week {week}")
+            return weekly_games
+
+        except Exception as e:
+            raise ESPNAPIError(
+                f"Failed to extract weekly games for {division_name} week {week}: {e}"
+            ) from e
+
+    def extract_weekly_players(
+        self,
+        league: League,
+        division_name: str,
+        week: int
+    ) -> list[WeeklyPlayerStats]:
+        """
+        Extract player performances for a specific week.
+
+        Args:
+            league: ESPN League object
+            division_name: Name of this division
+            week: Week number to extract data for
+
+        Returns:
+            List of weekly player statistics
+
+        Raises:
+            ESPNAPIError: If weekly player extraction fails
+        """
+        weekly_players: list[WeeklyPlayerStats] = []
+
+        try:
+            logger.debug(f"Extracting weekly players for {division_name} week {week}")
+
+            box_scores = league.box_scores(week)
+            if not box_scores:
+                logger.warning(f"No box scores available for week {week}")
+                return weekly_players
+
+            for box_score in box_scores:
+                try:
+                    # Process home team lineup
+                    home_team = box_score.home_team
+                    home_name = home_team.team_name or home_team.team_abbrev or f"Team {home_team.team_id}"
+
+                    for box_player in box_score.home_lineup:
+                        weekly_players.append(
+                            self._create_weekly_player_stat(
+                                box_player,
+                                home_name,
+                                division_name,
+                                week
+                            )
+                        )
+
+                    # Process away team lineup
+                    away_team = box_score.away_team
+                    away_name = away_team.team_name or away_team.team_abbrev or f"Team {away_team.team_id}"
+
+                    for box_player in box_score.away_lineup:
+                        weekly_players.append(
+                            self._create_weekly_player_stat(
+                                box_player,
+                                away_name,
+                                division_name,
+                                week
+                            )
+                        )
+
+                except Exception as e:
+                    logger.warning(f"Error processing player lineup for week {week}: {e}")
+                    continue
+
+            logger.info(f"Extracted {len(weekly_players)} weekly player stats for week {week}")
+            return weekly_players
+
+        except Exception as e:
+            raise ESPNAPIError(
+                f"Failed to extract weekly players for {division_name} week {week}: {e}"
+            ) from e
+
+    def _create_weekly_player_stat(
+        self,
+        box_player: Any,
+        team_name: str,
+        division: str,
+        week: int
+    ) -> WeeklyPlayerStats:
+        """
+        Create WeeklyPlayerStats from a BoxPlayer object.
+
+        Args:
+            box_player: ESPN BoxPlayer object
+            team_name: Fantasy team name
+            division: Division name
+            week: Week number
+
+        Returns:
+            WeeklyPlayerStats object
+        """
+        return WeeklyPlayerStats(
+            name=box_player.name,
+            position=box_player.position,
+            team_name=team_name,
+            division=division,
+            points=box_player.points,
+            projected_points=box_player.projected_points,
+            projection_diff=box_player.points - box_player.projected_points,
+            slot_position=box_player.slot_position,
+            week=week,
+            pro_team=box_player.proTeam if hasattr(box_player, 'proTeam') else "UNK",
+            pro_opponent=box_player.pro_opponent if hasattr(box_player, 'pro_opponent') else ""
+        )
+
     def load_division_data(self, league_id: int) -> DivisionData:
         """
         Load complete data for a single division.
@@ -447,11 +641,26 @@ class ESPNService:
         teams = self.extract_teams(league, league_name)
         games = self.extract_games(league, league_name)
 
+        # Extract weekly data if current week is available
+        weekly_games: list[WeeklyGameResult] = []
+        weekly_players: list[WeeklyPlayerStats] = []
+
+        if self.current_week is not None and self.current_week > 0:
+            try:
+                logger.info(f"Extracting weekly data for week {self.current_week}")
+                weekly_games = self.extract_weekly_games(league, league_name, self.current_week)
+                weekly_players = self.extract_weekly_players(league, league_name, self.current_week)
+            except Exception as e:
+                logger.warning(f"Could not extract weekly data for week {self.current_week}: {e}")
+                # Continue without weekly data - not a fatal error
+
         return DivisionData(
             league_id=league_id,
             name=league_name,
             teams=teams,
-            games=games
+            games=games,
+            weekly_games=weekly_games,
+            weekly_players=weekly_players
         )
 
     def load_all_divisions(self) -> list[DivisionData]:

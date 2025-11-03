@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ..models import ChallengeResult, DivisionData
+from ..models import ChallengeResult, DivisionData, WeeklyChallenge
 from .base import BaseFormatter
 
 
@@ -30,6 +30,7 @@ class MarkdownFormatter(BaseFormatter):
         self,
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
+        weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None
     ) -> str:
         """Format complete output for Markdown display."""
@@ -64,6 +65,14 @@ class MarkdownFormatter(BaseFormatter):
         output_lines.append("")
         output_lines.append("_\\* = Currently in playoff position_")
         output_lines.append("")
+
+        # Weekly challenges (appears before season challenges)
+        if weekly_challenges and current_week:
+            output_lines.append(f"## 🔥 WEEK {current_week} HIGHLIGHTS")
+            output_lines.append("")
+            weekly_table = self._format_weekly_table(weekly_challenges)
+            output_lines.append(weekly_table)
+            output_lines.append("")
 
         # Challenge results
         if challenges:
@@ -146,6 +155,29 @@ class MarkdownFormatter(BaseFormatter):
                 f"| {challenge.challenge_name} | {challenge.winner} | "
                 f"{challenge.owner.full_name} | {challenge.division} | "
                 f"{challenge.description} |"
+            )
+
+        return "\n".join(lines)
+
+    def _format_weekly_table(self, weekly_challenges: Sequence[WeeklyChallenge]) -> str:
+        """Format weekly challenge results table in Markdown."""
+        # Table header
+        lines = [
+            "| Challenge | Winner | Division | Value |",
+            "|-----------|--------|----------|-------|"
+        ]
+
+        # Table rows
+        for challenge in weekly_challenges:
+            # For player challenges, include position in winner display
+            winner_display = challenge.winner
+            if "position" in challenge.additional_info:
+                position = challenge.additional_info["position"]
+                winner_display = f"{challenge.winner} ({position})"
+
+            lines.append(
+                f"| {challenge.challenge_name} | {winner_display} | "
+                f"{challenge.division} | {challenge.value} |"
             )
 
         return "\n".join(lines)

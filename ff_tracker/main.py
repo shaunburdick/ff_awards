@@ -28,7 +28,8 @@ from .display import (
     SheetsFormatter,
 )
 from .exceptions import FFTrackerError
-from .services import ChallengeCalculator, ESPNService
+from .models import WeeklyChallenge, WeeklyGameResult, WeeklyPlayerStats
+from .services import ChallengeCalculator, ESPNService, WeeklyChallengeCalculator
 
 
 def parse_league_ids_from_arg(league_id_arg: str) -> list[int]:
@@ -230,11 +231,34 @@ def main() -> int:
         # Initialize services
         espn_service = ESPNService(config)
         challenge_calculator = ChallengeCalculator()
+        weekly_calculator = WeeklyChallengeCalculator()
 
         # Connect to ESPN and extract data (single API call)
         with espn_service:
             divisions = espn_service.load_all_divisions()
             challenges = challenge_calculator.calculate_all_challenges(divisions)
+
+            # Calculate weekly challenges if we have weekly data
+            weekly_challenges: list[WeeklyChallenge] = []
+            if espn_service.current_week and espn_service.current_week > 0:
+                # Combine all weekly games and players from all divisions
+                all_weekly_games: list[WeeklyGameResult] = []
+                all_weekly_players: list[WeeklyPlayerStats] = []
+                for division in divisions:
+                    all_weekly_games.extend(division.weekly_games)
+                    all_weekly_players.extend(division.weekly_players)
+
+                # Calculate weekly challenges if we have data
+                if all_weekly_games or all_weekly_players:
+                    try:
+                        weekly_challenges = weekly_calculator.calculate_all_weekly_challenges(
+                            all_weekly_games,
+                            all_weekly_players,
+                            espn_service.current_week
+                        )
+                    except Exception as e:
+                        logging.warning(f"Could not calculate weekly challenges: {e}")
+                        # Continue without weekly challenges - not fatal
 
         # Handle output based on mode
         if args.output_dir:
@@ -254,7 +278,12 @@ def main() -> int:
             # Generate each format and write to file
             for format_name, file_path in format_files.items():
                 formatter = create_formatter(format_name, config.year)
-                output = formatter.format_output(divisions, challenges, espn_service.current_week)
+                output = formatter.format_output(
+                    divisions,
+                    challenges,
+                    weekly_challenges if weekly_challenges else None,
+                    espn_service.current_week
+                )
                 file_path.write_text(output, encoding="utf-8")
                 print(f"Generated {format_name} output: {file_path}")
 
@@ -262,7 +291,12 @@ def main() -> int:
         else:
             # Single output mode: print to stdout
             formatter = create_formatter(args.format, config.year)
-            output = formatter.format_output(divisions, challenges, espn_service.current_week)
+            output = formatter.format_output(
+                divisions,
+                challenges,
+                weekly_challenges if weekly_challenges else None,
+                espn_service.current_week
+            )
             print(output)
             return 0
 

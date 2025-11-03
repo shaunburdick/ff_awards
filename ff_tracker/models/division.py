@@ -4,11 +4,23 @@ Division data model representing a complete league.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ..exceptions import DataValidationError
 from .game import GameResult
+from .player import WeeklyPlayerStats
 from .team import TeamStats
+from .week import WeeklyGameResult
+
+
+def _empty_weekly_games() -> list[WeeklyGameResult]:
+    """Factory for empty weekly games list."""
+    return []
+
+
+def _empty_weekly_players() -> list[WeeklyPlayerStats]:
+    """Factory for empty weekly players list."""
+    return []
 
 
 @dataclass(frozen=True)
@@ -16,12 +28,15 @@ class DivisionData:
     """
     Complete data for a single division (league).
 
-    Contains all teams and games for one ESPN league.
+    Contains all teams and games for one ESPN league,
+    plus optional weekly statistics for the current week.
     """
     league_id: int
     name: str
     teams: list[TeamStats]
     games: list[GameResult]
+    weekly_games: list[WeeklyGameResult] = field(default_factory=_empty_weekly_games)
+    weekly_players: list[WeeklyPlayerStats] = field(default_factory=_empty_weekly_players)
 
     def __post_init__(self) -> None:
         """Validate division data after construction."""

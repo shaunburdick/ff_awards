@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 
-from ..models import ChallengeResult, DivisionData, Owner
+from ..models import ChallengeResult, DivisionData, Owner, WeeklyChallenge
 from .base import BaseFormatter
 
 
@@ -35,11 +35,12 @@ class JsonFormatter(BaseFormatter):
         self,
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
+        weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None
     ) -> str:
         """Format results as JSON string."""
         # Dictionary comprehension - very pythonic!
-        data: dict[str, list[dict[str, object]] | int] = {
+        data: dict[str, object] = {
             "current_week": current_week if current_week is not None else -1,
             "divisions": [
                 {
@@ -60,6 +61,18 @@ class JsonFormatter(BaseFormatter):
                 }
                 for div in divisions
             ],
+            "weekly_challenges": [
+                {
+                    "name": challenge.challenge_name,
+                    "week": challenge.week,
+                    "winner": challenge.winner,
+                    "division": challenge.division,
+                    "value": challenge.value,
+                    "description": challenge.description,
+                    "additional_info": challenge.additional_info,
+                }
+                for challenge in weekly_challenges
+            ] if weekly_challenges else [],
             "challenges": [
                 {
                     "name": challenge.challenge_name,

@@ -12,7 +12,10 @@ from .challenge import ChallengeResult
 from .division import DivisionData
 from .game import GameResult
 from .owner import Owner
+from .player import WeeklyPlayerStats
 from .team import TeamStats
+from .week import WeeklyGameResult
+from .weekly_challenge import WeeklyChallenge
 
 __all__ = [
     "Validatable",
@@ -21,4 +24,7 @@ __all__ = [
     "TeamStats",
     "ChallengeResult",
     "DivisionData",
+    "WeeklyGameResult",
+    "WeeklyPlayerStats",
+    "WeeklyChallenge",
 ]
