@@ -22,6 +22,7 @@ Template Injection Support:
 from __future__ import annotations
 
 from collections.abc import Sequence
+from importlib.metadata import version
 
 from ..models import ChallengeResult, DivisionData, WeeklyChallenge
 from .base import BaseFormatter
@@ -304,7 +305,7 @@ class EmailFormatter(BaseFormatter):
         html_content += f"""
         <div class="footer">
             {game_data_text}<br>
-            <!-- GENERATED_METADATA_START --><!-- GENERATED_METADATA_END --><strong>Fantasy Football Challenge Tracker</strong><br>
+            <!-- GENERATED_METADATA_START --><!-- GENERATED_METADATA_END --><strong>Fantasy Football Challenge Tracker</strong> v{version("ff-awards")}<br>
             <a href="https://github.com/shaunburdick/ff_awards" style="color: #3498db; text-decoration: none;">View on GitHub 🔗</a>
         </div>
 """

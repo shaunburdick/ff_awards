@@ -12,9 +12,11 @@ Example:
     python -m ff_tracker 123456 --year 2024 --format console
 """
 
+from importlib.metadata import version
+
 from .main import main
 
-__version__ = "2.0.0"
+__version__ = version("ff-awards")
 __author__ = "Shaun Burdick"
 
 __all__ = ["main"]
