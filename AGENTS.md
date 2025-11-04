@@ -1,7 +1,7 @@
 # Fantasy Football Challenge Tracker - Agent Summary
 
 ## Project Overview
-A CLI tool to track 11 weekly highlights and 5 season-long fantasy football challenges across multiple ESPN leagues for end-of-season awards. Originally built as a single 1000+ line script, it has been completely refactored into a modern Python package demonstrating best practices.
+A CLI tool to track 13 weekly highlights and 5 season-long fantasy football challenges across multiple ESPN leagues for end-of-season awards. Originally built as a single 1000+ line script, it has been completely refactored into a modern Python package demonstrating best practices.
 
 ## Current Architecture
 
@@ -46,23 +46,26 @@ ff_tracker/
 - **Data Source**: ESPN Fantasy Football API (via espn-api Python library)
 - **Multi-League Support**: Handles 3-4 leagues typically, tested with 30+ teams
 - **Playoff Positioning**: Shows current playoff qualification status (top 4 by record, points-for tiebreaker)
-- **Weekly Highlights**: Tracks current week's top team and player performances (11 total challenges)
+- **Weekly Highlights**: Tracks current week's top team and player performances (13 total challenges)
+- **True Projection Tracking**: Uses pre-game starter projections for accurate boom/bust analysis (v2.2)
 
-### The 11 Weekly Highlights ✅ All Working (v2.1)
-**Team Challenges (4):**
+### The 13 Weekly Highlights ✅ All Working (v2.2)
+**Team Challenges (6):**
 1. **Highest Score This Week** - Team with most points this week
 2. **Lowest Score This Week** - Team with fewest points this week
 3. **Biggest Win This Week** - Largest margin of victory (displays: "148.78 - 49.00 (Δ99.78)")
 4. **Closest Game This Week** - Smallest margin (displays: "107.00 - 98.92 (Δ8.08)")
+5. **Overachiever** - Team that most exceeded pre-game starter projections (NEW v2.2)
+6. **Below Expectations** - Team that most underperformed pre-game starter projections (NEW v2.2)
 
 **Player Highlights (7):**
-5. **Top Scorer (Player)** - Highest scoring player across all positions
-6. **Best QB** - Top quarterback performance
-7. **Best RB** - Top running back performance
-8. **Best WR** - Top wide receiver performance
-9. **Best TE** - Top tight end performance
-10. **Best K** - Top kicker performance
-11. **Best D/ST** - Top defense/special teams performance
+7. **Top Scorer (Player)** - Highest scoring player across all positions
+8. **Best QB** - Top quarterback performance
+9. **Best RB** - Top running back performance
+10. **Best WR** - Top wide receiver performance
+11. **Best TE** - Top tight end performance
+12. **Best K** - Top kicker performance
+13. **Best D/ST** - Top defense/special teams performance
 
 ### The 5 Season Challenges ✅ All Working
 1. **Most Points Overall** - Team with most total regular season points
@@ -147,10 +150,11 @@ SWID=your_swid_cookie
 - **Data Validation**: Ensures complete game data before calculation
 
 **Weekly Challenges** (`ff_tracker/services/weekly_challenge_service.py`)
-- **Team Challenges**: Highest/lowest scores, biggest win, closest game
+- **Team Challenges**: Highest/lowest scores, biggest win, closest game, overachiever, below expectations
 - **Player Highlights**: Top scorer overall and by position (QB/RB/WR/TE/K/D/ST)
 - **Starter Filtering**: Only includes players in starting lineups (excludes bench)
 - **Detailed Scoring**: Shows both team scores and margins for context
+- **Projection Tracking**: Overachiever/Below Expectations use true pre-game starter projections (v2.2)
 
 ### 4. Display System (`ff_tracker/display/`)
 - **Extensible Architecture**: Protocol-based formatter pattern
@@ -158,14 +162,8 @@ SWID=your_swid_cookie
 - **Console Output**: Beautiful tables with emojis and playoff indicators (*)
 - **Sheets Export**: Clean TSV format with separate sections for team/player challenges
 - **Email Format**: Mobile-friendly HTML with responsive design and h3 subheadings
-- **JSON Export**: Structured data with challenge_type field ("team" or "player")
+- **JSON Export**: Structured data with challenge_type field ("team" or "player") and weekly_games array (v2.2)
 - **Markdown Format**: GitHub/Slack/Discord-ready tables with bold subheadings
-- **Extensible Architecture**: Protocol-based formatter pattern
-- **Console Output**: Beautiful tables with emojis and playoff indicators (*)
-- **Sheets Export**: Clean TSV format with Playoffs column for Google Sheets import
-- **Email Format**: Mobile-friendly HTML with responsive design and playoff indicators
-- **JSON Export**: Structured data with in_playoff_position field
-- **Markdown Format**: GitHub/Slack/Discord-ready tables with proper formatting
 
 ### 5. Configuration (`ff_tracker/config.py`)
 - **Environment Loading**: Automatic .env file detection
@@ -183,8 +181,9 @@ SWID=your_swid_cookie
 ### Functionality Verified ✅
 - **Single League**: 10 teams, 60 games processed
 - **Multi-League**: 3 divisions, 30 teams, 180+ games processed
-- **All Challenges**: Accurate calculations across all game data (11 weekly + 5 season)
+- **All Challenges**: Accurate calculations across all game data (13 weekly + 5 season)
 - **Weekly Highlights**: Team challenges and player highlights working correctly
+- **True Projections**: Starter-based projections calculated for all teams (v2.2)
 - **Output Formats**: Console, TSV, HTML, JSON, and Markdown all working perfectly
 - **Playoff Positioning**: Accurate top 4 calculation with proper tiebreaking
 - **Private Leagues**: Authentication and data extraction working
@@ -194,8 +193,9 @@ SWID=your_swid_cookie
 - **Game Processing**: Successfully handles 180+ individual game results
 - **Weekly Data**: Processes current week's BoxScore data for all teams
 - **Player Stats**: Filters and ranks starters across all positions
+- **Projection Calculation**: Sums starter projections for 30+ teams per week (v2.2)
 - **Team Rankings**: Accurate sorting across divisions and overall
-- **Challenge Accuracy**: All 11 weekly + 5 season challenges calculated from real game data
+- **Challenge Accuracy**: All 13 weekly + 5 season challenges calculated from real game data
 - **Memory Usage**: Efficient processing with minimal memory footprint
 
 ## GitHub Actions Integration
@@ -279,6 +279,19 @@ uv run ff-tracker --help  # Test CLI
 - **Display Innovation**: Separated team and player tables for clarity, shows detailed margins (Δ) for wins/losses
 - **Result**: Comprehensive weekly insights with clean, intuitive presentation across all 5 output formats
 
+### 8. True Projection Tracking ✅ IMPLEMENTED (v2.2)
+- **Problem**: ESPN updates team projections in real-time as games progress, making post-game boom/bust analysis unreliable
+- **Discovery**: Team that scored 108.24 showed ESPN projection of 121.34 (diff: -13.10), but true pre-game projection was 142.57 (diff: -34.33)
+  - ESPN had adjusted projections DOWN by 21 points during games, hiding true underperformance
+- **Solution**: Calculate "true" pre-game projections by summing individual starter projected points before games begin
+- **Implementation**:
+  - Added `_calculate_starter_projections()` method to sum starter projections (excludes bench)
+  - Added `starter_projected_score` and `true_projection_diff` fields to `WeeklyGameResult`
+  - Maintains both ESPN's real-time projection AND true pre-game projection for comparison
+- **New Challenges**: Overachiever (most above) and Below Expectations (most below) using true projections
+- **Data Export**: JSON format includes `weekly_games` array with both projection types for analysis
+- **Result**: Accurate boom/bust tracking based on actual pre-game expectations vs real-time adjusted values
+
 ## Future Enhancement Opportunities
 
 ### Potential Improvements
@@ -293,7 +306,6 @@ uv run ff-tracker --help  # Test CLI
 - **Additional Data Sources**: Framework supports other fantasy platforms
 - **Enhanced Analytics**: More sophisticated challenge calculations (e.g., consistency metrics)
 - **Database Storage**: Optional persistence layer for historical tracking
-- **Pre-Game Projections**: Capture projections before games start for accurate boom/bust tracking
 
 ## How to Work With This Project
 
@@ -324,6 +336,7 @@ The README.md Table of Contents should only show H2 (##) level headers for clean
 - ✅ Tool connects to ESPN leagues successfully (single and multiple)
 - ✅ Displays comprehensive league standings and challenge results
 - ✅ Weekly highlights feature tracking current week's top performances (v2.1)
+- ✅ True projection tracking for accurate boom/bust analysis (v2.2)
 - ✅ Clean, maintainable codebase (modular, well-organized)
 - ✅ Proper typing without suppressions (100% type coverage)
 - ✅ Clear error messages for all failure modes
@@ -331,4 +344,4 @@ The README.md Table of Contents should only show H2 (##) level headers for clean
 - ✅ Preserved all original functionality while improving architecture
 - ✅ Efficient multi-output mode for automated workflows (v2.1)
 
-**Current Status**: Production-ready, fully functional with 11 weekly highlights and 5 season challenges, serving as excellent example of modern Python development practices.
+**Current Status**: Production-ready, fully functional with 13 weekly highlights and 5 season challenges, serving as excellent example of modern Python development practices.

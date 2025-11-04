@@ -466,6 +466,10 @@ class ESPNService:
                     home_projected = box_score.home_projected
                     away_projected = box_score.away_projected
 
+                    # Calculate starter-based projections (sum of starters' pre-game projections)
+                    home_starter_projected = self._calculate_starter_projections(box_score.home_lineup)
+                    away_starter_projected = self._calculate_starter_projections(box_score.away_lineup)
+
                     # Calculate margins
                     margin = abs(home_score - away_score)
 
@@ -482,7 +486,9 @@ class ESPNService:
                             week=week,
                             margin=margin,
                             projection_diff=home_score - home_projected,
-                            division=division_name
+                            division=division_name,
+                            starter_projected_score=home_starter_projected,
+                            true_projection_diff=home_score - home_starter_projected if home_starter_projected is not None else None
                         ),
                         WeeklyGameResult(
                             team_name=away_name,
@@ -495,7 +501,9 @@ class ESPNService:
                             week=week,
                             margin=margin,
                             projection_diff=away_score - away_projected,
-                            division=division_name
+                            division=division_name,
+                            starter_projected_score=away_starter_projected,
+                            true_projection_diff=away_score - away_starter_projected if away_starter_projected is not None else None
                         )
                     ])
 
@@ -615,6 +623,31 @@ class ESPNService:
             pro_team=box_player.proTeam if hasattr(box_player, 'proTeam') else "UNK",
             pro_opponent=box_player.pro_opponent if hasattr(box_player, 'pro_opponent') else ""
         )
+
+    def _calculate_starter_projections(self, lineup: list[Any]) -> float | None:
+        """
+        Calculate total projected points for starters only (excludes bench).
+
+        This provides a "true" pre-game projection by summing individual player
+        projections, which are more static than ESPN's real-time team projections.
+
+        Args:
+            lineup: List of BoxPlayer objects from a team's lineup
+
+        Returns:
+            Sum of projected points for starters, or None if calculation fails
+        """
+        try:
+            total_projected = 0.0
+            for player in lineup:
+                # Only include starters (slot_position != 'BE' for bench)
+                if hasattr(player, 'slot_position') and player.slot_position != 'BE':
+                    if hasattr(player, 'projected_points'):
+                        total_projected += player.projected_points
+            return total_projected
+        except Exception as e:
+            logger.warning(f"Could not calculate starter projections: {e}")
+            return None
 
     def load_division_data(self, league_id: int) -> DivisionData:
         """

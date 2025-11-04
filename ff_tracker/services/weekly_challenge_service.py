@@ -27,14 +27,12 @@ class WeeklyChallengeCalculator:
     2. Lowest Score This Week
     3. Biggest Win This Week
     4. Closest Game This Week
+    5. Overachiever (most above starter projections)
+    6. Below Expectations (most below starter projections)
 
     Player Challenges:
-    5. Top Scorer (Overall)
-    6. Top Scorer by Position (QB, RB, WR, TE, K, D/ST)
-
-    Note: Projection-based challenges (over/under projection, boom/bust) are not
-    included because ESPN updates projections in real-time as games progress,
-    making post-game projection comparisons unreliable.
+    7. Top Scorer (Overall)
+    8. Top Scorer by Position (QB, RB, WR, TE, K, D/ST)
     """
 
     def __init__(self) -> None:
@@ -73,6 +71,15 @@ class WeeklyChallengeCalculator:
             results.append(self._calculate_lowest_score(weekly_games, week))
             results.append(self._calculate_biggest_win(weekly_games, week))
             results.append(self._calculate_closest_game(weekly_games, week))
+
+            # Projection-based challenges (require starter projections)
+            games_with_projections = [g for g in weekly_games if g.true_projection_diff is not None]
+            if games_with_projections:
+                logger.info(f"Calculating projection challenges with {len(games_with_projections)} teams")
+                results.append(self._calculate_overachiever(games_with_projections, week))
+                results.append(self._calculate_below_expectations(games_with_projections, week))
+            else:
+                logger.warning(f"No projection data for week {week}, skipping projection challenges")
         else:
             logger.warning(f"No weekly game data for week {week}, skipping team challenges")
 
@@ -197,6 +204,72 @@ class WeeklyChallengeCalculator:
                 "opponent_score": winner.opponent_score,
                 "won": winner.won,
                 "margin": winner.margin
+            }
+        )
+
+    def _calculate_overachiever(
+        self,
+        games: Sequence[WeeklyGameResult],
+        week: int
+    ) -> WeeklyChallenge:
+        """
+        Find team that most exceeded their pre-game starter projections.
+
+        Uses true_projection_diff (actual score - starter projections) to find
+        the team that outperformed expectations the most.
+        """
+        # Find game with highest positive true_projection_diff
+        winner = max(games, key=lambda g: g.true_projection_diff or 0.0)
+
+        true_diff = winner.true_projection_diff or 0.0
+        starter_proj = winner.starter_projected_score or 0.0
+
+        return WeeklyChallenge(
+            challenge_name="Overachiever",
+            week=week,
+            winner=winner.team_name,
+            owner=None,
+            division=winner.division,
+            value=f"+{true_diff:.2f}",
+            description=f"{winner.team_name} scored {true_diff:.2f} above starter projections",
+            additional_info={
+                "score": winner.score,
+                "starter_projection": starter_proj,
+                "true_diff": true_diff,
+                "opponent": winner.opponent_name
+            }
+        )
+
+    def _calculate_below_expectations(
+        self,
+        games: Sequence[WeeklyGameResult],
+        week: int
+    ) -> WeeklyChallenge:
+        """
+        Find team that most underperformed their pre-game starter projections.
+
+        Uses true_projection_diff (actual score - starter projections) to find
+        the team that underperformed expectations the most (most negative diff).
+        """
+        # Find game with lowest (most negative) true_projection_diff
+        winner = min(games, key=lambda g: g.true_projection_diff or 0.0)
+
+        true_diff = winner.true_projection_diff or 0.0
+        starter_proj = winner.starter_projected_score or 0.0
+
+        return WeeklyChallenge(
+            challenge_name="Below Expectations",
+            week=week,
+            winner=winner.team_name,
+            owner=None,
+            division=winner.division,
+            value=f"{true_diff:.2f}",
+            description=f"{winner.team_name} scored {true_diff:.2f} below starter projections",
+            additional_info={
+                "score": winner.score,
+                "starter_projection": starter_proj,
+                "true_diff": true_diff,
+                "opponent": winner.opponent_name
             }
         )
 

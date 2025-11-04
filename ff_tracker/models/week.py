@@ -19,15 +19,17 @@ class WeeklyGameResult:
     """
     team_name: str
     score: float
-    projected_score: float
+    projected_score: float  # ESPN's real-time updated team projection
     opponent_name: str
     opponent_score: float
     opponent_projected_score: float
     won: bool
     week: int
     margin: float
-    projection_diff: float  # score - projected_score
+    projection_diff: float  # score - projected_score (ESPN's real-time)
     division: str
+    starter_projected_score: float | None = None  # Sum of starter pre-game projections
+    true_projection_diff: float | None = None  # score - starter_projected_score
 
     def __post_init__(self) -> None:
         """Validate weekly game result data after construction."""
@@ -68,6 +70,21 @@ class WeeklyGameResult:
                 f"Projection diff {self.projection_diff} doesn't match "
                 f"calculated value {expected_diff}"
             )
+
+        # Verify true_projection_diff if starter projections are available
+        if self.starter_projected_score is not None:
+            if self.starter_projected_score < 0:
+                raise DataValidationError(
+                    f"Starter projected score cannot be negative: {self.starter_projected_score}"
+                )
+
+            if self.true_projection_diff is not None:
+                expected_true_diff = self.score - self.starter_projected_score
+                if abs(self.true_projection_diff - expected_true_diff) > 0.01:
+                    raise DataValidationError(
+                        f"True projection diff {self.true_projection_diff} doesn't match "
+                        f"calculated value {expected_true_diff}"
+                    )
 
         if not self.division.strip():
             raise DataValidationError("Division name cannot be empty")

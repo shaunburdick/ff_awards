@@ -57,7 +57,23 @@ class JsonFormatter(BaseFormatter):
                             "in_playoff_position": team.in_playoff_position,
                         }
                         for team in div.teams  # List comprehension inside dict
-                    ]
+                    ],
+                    "weekly_games": [
+                        {
+                            "team_name": game.team_name,
+                            "score": game.score,
+                            "projected_score": game.projected_score,
+                            "starter_projected_score": game.starter_projected_score,
+                            "opponent_name": game.opponent_name,
+                            "opponent_score": game.opponent_score,
+                            "won": game.won,
+                            "week": game.week,
+                            "margin": game.margin,
+                            "projection_diff": game.projection_diff,
+                            "true_projection_diff": game.true_projection_diff,
+                        }
+                        for game in div.weekly_games
+                    ] if div.weekly_games else []
                 }
                 for div in divisions
             ],
