@@ -133,6 +133,12 @@ class EmailFormatter(BaseFormatter):
             color: #856404;
             margin-top: 0;
         }}
+        .weekly-highlight table {{
+            margin-bottom: 0;
+        }}
+        .weekly-highlight table:not(:last-child) {{
+            margin-bottom: 15px;
+        }}
         .winner {{
             color: #27ae60;
             font-weight: bold;
