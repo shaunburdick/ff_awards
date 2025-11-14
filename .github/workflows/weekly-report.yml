@@ -74,11 +74,11 @@ jobs:
           PRIVATE_FLAG=""
         fi
 
-        # Build format args - hardcoded note takes precedence over workflow input
-        if [ -n "$HARDCODED_NOTE" ]; then
-          FORMAT_ARGS=(--format-arg "note=$HARDCODED_NOTE")
-        elif [ -n "${{ inputs.weekly_note }}" ]; then
+        # Build format args - workflow input takes precedence over hardcoded note
+        if [ -n "${{ inputs.weekly_note }}" ]; then
           FORMAT_ARGS=(--format-arg "note=${{ inputs.weekly_note }}")
+        elif [ -n "$HARDCODED_NOTE" ]; then
+          FORMAT_ARGS=(--format-arg "note=$HARDCODED_NOTE")
         else
           FORMAT_ARGS=()
         fi
