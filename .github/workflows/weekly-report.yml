@@ -63,6 +63,10 @@ jobs:
     - name: Generate fantasy football report
       id: generate-report
       run: |
+        # Hardcoded note for this week (set to empty string to disable)
+        # Example: HARDCODED_NOTE="Playoffs start next week! 🏆"
+        HARDCODED_NOTE="The last game of the regular season is week 14! Playoffs begin week 15. Good luck to all teams! 🏈"
+
         # Determine if private leagues are needed
         if [ -n "${{ secrets.ESPN_SWID }}" ] && [ -n "${{ secrets.ESPN_S2 }}" ]; then
           PRIVATE_FLAG="--private"
@@ -70,17 +74,20 @@ jobs:
           PRIVATE_FLAG=""
         fi
 
-        # Build format args if weekly note is provided
-        FORMAT_ARGS=""
-        if [ -n "${{ inputs.weekly_note }}" ]; then
-          FORMAT_ARGS="--format-arg note=\"${{ inputs.weekly_note }}\""
+        # Build format args - hardcoded note takes precedence over workflow input
+        if [ -n "$HARDCODED_NOTE" ]; then
+          FORMAT_ARGS=(--format-arg "note=$HARDCODED_NOTE")
+        elif [ -n "${{ inputs.weekly_note }}" ]; then
+          FORMAT_ARGS=(--format-arg "note=${{ inputs.weekly_note }}")
+        else
+          FORMAT_ARGS=()
         fi
 
         # Capture start time
         START_TIME=$(date +%s)
 
         # Generate all output formats in one execution using --output-dir
-        uv run ff-tracker --env $PRIVATE_FLAG --output-dir ./reports $FORMAT_ARGS
+        uv run ff-tracker --env $PRIVATE_FLAG --output-dir ./reports "${FORMAT_ARGS[@]}"
 
         # Calculate execution time
         END_TIME=$(date +%s)
