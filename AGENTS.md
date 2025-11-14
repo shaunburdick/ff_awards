@@ -212,15 +212,15 @@ SWID=your_swid_cookie
 ### Weekly Automation (`weekly-report.yml`)
 ```yaml
 # Generate all reports in one execution (v2.1 - NEW)
-uv run ff-tracker --env --private --output-dir ./reports
+uv run ff-tracker --env --output-dir ./reports
 
 # With format arguments (v2.3 - NEW)
-uv run ff-tracker --env --private --output-dir ./reports \
+uv run ff-tracker --env --output-dir ./reports \
   --format-arg note="Playoffs start next week!"
 
 # Old approach (deprecated - kept for reference)
-# uv run ff-tracker --env --private --format sheets > weekly-report.tsv
-# uv run ff-tracker --env --private --format email > email_content.html
+# uv run ff-tracker --env --format sheets > weekly-report.tsv
+# uv run ff-tracker --env --format email > email_content.html
 ```
 
 - **Multi-Output Mode (v2.1)**: Single execution generates all 5 formats with one API call
