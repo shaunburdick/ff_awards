@@ -137,14 +137,16 @@ class EmailFormatter(BaseFormatter):
             color: #2980b9;
         }}
         .alert-box {{
-            background-color: #fff3cd;
-            border-left: 4px solid {accent_color};
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: 2px solid #5a67d8;
             padding: 15px;
             margin: 15px 0;
-            border-radius: 5px;
-            color: #856404;
+            border-radius: 8px;
+            color: white;
             font-weight: bold;
             text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+            font-size: 14px;
         }}
         .weekly-highlight {{
             background-color: #fff3cd;
@@ -208,7 +210,7 @@ class EmailFormatter(BaseFormatter):
         if note:
             html_content += f'''
         <div class="alert-box">
-            ⚠️ {self._escape_html(note)}
+            📢 {self._escape_html(note)}
         </div>
 '''
 
