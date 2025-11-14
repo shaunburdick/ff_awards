@@ -43,6 +43,7 @@ ff_tracker/
 - **Input**: Single league ID, multiple leagues via comma-separated CLI argument, or `LEAGUE_IDS` environment variable
 - **Output**: Five formats (console tables, TSV for sheets, HTML for email, JSON for APIs, Markdown for GitHub/Slack/Discord)
 - **Multi-Output Mode**: Generate all formats at once with `--output-dir` (single API call)
+- **Format Arguments**: Generic `--format-arg` system for passing formatter-specific parameters (v2.3)
 - **Data Source**: ESPN Fantasy Football API (via espn-api Python library)
 - **Multi-League Support**: Handles 3-4 leagues typically, tested with 30+ teams
 - **Playoff Positioning**: Shows current playoff qualification status (top 4 by record, points-for tiebreaker)
@@ -103,6 +104,13 @@ uv run ff-tracker --env --private --output-dir ./reports
 uv run ff-tracker 123456789,987654321 --output-dir ./reports
 # Creates: standings.txt, standings.tsv, standings.html, standings.json, standings.md
 
+# Format arguments (v2.3 - NEW)
+--format-arg note="Playoffs start next week!"  # Global argument (all formats)
+--format-arg email.accent_color="#007bff"      # Formatter-specific argument
+--format-arg markdown.include_toc=true         # Enable table of contents
+--format-arg json.pretty=true                  # Pretty-print JSON
+--format-arg email.max_teams=5                 # Limit top teams display
+
 # Output formats
 --format console   # Human-readable tables (default)
 --format sheets    # TSV for Google Sheets
@@ -157,13 +165,14 @@ SWID=your_swid_cookie
 - **Projection Tracking**: Overachiever/Below Expectations use true pre-game starter projections (v2.2)
 
 ### 4. Display System (`ff_tracker/display/`)
-- **Extensible Architecture**: Protocol-based formatter pattern
+- **Extensible Architecture**: Protocol-based formatter pattern with format arguments support (v2.3)
+- **Format Arguments**: All formatters inherit from `BaseFormatter` with `format_args` parameter
 - **Separated Weekly Tables**: Team challenges and player highlights in distinct tables
-- **Console Output**: Beautiful tables with emojis and playoff indicators (*)
-- **Sheets Export**: Clean TSV format with separate sections for team/player challenges
-- **Email Format**: Mobile-friendly HTML with responsive design and h3 subheadings
-- **JSON Export**: Structured data with challenge_type field ("team" or "player") and weekly_games array (v2.2)
-- **Markdown Format**: GitHub/Slack/Discord-ready tables with bold subheadings
+- **Console Output**: Beautiful tables with emojis and playoff indicators (*), optional note display
+- **Sheets Export**: Clean TSV format with separate sections for team/player challenges, optional note row
+- **Email Format**: Mobile-friendly HTML with responsive design, optional note alert box, customizable colors
+- **JSON Export**: Structured data with challenge_type field ("team" or "player"), weekly_games array (v2.2), optional metadata note
+- **Markdown Format**: GitHub/Slack/Discord-ready tables with bold subheadings, optional note blockquote, optional TOC
 
 ### 5. Configuration (`ff_tracker/config.py`)
 - **Environment Loading**: Automatic .env file detection
@@ -205,6 +214,10 @@ SWID=your_swid_cookie
 # Generate all reports in one execution (v2.1 - NEW)
 uv run ff-tracker --env --private --output-dir ./reports
 
+# With format arguments (v2.3 - NEW)
+uv run ff-tracker --env --private --output-dir ./reports \
+  --format-arg note="Playoffs start next week!"
+
 # Old approach (deprecated - kept for reference)
 # uv run ff-tracker --env --private --format sheets > weekly-report.tsv
 # uv run ff-tracker --env --private --format email > email_content.html
@@ -213,6 +226,7 @@ uv run ff-tracker --env --private --output-dir ./reports
 - **Multi-Output Mode (v2.1)**: Single execution generates all 5 formats with one API call
 - **Efficiency Improvement**: Reduced from 3 API calls to 1 (~66% faster)
 - **Output Files**: `standings.txt`, `standings.tsv`, `standings.html`, `standings.json`, `standings.md`
+- **Format Arguments (v2.3)**: Optional `weekly_note` workflow input passed via `--format-arg note="..."`
 - **Environment Integration**: Loads leagues from `LEAGUE_IDS` secret
 - **Email Reports**: Mobile-friendly HTML with comprehensive league data
 - **Artifacts**: All formats saved for 30 days in GitHub Actions
@@ -291,6 +305,32 @@ uv run ff-tracker --help  # Test CLI
 - **New Challenges**: Overachiever (most above) and Below Expectations (most below) using true projections
 - **Data Export**: JSON format includes `weekly_games` array with both projection types for analysis
 - **Result**: Accurate boom/bust tracking based on actual pre-game expectations vs real-time adjusted values
+
+### 9. Format Arguments System ✅ IMPLEMENTED (v2.3)
+- **Need**: Ability to customize formatter output (e.g., add weekly notes, customize colors, control display options)
+- **Solution**: Generic `--format-arg` CLI system supporting both global and formatter-specific arguments
+- **Architecture**:
+  - Added `format_args` parameter to `BaseFormatter.__init__()`
+  - Created helper methods: `_get_arg()`, `_get_arg_bool()`, `_get_arg_int()`
+  - Added `parse_format_args()` and `get_formatter_args()` for argument parsing and merging
+  - Each formatter declares supported arguments via `get_supported_args()` classmethod
+- **Syntax**:
+  - Global: `--format-arg note="Important message"` (applies to all formats)
+  - Specific: `--format-arg email.accent_color="#007bff"` (applies only to email formatter)
+- **Implementation**:
+  - **Note Feature**: All formatters support optional note display at top of output
+    - Console: Fancy Unicode table using tabulate with `fancy_grid` format
+    - Email: Styled alert box with warning icon and customizable accent color
+    - Markdown: Blockquote with warning emoji
+    - JSON: Metadata section in JSON structure
+    - Sheets: First row in TSV output
+  - **Formatter-Specific Args**:
+    - `email.accent_color`, `email.max_teams`
+    - `markdown.include_toc`
+    - `json.pretty`
+- **GitHub Actions**: Added `weekly_note` workflow input for automated report customization
+- **Unicode Handling**: Leveraged tabulate library for proper emoji width calculation
+- **Result**: Flexible, extensible system for output customization without hardcoding formatter-specific logic
 
 ## Future Enhancement Opportunities
 

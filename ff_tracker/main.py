@@ -57,6 +57,90 @@ def parse_league_ids_from_arg(league_id_arg: str) -> list[int]:
         ) from e
 
 
+def parse_format_args(args_list: list[str] | None) -> dict[str, dict[str, str]]:
+    """
+    Parse format arguments into nested dictionary structure.
+
+    Supports two syntaxes:
+    - Global: "key=value" -> {"_global": {"key": "value"}}
+    - Formatter-specific: "formatter.key=value" -> {"formatter": {"key": "value"}}
+
+    Global args apply to all formatters. Formatter-specific args override globals.
+
+    Args:
+        args_list: List of format argument strings from CLI
+
+    Returns:
+        Nested dict with "_global" key and formatter-specific keys
+
+    Raises:
+        ValueError: If argument format is invalid
+
+    Examples:
+        >>> parse_format_args(["note=Test", "email.accent_color=#ff0000"])
+        {"_global": {"note": "Test"}, "email": {"accent_color": "#ff0000"}}
+    """
+    if not args_list:
+        return {}
+
+    result: dict[str, dict[str, str]] = {"_global": {}}
+
+    for arg in args_list:
+        if "=" not in arg:
+            raise ValueError(
+                f"Invalid format argument: '{arg}'. "
+                f"Must be in format: key=value or formatter.key=value"
+            )
+
+        key, value = arg.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+
+        if not key:
+            raise ValueError(f"Empty key in format argument: '{arg}'")
+
+        # Check if formatter-specific (contains dot)
+        if "." in key:
+            parts = key.split(".", 1)
+            if len(parts) != 2 or not parts[0] or not parts[1]:
+                raise ValueError(
+                    f"Invalid formatter-specific argument: '{arg}'. "
+                    f"Must be: formatter.key=value"
+                )
+
+            formatter, arg_key = parts
+            if formatter not in result:
+                result[formatter] = {}
+            result[formatter][arg_key] = value
+        else:
+            # Global argument
+            result["_global"][key] = value
+
+    return result
+
+
+def get_formatter_args(
+    format_name: str,
+    format_args_dict: dict[str, dict[str, str]]
+) -> dict[str, str]:
+    """
+    Get merged arguments for a specific formatter.
+
+    Merges global args with formatter-specific args, with formatter-specific
+    taking precedence.
+
+    Args:
+        format_name: Name of the formatter (e.g., "email", "json")
+        format_args_dict: Parsed format arguments dict
+
+    Returns:
+        Merged dictionary of arguments for this formatter
+    """
+    merged_args = dict(format_args_dict.get("_global", {}))
+    merged_args.update(format_args_dict.get(format_name, {}))
+    return merged_args
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Create and configure argument parser."""
     parser = argparse.ArgumentParser(
@@ -134,6 +218,37 @@ Private League Setup:
     )
 
     parser.add_argument(
+        "--format-arg",
+        action="append",
+        dest="format_args",
+        metavar="KEY=VALUE",
+        help="""Pass optional arguments to formatters (can be specified multiple times).
+
+Syntax:
+  key=value           Global arg (applies to all formatters)
+  formatter.key=value Formatter-specific arg (overrides global)
+
+Common Arguments:
+  note=TEXT           Display an alert/notice at top of output
+
+Email-Specific:
+  email.accent_color=HEX    Hex color for highlights (default: #ffc107)
+  email.max_teams=N         Max teams in overall rankings (default: 20)
+
+Markdown-Specific:
+  markdown.include_toc=BOOL Include table of contents (default: false)
+
+JSON-Specific:
+  json.pretty=BOOL          Pretty-print with indentation (default: true)
+
+Examples:
+  --format-arg note="Season ends Week 14!"
+  --format-arg email.accent_color="#ff0000"
+  --format-arg json.pretty="false"
+        """
+    )
+
+    parser.add_argument(
         "--env-file",
         type=Path,
         default=Path(".env"),
@@ -177,18 +292,38 @@ def setup_logging(verbose: int = 0) -> None:
         logging.getLogger('espn_api').setLevel(logging.WARNING)
 
 
-def create_formatter(format_name: str, year: int) -> BaseFormatter:
-    """Create formatter instance based on format name."""
+def create_formatter(
+    format_name: str,
+    year: int,
+    format_args_dict: dict[str, dict[str, str]]
+) -> BaseFormatter:
+    """
+    Create formatter instance based on format name with merged arguments.
+
+    Args:
+        format_name: Name of the formatter to create
+        year: Fantasy season year
+        format_args_dict: Parsed format arguments dictionary
+
+    Returns:
+        Configured formatter instance
+
+    Raises:
+        ValueError: If format name is unknown
+    """
+    # Get merged args for this specific formatter
+    merged_args = get_formatter_args(format_name, format_args_dict)
+
     if format_name == "console":
-        return ConsoleFormatter(year)
+        return ConsoleFormatter(year, merged_args)
     elif format_name == "sheets":
-        return SheetsFormatter(year)
+        return SheetsFormatter(year, merged_args)
     elif format_name == "email":
-        return EmailFormatter(year)
+        return EmailFormatter(year, merged_args)
     elif format_name == "json":
-        return JsonFormatter(year)
+        return JsonFormatter(year, merged_args)
     elif format_name == "markdown":
-        return MarkdownFormatter(year)
+        return MarkdownFormatter(year, merged_args)
     else:
         raise ValueError(f"Unknown format: {format_name}")
 
@@ -208,6 +343,13 @@ def main() -> int:
 
         if args.league_id and args.env:
             parser.error("Cannot use both league_id and --env flag")
+
+        # Parse format arguments
+        try:
+            format_args_dict = parse_format_args(args.format_args)
+        except ValueError as e:
+            print(f"Error parsing format arguments: {e}", file=sys.stderr)
+            return 1
 
         # Load configuration
         from .config import create_config
@@ -277,7 +419,7 @@ def main() -> int:
 
             # Generate each format and write to file
             for format_name, file_path in format_files.items():
-                formatter = create_formatter(format_name, config.year)
+                formatter = create_formatter(format_name, config.year, format_args_dict)
                 output = formatter.format_output(
                     divisions,
                     challenges,
@@ -290,7 +432,7 @@ def main() -> int:
             return 0
         else:
             # Single output mode: print to stdout
-            formatter = create_formatter(args.format, config.year)
+            formatter = create_formatter(args.format, config.year, format_args_dict)
             output = formatter.format_output(
                 divisions,
                 challenges,

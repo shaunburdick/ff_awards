@@ -15,15 +15,15 @@ from .base import BaseFormatter
 class SheetsFormatter(BaseFormatter):
     """Formatter for Google Sheets compatible TSV output."""
 
-    def __init__(self, year: int) -> None:
+    def __init__(self, year: int, format_args: dict[str, str] | None = None) -> None:
         """
         Initialize sheets formatter.
 
         Args:
             year: Fantasy season year for display
+            format_args: Optional dict of formatter-specific arguments
         """
-        super().__init__()
-        self.year = year
+        super().__init__(year, format_args)
 
     def format_output(
         self,

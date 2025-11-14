@@ -16,15 +16,23 @@ from .base import BaseFormatter
 class MarkdownFormatter(BaseFormatter):
     """Formatter for Markdown output."""
 
-    def __init__(self, year: int) -> None:
+    def __init__(self, year: int, format_args: dict[str, str] | None = None) -> None:
         """
         Initialize markdown formatter.
 
         Args:
             year: Fantasy season year for display
+            format_args: Optional dict of formatter-specific arguments
         """
-        super().__init__()
-        self.year = year
+        super().__init__(year, format_args)
+
+    @classmethod
+    def get_supported_args(cls) -> dict[str, str]:
+        """Return supported format arguments for markdown formatter."""
+        return {
+            "note": "Optional notice displayed as blockquote at top",
+            "include_toc": "Include table of contents (default: false)",
+        }
 
     def format_output(
         self,
@@ -34,6 +42,10 @@ class MarkdownFormatter(BaseFormatter):
         current_week: int | None = None
     ) -> str:
         """Format complete output for Markdown display."""
+        # Get format arguments
+        note = self._get_arg("note")
+        include_toc = self._get_arg_bool("include_toc", False)
+
         output_lines: list[str] = []
 
         # Header
@@ -46,6 +58,25 @@ class MarkdownFormatter(BaseFormatter):
             output_lines.append(f"📅 **Current Week:** {current_week}")
 
         output_lines.append("")
+
+        # Optional note
+        if note:
+            output_lines.append(f"> ⚠️ **{note}**")
+            output_lines.append("")
+
+        # Optional table of contents
+        if include_toc:
+            output_lines.append("## 📋 Table of Contents")
+            output_lines.append("")
+            # Add TOC entries for each major section
+            for division in divisions:
+                output_lines.append(f"- [{division.name} Standings](#{division.name.lower().replace(' ', '-')}-standings)")
+            output_lines.append("- [Overall Top Teams](#-overall-top-teams-across-all-divisions)")
+            if challenges:
+                output_lines.append("- [Season Challenge Results](#-season-challenge-results)")
+            if weekly_challenges and current_week:
+                output_lines.append(f"- [Week {current_week} Highlights](#-week-{current_week}-highlights)")
+            output_lines.append("")
 
         # Division standings
         for division in divisions:

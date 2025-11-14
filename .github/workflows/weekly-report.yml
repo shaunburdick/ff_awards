@@ -21,6 +21,10 @@ on:
         required: false
         type: boolean
         default: false
+      weekly_note:
+        description: 'Optional note for this week (e.g., "Season ends Week 14! Playoffs start Week 15!")'
+        required: false
+        type: string
 
 env:
   PYTHONUNBUFFERED: 1
@@ -66,11 +70,17 @@ jobs:
           PRIVATE_FLAG=""
         fi
 
+        # Build format args if weekly note is provided
+        FORMAT_ARGS=""
+        if [ -n "${{ inputs.weekly_note }}" ]; then
+          FORMAT_ARGS="--format-arg note=\"${{ inputs.weekly_note }}\""
+        fi
+
         # Capture start time
         START_TIME=$(date +%s)
 
         # Generate all output formats in one execution using --output-dir
-        uv run ff-tracker --env $PRIVATE_FLAG --output-dir ./reports
+        uv run ff-tracker --env $PRIVATE_FLAG --output-dir ./reports $FORMAT_ARGS
 
         # Calculate execution time
         END_TIME=$(date +%s)

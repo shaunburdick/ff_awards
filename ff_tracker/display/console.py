@@ -17,15 +17,22 @@ from .base import BaseFormatter
 class ConsoleFormatter(BaseFormatter):
     """Formatter for rich console output with tables."""
 
-    def __init__(self, year: int) -> None:
+    def __init__(self, year: int, format_args: dict[str, str] | None = None) -> None:
         """
         Initialize console formatter.
 
         Args:
             year: Fantasy season year for display
+            format_args: Optional dict of formatter-specific arguments
         """
-        super().__init__()
-        self.year = year
+        super().__init__(year, format_args)
+
+    @classmethod
+    def get_supported_args(cls) -> dict[str, str]:
+        """Return supported format arguments for console formatter."""
+        return {
+            "note": "Optional notice displayed in box at top of output",
+        }
 
     def format_output(
         self,
@@ -35,6 +42,9 @@ class ConsoleFormatter(BaseFormatter):
         current_week: int | None = None
     ) -> str:
         """Format complete output for console display."""
+        # Get format arguments
+        note = self._get_arg("note")
+
         output_lines: list[str] = []
 
         # Header
@@ -46,6 +56,18 @@ class ConsoleFormatter(BaseFormatter):
             output_lines.append(f"📅 Current Week: {current_week}")
             # Machine-readable output for scripts
             output_lines.append(f"CURRENT_WEEK={current_week}")
+
+        # Optional note
+        if note:
+            # Use tabulate to create a single-cell table for the note
+            # This handles Unicode width and formatting edge cases properly
+            note_content = f"⚠️  {note}"
+            note_table = tabulate(
+                [[note_content]],
+                tablefmt="fancy_grid"
+            )
+            output_lines.append("")
+            output_lines.append(note_table)
 
         # Division standings
         for division in divisions:

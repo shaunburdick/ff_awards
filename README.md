@@ -123,6 +123,39 @@ uv run ff-tracker 123456 --format json > data.json
 uv run ff-tracker 123456 --format markdown > report.md
 ```
 
+### Format Arguments
+
+Customize output with `--format-arg` (can be used multiple times):
+
+```bash
+# Add a note to any format (global argument)
+uv run ff-tracker 123456 --format-arg note="Playoffs start next week!"
+
+# Customize email colors (formatter-specific)
+uv run ff-tracker 123456 --format email \
+  --format-arg note="Season ends Dec 15th" \
+  --format-arg email.accent_color="#ff6b6b" \
+  --format-arg email.max_teams=5
+
+# Generate markdown with table of contents
+uv run ff-tracker 123456 --format markdown \
+  --format-arg note="Championship game this week!" \
+  --format-arg markdown.include_toc=true
+
+# Pretty-print JSON output
+uv run ff-tracker 123456 --format json --format-arg json.pretty=true
+```
+
+**Supported Format Arguments:**
+
+| Argument | Formats | Description |
+|----------|---------|-------------|
+| `note` | All | Display a message at the top of the output |
+| `email.accent_color` | email | Customize border/accent colors (hex color) |
+| `email.max_teams` | email | Limit number of teams in top overall rankings |
+| `markdown.include_toc` | markdown | Generate table of contents with section links |
+| `json.pretty` | json | Enable indented JSON output (true/false) |
+
 ### Multi-Output Mode
 
 Generate all formats in a single execution with `--output-dir`:
@@ -168,6 +201,19 @@ uv run ff-tracker --env --private --output-dir ./reports
 
 # Multiple leagues from environment variable (alternative to CLI)
 uv run ff-tracker --env --format console
+
+# Add a note to console output
+uv run ff-tracker 123456 --format-arg note="Playoffs start next week! Good luck!"
+
+# Customize email report colors and add note
+uv run ff-tracker 123456 --format email \
+  --format-arg note="Championship game December 15th" \
+  --format-arg email.accent_color="#28a745"
+
+# Generate markdown with table of contents
+uv run ff-tracker --env --format markdown \
+  --format-arg markdown.include_toc=true \
+  --format-arg note="Final week of regular season"
 ```
 
 ## Configuration

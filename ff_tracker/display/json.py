@@ -10,15 +10,23 @@ from .base import BaseFormatter
 class JsonFormatter(BaseFormatter):
     """Export fantasy football data as JSON."""
 
-    def __init__(self, year: int) -> None:
+    def __init__(self, year: int, format_args: dict[str, str] | None = None) -> None:
         """
-        Initialize console formatter.
+        Initialize JSON formatter.
 
         Args:
             year: Fantasy season year for display
+            format_args: Optional dict of formatter-specific arguments
         """
-        super().__init__()
-        self.year = year
+        super().__init__(year, format_args)
+
+    @classmethod
+    def get_supported_args(cls) -> dict[str, str]:
+        """Return supported format arguments for JSON formatter."""
+        return {
+            "note": "Optional note included in metadata section",
+            "pretty": "Pretty-print with indentation (default: true)",
+        }
 
     def _serialize_owner(self, owner: Owner) -> dict[str, object]:
         """Convert Owner object to dictionary for JSON serialization."""
@@ -39,9 +47,21 @@ class JsonFormatter(BaseFormatter):
         current_week: int | None = None
     ) -> str:
         """Format results as JSON string."""
+        # Get format arguments
+        note = self._get_arg("note")
+        pretty = self._get_arg_bool("pretty", True)
+
         # Dictionary comprehension - very pythonic!
         data: dict[str, object] = {
             "current_week": current_week if current_week is not None else -1,
+        }
+
+        # Add optional note to metadata
+        if note:
+            data["note"] = note
+
+        # Add main data sections (typed as object to avoid complex nested type inference)
+        main_sections: dict[str, object] = {
             "divisions": [
                 {
                     "name": div.name,
@@ -101,6 +121,8 @@ class JsonFormatter(BaseFormatter):
                 for challenge in challenges
             ]
         }
+        data.update(main_sections)
 
-        # Python's json module with pretty printing
-        return json.dumps(data, indent=2, ensure_ascii=False)
+        # Python's json module with optional pretty printing
+        indent = 2 if pretty else None
+        return json.dumps(data, indent=indent, ensure_ascii=False)

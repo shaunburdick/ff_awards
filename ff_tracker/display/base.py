@@ -42,6 +42,79 @@ class OutputFormatter(Protocol):
 class BaseFormatter(ABC):
     """Base class for output formatters with common functionality."""
 
+    def __init__(self, year: int, format_args: dict[str, str] | None = None) -> None:
+        """
+        Initialize formatter with optional arguments.
+
+        Args:
+            year: Fantasy season year for display
+            format_args: Optional dict of formatter-specific arguments
+        """
+        self.year = year
+        self.format_args = format_args or {}
+
+    @classmethod
+    def get_supported_args(cls) -> dict[str, str]:
+        """
+        Return dictionary of supported argument names and descriptions.
+
+        Subclasses should override this to document their specific arguments.
+
+        Returns:
+            Dict mapping argument name to human-readable description
+        """
+        return {}
+
+    def _get_arg(self, key: str, default: str | None = None) -> str | None:
+        """
+        Safely retrieve a format argument with optional default.
+
+        Args:
+            key: Argument name to retrieve
+            default: Default value if argument not provided
+
+        Returns:
+            Argument value or default
+        """
+        return self.format_args.get(key, default)
+
+    def _get_arg_bool(self, key: str, default: bool = False) -> bool:
+        """
+        Retrieve a format argument as boolean.
+
+        Accepts: "true", "1", "yes", "on" (case-insensitive) as True
+
+        Args:
+            key: Argument name to retrieve
+            default: Default value if argument not provided
+
+        Returns:
+            Boolean value
+        """
+        value = self._get_arg(key)
+        if value is None:
+            return default
+        return value.lower() in ("true", "1", "yes", "on")
+
+    def _get_arg_int(self, key: str, default: int) -> int:
+        """
+        Retrieve a format argument as integer.
+
+        Args:
+            key: Argument name to retrieve
+            default: Default value if argument not provided or invalid
+
+        Returns:
+            Integer value
+        """
+        value = self._get_arg(key)
+        if value is None:
+            return default
+        try:
+            return int(value)
+        except ValueError:
+            return default
+
     @abstractmethod
     def format_output(
         self,

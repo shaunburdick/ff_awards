@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2025-11-13
+
+### Added
+- **Format Arguments System**: Generic `--format-arg` CLI option for passing formatter-specific parameters
+  - Supports both global arguments (e.g., `--format-arg note="Important message"`)
+  - Supports formatter-specific arguments (e.g., `--format-arg email.accent_color="#007bff"`)
+  - Can be specified multiple times to pass multiple arguments
+  - Each formatter declares supported arguments via `get_supported_args()` classmethod
+
+- **Note Feature Across All Formats**:
+  - **Console**: Displays note in fancy Unicode table at the top of output
+  - **Email**: Shows note in styled alert box with warning icon
+  - **Markdown**: Renders note as blockquote with warning emoji
+  - **JSON**: Includes note in metadata section of JSON output
+  - **Sheets**: Includes note as first row in TSV output
+
+- **Formatter-Specific Arguments**:
+  - **Email Formatter**: `note`, `accent_color` (customize border colors), `max_teams` (limit top teams display)
+  - **Markdown Formatter**: `note`, `include_toc` (generate table of contents)
+  - **Console Formatter**: `note` (displayed with tabulate fancy_grid)
+  - **JSON Formatter**: `note`, `pretty` (enable indented JSON output)
+  - **Sheets Formatter**: `note` (included as first row)
+
+- **GitHub Actions Integration**: Added `weekly_note` input to workflow_dispatch for manual report customization
+
+### Changed
+- **Base Formatter Architecture**: All formatters now inherit format arguments support
+  - Added `format_args` parameter to `BaseFormatter.__init__()`
+  - Added helper methods: `_get_arg()`, `_get_arg_bool()`, `_get_arg_int()`
+  - Formatters automatically receive merged global and formatter-specific arguments
+
+- **CLI Interface**: Enhanced argument parsing for format-arg syntax
+  - Added `parse_format_args()` function to parse key=value pairs
+  - Added `get_formatter_args()` function to merge global and formatter-specific args
+  - Updated `create_formatter()` to accept and pass format_args_dict
+
+### Technical Details
+- Format arguments use nested dictionary structure: `{"_global": {...}, "formatter_name": {...}}`
+- Argument merging prioritizes formatter-specific values over global values
+- Unicode width handling in console formatter uses tabulate library for proper emoji/character display
+- All formatters maintain backward compatibility when no format args are provided
+
 ## [2.2.1] - 2025-11-10
 
 ### Fixed

@@ -31,15 +31,24 @@ from .base import BaseFormatter
 class EmailFormatter(BaseFormatter):
     """Formatter for mobile-friendly HTML email output."""
 
-    def __init__(self, year: int) -> None:
+    def __init__(self, year: int, format_args: dict[str, str] | None = None) -> None:
         """
         Initialize email formatter.
 
         Args:
             year: Fantasy season year for display
+            format_args: Optional dict of formatter-specific arguments
         """
-        super().__init__()
-        self.year = year
+        super().__init__(year, format_args)
+
+    @classmethod
+    def get_supported_args(cls) -> dict[str, str]:
+        """Return supported format arguments for email formatter."""
+        return {
+            "note": "Optional alert message displayed at top of email",
+            "accent_color": "Hex color for highlight sections (default: #ffc107)",
+            "max_teams": "Maximum teams to show in overall rankings (default: 20)",
+        }
 
     def format_output(
         self,
@@ -49,6 +58,11 @@ class EmailFormatter(BaseFormatter):
         current_week: int | None = None
     ) -> str:
         """Format complete output for mobile-friendly HTML email."""
+        # Get format arguments
+        note = self._get_arg("note")
+        accent_color = self._get_arg("accent_color", "#ffc107")
+        max_teams = self._get_arg_int("max_teams", 20)
+
         total_divisions, total_teams = self._calculate_total_stats(divisions)
 
         html_content = f"""
@@ -122,12 +136,22 @@ class EmailFormatter(BaseFormatter):
             font-weight: bold;
             color: #2980b9;
         }}
+        .alert-box {{
+            background-color: #fff3cd;
+            border-left: 4px solid {accent_color};
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+            color: #856404;
+            font-weight: bold;
+            text-align: center;
+        }}
         .weekly-highlight {{
             background-color: #fff3cd;
             padding: 15px;
             border-radius: 5px;
             margin-bottom: 20px;
-            border-left: 4px solid #ffc107;
+            border-left: 4px solid {accent_color};
         }}
         .weekly-highlight h2 {{
             color: #856404;
@@ -179,6 +203,14 @@ class EmailFormatter(BaseFormatter):
         <h1>Fantasy Football Multi-Division Challenge Tracker ({self.year})</h1>
         <div class="summary">{total_divisions} divisions • {total_teams} teams total • Week {current_week or "Not Found"}</div>
 """
+
+        # Optional note/alert
+        if note:
+            html_content += f'''
+        <div class="alert-box">
+            ⚠️ {self._escape_html(note)}
+        </div>
+'''
 
         # Weekly highlights (at the top for email - most relevant)
         if weekly_challenges and current_week:
@@ -263,7 +295,7 @@ class EmailFormatter(BaseFormatter):
         html_content += '<table>\n'
         html_content += '<tr><th>Rank</th><th>Team</th><th>Owner</th><th>Division</th><th class="number">PF</th><th class="number">PA</th><th>Record</th></tr>\n'
 
-        top_teams = self._get_overall_top_teams(divisions, limit=20)
+        top_teams = self._get_overall_top_teams(divisions, limit=max_teams)
         for i, team in enumerate(top_teams, 1):
             # Add asterisk to beginning of team name if in playoffs
             team_name = team.name
