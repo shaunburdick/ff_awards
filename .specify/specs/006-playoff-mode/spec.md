@@ -96,9 +96,11 @@ Automatically detect and display playoff brackets when leagues transition from r
 
 6. **Trust ESPN Data**: Display playoff matchups exactly as ESPN API provides them via `league.box_scores(week)` where `is_playoff: True`. No validation of seeding rules.
 
-7. **Historical Season Challenges**: The 5 season challenges (Most Points Overall, Most Points in One Game, etc.) are finalized at end of regular season and displayed as historical/final during playoffs.
+7. **Winners Bracket Filtering**: Only display matchups where `matchup_type == "WINNERS_BRACKET"`. Ignore `"LOSERS_CONSOLATION_LADDER"` matchups.
 
-8. **Player Highlights Scope**: During playoffs, player highlights include ALL players across ALL teams (not just playoff teams), filtered to starters only as usual.
+8. **Historical Season Challenges**: The 5 season challenges (Most Points Overall, Most Points in One Game, etc.) are finalized at end of regular season and displayed as historical/final during playoffs.
+
+9. **Player Highlights Scope**: During playoffs, player highlights include ALL players across ALL teams (not just playoff teams), filtered to starters only as usual.
 
 ---
 
@@ -175,9 +177,11 @@ Automatically detect and display playoff brackets when leagues transition from r
 - `league.current_week` (int): Current week number from ESPN
 - `league.settings.reg_season_count` (int): Number of regular season weeks
 - `league.settings.playoff_team_count` (int): Number of teams in playoff bracket
-- `league.settings.playoff_matchup_period_length` (int): Weeks per playoff round
+- `league.settings.playoff_matchup_period_length` (int): Weeks per playoff round (typically 1)
 - `league.box_scores(week)` → `BoxScore.is_playoff` (bool): Identifies playoff games
-- `team.standing` (int): Playoff seed number
+- `league.box_scores(week)` → `BoxScore.matchup_type` (str): "WINNERS_BRACKET" or "LOSERS_CONSOLATION_LADDER"
+- `team.standing` (int): Playoff seed number (1-4 for playoff teams)
+- `team.playoff_pct` (float): 100.0 for playoff teams, 0.0 for eliminated
 - `team.team_name` (str): Team name
 - `team.owners` (list): Owner information
 
@@ -263,13 +267,21 @@ Explicitly list what this feature does **not** include:
 
 ## Open Questions
 
-**[TESTING REQUIRED]** ESPN API Playoff Data Structure:
-- Need to test with live playoff data (week 15+) to confirm:
-  - How `league.box_scores(week)` structures playoff matchups
-  - Whether `team.standing` reflects playoff seeding accurately
-  - How `playoff_matchup_period_length` maps to actual weeks
-  - If there are any edge cases in playoff game detection
-- **Action**: Test with real playoff data starting next week, refine spec if needed
+**[RESOLVED]** ESPN API Playoff Data Structure ✅
+- ✅ Tested with live playoff data (Week 15, 2025-12-10)
+- ✅ Confirmed: `current_week > reg_season_count` detects playoffs perfectly
+- ✅ Confirmed: `team.standing` provides exact seed numbers (1-4)
+- ✅ Confirmed: `playoff_matchup_period_length = 1` (1 week per round)
+- ✅ Confirmed: Semifinal matchups are #1 vs #4, #2 vs #3
+- ✅ Confirmed: `matchup_type` field distinguishes winners vs consolation brackets
+- 📝 See ESPN_API_TESTING.md for full test results
+
+**[TESTING REQUIRED]** Championship Week Detection:
+- Need to test Week 16 (Finals) and Week 17 (Championship Week) to confirm:
+  - How finals matchups are structured (2 teams remaining)
+  - Whether Championship Week uses a special `matchup_type`
+  - How to detect when all divisions have crowned champions
+- **Action**: Re-run test_playoff_api.py on Week 16 and Week 17
 
 ## Design Decisions (From Iteration)
 
@@ -312,3 +324,4 @@ How will we know this feature is successful?
 |---------|------------|------------------|----------------------------------------------|
 | 0.1     | 2025-12-08 | Spec Planner     | Initial draft based on clarification session |
 | 1.0     | 2025-12-08 | Spec Planner     | Finalized with examples and design decisions |
+| 1.1     | 2025-12-10 | Spec Planner     | Updated with ESPN API test results (Week 15) |
