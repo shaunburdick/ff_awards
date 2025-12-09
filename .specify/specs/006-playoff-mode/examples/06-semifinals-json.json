@@ -1,0 +1,255 @@
+{
+  "report_type": "playoff_semifinals",
+  "week": 15,
+  "generated_at": "2025-12-15T10:30:00Z",
+  
+  "playoff_bracket": {
+    "round": "Semifinals",
+    "divisions": [
+      {
+        "division_name": "Division 1",
+        "matchups": [
+          {
+            "matchup_id": "div1_sf1",
+            "round": "Semifinal 1",
+            "seed1": 1,
+            "team1": "Thunder Cats",
+            "owner1": "John",
+            "score1": 145.67,
+            "seed2": 4,
+            "team2": "Dream Team",
+            "owner2": "Sarah",
+            "score2": 98.23,
+            "winner": "Thunder Cats",
+            "winner_seed": 1,
+            "division": "Division 1"
+          },
+          {
+            "matchup_id": "div1_sf2",
+            "round": "Semifinal 2",
+            "seed1": 2,
+            "team1": "Grid Iron Giants",
+            "owner1": "Mike",
+            "score1": 132.45,
+            "seed2": 3,
+            "team2": "The Replacements",
+            "owner2": "Lisa",
+            "score2": 128.90,
+            "winner": "Grid Iron Giants",
+            "winner_seed": 2,
+            "division": "Division 1"
+          }
+        ]
+      },
+      {
+        "division_name": "Division 2",
+        "matchups": [
+          {
+            "matchup_id": "div2_sf1",
+            "round": "Semifinal 1",
+            "seed1": 1,
+            "team1": "Pineapple Express",
+            "owner1": "Tom",
+            "score1": 156.78,
+            "seed2": 4,
+            "team2": "Blitz Brigade",
+            "owner2": "Emma",
+            "score2": 142.12,
+            "winner": "Pineapple Express",
+            "winner_seed": 1,
+            "division": "Division 2"
+          },
+          {
+            "matchup_id": "div2_sf2",
+            "round": "Semifinal 2",
+            "seed1": 2,
+            "team1": "Sunday Funday",
+            "owner1": "Alex",
+            "score1": 139.45,
+            "seed2": 3,
+            "team2": "Touchdown Titans",
+            "owner2": "Chris",
+            "score2": 141.22,
+            "winner": "Touchdown Titans",
+            "winner_seed": 3,
+            "division": "Division 2"
+          }
+        ]
+      },
+      {
+        "division_name": "Division 3",
+        "matchups": [
+          {
+            "matchup_id": "div3_sf1",
+            "round": "Semifinal 1",
+            "seed1": 1,
+            "team1": "End Zone Warriors",
+            "owner1": "Pat",
+            "score1": 148.90,
+            "seed2": 4,
+            "team2": "Red Zone Raiders",
+            "owner2": "Jamie",
+            "score2": 135.67,
+            "winner": "End Zone Warriors",
+            "winner_seed": 1,
+            "division": "Division 3"
+          },
+          {
+            "matchup_id": "div3_sf2",
+            "round": "Semifinal 2",
+            "seed1": 2,
+            "team1": "Hail Mary Heroes",
+            "owner1": "Sam",
+            "score1": 144.55,
+            "seed2": 3,
+            "team2": "Fourth Down Force",
+            "owner2": "Dana",
+            "score2": 138.23,
+            "winner": "Hail Mary Heroes",
+            "winner_seed": 2,
+            "division": "Division 3"
+          }
+        ]
+      }
+    ]
+  },
+  
+  "weekly_player_highlights": [
+    {
+      "challenge_name": "Top Scorer",
+      "challenge_type": "player",
+      "player_name": "Patrick Mahomes",
+      "position": "QB",
+      "pro_team": "KC",
+      "fantasy_team": "Thunder Cats",
+      "division": "Division 1",
+      "points": 38.45
+    },
+    {
+      "challenge_name": "Best QB",
+      "challenge_type": "player",
+      "player_name": "Patrick Mahomes",
+      "position": "QB",
+      "pro_team": "KC",
+      "fantasy_team": "Thunder Cats",
+      "division": "Division 1",
+      "points": 38.45
+    },
+    {
+      "challenge_name": "Best RB",
+      "challenge_type": "player",
+      "player_name": "Christian McCaffrey",
+      "position": "RB",
+      "pro_team": "SF",
+      "fantasy_team": "Pineapple Express",
+      "division": "Division 2",
+      "points": 34.20
+    },
+    {
+      "challenge_name": "Best WR",
+      "challenge_type": "player",
+      "player_name": "Tyreek Hill",
+      "position": "WR",
+      "pro_team": "MIA",
+      "fantasy_team": "Grid Iron Giants",
+      "division": "Division 1",
+      "points": 31.80
+    },
+    {
+      "challenge_name": "Best TE",
+      "challenge_type": "player",
+      "player_name": "Travis Kelce",
+      "position": "TE",
+      "pro_team": "KC",
+      "fantasy_team": "End Zone Warriors",
+      "division": "Division 3",
+      "points": 22.30
+    },
+    {
+      "challenge_name": "Best K",
+      "challenge_type": "player",
+      "player_name": "Justin Tucker",
+      "position": "K",
+      "pro_team": "BAL",
+      "fantasy_team": "Sunday Funday",
+      "division": "Division 2",
+      "points": 16.00
+    },
+    {
+      "challenge_name": "Best D/ST",
+      "challenge_type": "player",
+      "player_name": "49ers D/ST",
+      "position": "D/ST",
+      "pro_team": "SF",
+      "fantasy_team": "Hail Mary Heroes",
+      "division": "Division 3",
+      "points": 24.00
+    }
+  ],
+  
+  "season_challenges": {
+    "note": "Regular season challenges - finalized at end of week 14",
+    "challenges": [
+      {
+        "challenge_name": "Most Points Overall",
+        "team_name": "Pineapple Express",
+        "owner_name": "Tom",
+        "division": "Division 2",
+        "value": 1847.56,
+        "details": "Total regular season points"
+      },
+      {
+        "challenge_name": "Most Points in One Game",
+        "team_name": "Thunder Cats",
+        "owner_name": "John",
+        "division": "Division 1",
+        "value": 178.90,
+        "details": "Week 8"
+      },
+      {
+        "challenge_name": "Most Points in a Loss",
+        "team_name": "Grid Iron Giants",
+        "owner_name": "Mike",
+        "division": "Division 1",
+        "value": 156.23,
+        "details": "Week 11, lost 156.23 - 158.45"
+      },
+      {
+        "challenge_name": "Least Points in a Win",
+        "team_name": "Sunday Funday",
+        "owner_name": "Alex",
+        "division": "Division 2",
+        "value": 89.45,
+        "details": "Week 4, won 89.45 - 87.12"
+      },
+      {
+        "challenge_name": "Closest Victory",
+        "team_name": "End Zone Warriors",
+        "owner_name": "Pat",
+        "division": "Division 3",
+        "value": 0.12,
+        "details": "Week 6, won 112.23 - 112.11"
+      }
+    ]
+  },
+  
+  "standings": {
+    "note": "Final regular season standings - week 14",
+    "divisions": [
+      {
+        "division_name": "Division 1",
+        "teams": [
+          {
+            "rank": 1,
+            "team_name": "Thunder Cats",
+            "owner_name": "John",
+            "record": "11-3",
+            "points_for": 1678.9,
+            "points_against": 1456.2,
+            "playoff_status": "qualified"
+          }
+        ]
+      }
+    ]
+  }
+}

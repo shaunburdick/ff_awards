@@ -73,6 +73,7 @@ These specs serve as:
 - ✅ 003: Output Format System (5 formats)
 - ✅ 004: Multi-League Support (divisions)
 - ✅ 005: Format Arguments System
+- 📝 006: Playoff Mode (in draft - testing required)
 
 ## Contributing
 
@@ -102,6 +103,6 @@ These specs work with:
 
 ---
 
-**Last Updated**: 2025-11-14
-**Spec Version**: 1.0.0
+**Last Updated**: 2025-12-08
+**Spec Version**: 1.1.0
 **Project Status**: Production (actively maintained)

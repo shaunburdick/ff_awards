@@ -1,0 +1,168 @@
+{
+  "report_type": "championship_week",
+  "week": 17,
+  "generated_at": "2025-12-22T10:30:00Z",
+  
+  "championship": {
+    "round": "Championship Week",
+    "description": "Highest score wins overall championship",
+    "leaderboard": [
+      {
+        "rank": 1,
+        "medal": "🥇",
+        "team_name": "Pineapple Express",
+        "owner_name": "Tom",
+        "division": "Division 2",
+        "division_title": "Division 2 Champion",
+        "score": 162.78,
+        "is_champion": true
+      },
+      {
+        "rank": 2,
+        "medal": "🥈",
+        "team_name": "Thunder Cats",
+        "owner_name": "John",
+        "division": "Division 1",
+        "division_title": "Division 1 Champion",
+        "score": 158.45,
+        "is_champion": false
+      },
+      {
+        "rank": 3,
+        "medal": "🥉",
+        "team_name": "Hail Mary Heroes",
+        "owner_name": "Sam",
+        "division": "Division 3",
+        "division_title": "Division 3 Champion",
+        "score": 154.23,
+        "is_champion": false
+      }
+    ],
+    "overall_champion": {
+      "team_name": "Pineapple Express",
+      "owner_name": "Tom",
+      "division": "Division 2",
+      "score": 162.78
+    }
+  },
+  
+  "weekly_player_highlights": [
+    {
+      "challenge_name": "Top Scorer",
+      "challenge_type": "player",
+      "player_name": "Lamar Jackson",
+      "position": "QB",
+      "pro_team": "BAL",
+      "fantasy_team": "Pineapple Express",
+      "division": "Division 2",
+      "points": 45.23,
+      "note": "Includes all players across all 30 teams"
+    },
+    {
+      "challenge_name": "Best QB",
+      "challenge_type": "player",
+      "player_name": "Lamar Jackson",
+      "position": "QB",
+      "pro_team": "BAL",
+      "fantasy_team": "Pineapple Express",
+      "division": "Division 2",
+      "points": 45.23
+    },
+    {
+      "challenge_name": "Best RB",
+      "challenge_type": "player",
+      "player_name": "Saquon Barkley",
+      "position": "RB",
+      "pro_team": "PHI",
+      "fantasy_team": "Thunder Cats",
+      "division": "Division 1",
+      "points": 38.90
+    },
+    {
+      "challenge_name": "Best WR",
+      "challenge_type": "player",
+      "player_name": "CeeDee Lamb",
+      "position": "WR",
+      "pro_team": "DAL",
+      "fantasy_team": "Hail Mary Heroes",
+      "division": "Division 3",
+      "points": 35.60
+    },
+    {
+      "challenge_name": "Best TE",
+      "challenge_type": "player",
+      "player_name": "George Kittle",
+      "position": "TE",
+      "pro_team": "SF",
+      "fantasy_team": "Pineapple Express",
+      "division": "Division 2",
+      "points": 26.40
+    },
+    {
+      "challenge_name": "Best K",
+      "challenge_type": "player",
+      "player_name": "Jake Elliott",
+      "position": "K",
+      "pro_team": "PHI",
+      "fantasy_team": "Thunder Cats",
+      "division": "Division 1",
+      "points": 17.00
+    },
+    {
+      "challenge_name": "Best D/ST",
+      "challenge_type": "player",
+      "player_name": "Ravens D/ST",
+      "position": "D/ST",
+      "pro_team": "BAL",
+      "fantasy_team": "Hail Mary Heroes",
+      "division": "Division 3",
+      "points": 25.00
+    }
+  ],
+  
+  "season_challenges": {
+    "note": "Regular season challenges - finalized at end of week 14",
+    "challenges": [
+      {
+        "challenge_name": "Most Points Overall",
+        "team_name": "Pineapple Express",
+        "owner_name": "Tom",
+        "division": "Division 2",
+        "value": 1847.56,
+        "details": "Total regular season points"
+      },
+      {
+        "challenge_name": "Most Points in One Game",
+        "team_name": "Thunder Cats",
+        "owner_name": "John",
+        "division": "Division 1",
+        "value": 178.90,
+        "details": "Week 8"
+      },
+      {
+        "challenge_name": "Most Points in a Loss",
+        "team_name": "Grid Iron Giants",
+        "owner_name": "Mike",
+        "division": "Division 1",
+        "value": 156.23,
+        "details": "Week 11, lost 156.23 - 158.45"
+      },
+      {
+        "challenge_name": "Least Points in a Win",
+        "team_name": "Sunday Funday",
+        "owner_name": "Alex",
+        "division": "Division 2",
+        "value": 89.45,
+        "details": "Week 4, won 89.45 - 87.12"
+      },
+      {
+        "challenge_name": "Closest Victory",
+        "team_name": "End Zone Warriors",
+        "owner_name": "Pat",
+        "division": "Division 3",
+        "value": 0.12,
+        "details": "Week 6, won 112.23 - 112.11"
+      }
+    ]
+  }
+}

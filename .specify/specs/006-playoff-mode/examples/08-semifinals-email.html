@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Football Playoffs - Semifinals (Week 15)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.4;
+            margin: 0;
+            padding: 10px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 100%;
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            font-size: 20px;
+            margin: 0 0 10px 0;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        h2 {
+            color: #34495e;
+            font-size: 16px;
+            margin: 20px 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #3498db;
+        }
+        h3 {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin: 15px 0 8px 0;
+            font-weight: bold;
+            background-color: #ecf0f1;
+            padding: 8px 10px;
+            border-radius: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0 20px 0;
+            font-size: 13px;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 8px;
+            text-align: left;
+            font-weight: bold;
+        }
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+        .winner-row {
+            background-color: #d4edda !important;
+            font-weight: bold;
+        }
+        .winner-row td {
+            border-left: 4px solid #28a745;
+        }
+        .seed {
+            color: #7f8c8d;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .score {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+        .winner-badge {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .playoff-header {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 15px 0 10px 0;
+            text-align: center;
+            font-weight: bold;
+            font-size: 15px;
+        }
+        .historical-note {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px;
+            margin: 15px 0;
+            border-radius: 4px;
+            color: #856404;
+            font-size: 13px;
+        }
+        .challenge-emoji {
+            font-size: 16px;
+            margin-right: 5px;
+        }
+        .footer {
+            text-align: center;
+            color: #95a5a6;
+            font-size: 11px;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #ecf0f1;
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 5px;
+            }
+            .container {
+                padding: 10px;
+            }
+            h1 {
+                font-size: 16px;
+                padding: 10px;
+            }
+            table {
+                font-size: 11px;
+            }
+            th, td {
+                padding: 6px 4px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏈 PLAYOFF SEMIFINALS - WEEK 15 🏈</h1>
+        
+        <!-- Playoff Brackets Section -->
+        <h2>🏆 Playoff Brackets</h2>
+        
+        <div class="playoff-header">DIVISION 1 - SEMIFINALS</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Matchup</th>
+                    <th>Team (Owner)</th>
+                    <th>Seed</th>
+                    <th>Score</th>
+                    <th>Result</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="winner-row">
+                    <td rowspan="2" style="vertical-align: middle; font-weight: bold;">Semifinal 1</td>
+                    <td>Thunder Cats<br><span style="color: #7f8c8d; font-size: 11px;">John</span></td>
+                    <td class="seed">#1</td>
+                    <td class="score">145.67</td>
+                    <td class="winner-badge">✓ Winner</td>
+                </tr>
+                <tr>
+                    <td>Dream Team<br><span style="color: #7f8c8d; font-size: 11px;">Sarah</span></td>
+                    <td class="seed">#4</td>
+                    <td class="score">98.23</td>
+                    <td>—</td>
+                </tr>
+                <tr class="winner-row">
+                    <td rowspan="2" style="vertical-align: middle; font-weight: bold;">Semifinal 2</td>
+                    <td>Grid Iron Giants<br><span style="color: #7f8c8d; font-size: 11px;">Mike</span></td>
+                    <td class="seed">#2</td>
+                    <td class="score">132.45</td>
+                    <td class="winner-badge">✓ Winner</td>
+                </tr>
+                <tr>
+                    <td>The Replacements<br><span style="color: #7f8c8d; font-size: 11px;">Lisa</span></td>
+                    <td class="seed">#3</td>
+                    <td class="score">128.90</td>
+                    <td>—</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="playoff-header">DIVISION 2 - SEMIFINALS</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Matchup</th>
+                    <th>Team (Owner)</th>
+                    <th>Seed</th>
+                    <th>Score</th>
+                    <th>Result</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="winner-row">
+                    <td rowspan="2" style="vertical-align: middle; font-weight: bold;">Semifinal 1</td>
+                    <td>Pineapple Express<br><span style="color: #7f8c8d; font-size: 11px;">Tom</span></td>
+                    <td class="seed">#1</td>
+                    <td class="score">156.78</td>
+                    <td class="winner-badge">✓ Winner</td>
+                </tr>
+                <tr>
+                    <td>Blitz Brigade<br><span style="color: #7f8c8d; font-size: 11px;">Emma</span></td>
+                    <td class="seed">#4</td>
+                    <td class="score">142.12</td>
+                    <td>—</td>
+                </tr>
+                <tr>
+                    <td rowspan="2" style="vertical-align: middle; font-weight: bold;">Semifinal 2</td>
+                    <td>Sunday Funday<br><span style="color: #7f8c8d; font-size: 11px;">Alex</span></td>
+                    <td class="seed">#2</td>
+                    <td class="score">139.45</td>
+                    <td>—</td>
+                </tr>
+                <tr class="winner-row">
+                    <td>Touchdown Titans<br><span style="color: #7f8c8d; font-size: 11px;">Chris</span></td>
+                    <td class="seed">#3</td>
+                    <td class="score">141.22</td>
+                    <td class="winner-badge">✓ Winner</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="playoff-header">DIVISION 3 - SEMIFINALS</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Matchup</th>
+                    <th>Team (Owner)</th>
+                    <th>Seed</th>
+                    <th>Score</th>
+                    <th>Result</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="winner-row">
+                    <td rowspan="2" style="vertical-align: middle; font-weight: bold;">Semifinal 1</td>
+                    <td>End Zone Warriors<br><span style="color: #7f8c8d; font-size: 11px;">Pat</span></td>
+                    <td class="seed">#1</td>
+                    <td class="score">148.90</td>
+                    <td class="winner-badge">✓ Winner</td>
+                </tr>
+                <tr>
+                    <td>Red Zone Raiders<br><span style="color: #7f8c8d; font-size: 11px;">Jamie</span></td>
+                    <td class="seed">#4</td>
+                    <td class="score">135.67</td>
+                    <td>—</td>
+                </tr>
+                <tr class="winner-row">
+                    <td rowspan="2" style="vertical-align: middle; font-weight: bold;">Semifinal 2</td>
+                    <td>Hail Mary Heroes<br><span style="color: #7f8c8d; font-size: 11px;">Sam</span></td>
+                    <td class="seed">#2</td>
+                    <td class="score">144.55</td>
+                    <td class="winner-badge">✓ Winner</td>
+                </tr>
+                <tr>
+                    <td>Fourth Down Force<br><span style="color: #7f8c8d; font-size: 11px;">Dana</span></td>
+                    <td class="seed">#3</td>
+                    <td class="score">138.23</td>
+                    <td>—</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <!-- Weekly Player Highlights Section -->
+        <h2>🌟 Weekly Player Highlights - Week 15</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Challenge</th>
+                    <th>Player (Position)</th>
+                    <th>Team</th>
+                    <th>Points</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="challenge-emoji">🏆</span>Top Scorer</td>
+                    <td>Patrick Mahomes (QB)</td>
+                    <td>Thunder Cats</td>
+                    <td class="score">38.45</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">🎯</span>Best QB</td>
+                    <td>Patrick Mahomes (QB)</td>
+                    <td>Thunder Cats</td>
+                    <td class="score">38.45</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">🏃</span>Best RB</td>
+                    <td>Christian McCaffrey (RB)</td>
+                    <td>Pineapple Express</td>
+                    <td class="score">34.20</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">🙌</span>Best WR</td>
+                    <td>Tyreek Hill (WR)</td>
+                    <td>Grid Iron Giants</td>
+                    <td class="score">31.80</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">🏈</span>Best TE</td>
+                    <td>Travis Kelce (TE)</td>
+                    <td>End Zone Warriors</td>
+                    <td class="score">22.30</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">⚡</span>Best K</td>
+                    <td>Justin Tucker (K)</td>
+                    <td>Sunday Funday</td>
+                    <td class="score">16.00</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">🛡️</span>Best D/ST</td>
+                    <td>49ers D/ST (D/ST)</td>
+                    <td>Hail Mary Heroes</td>
+                    <td class="score">24.00</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <!-- Historical Season Challenges -->
+        <div class="historical-note">
+            <strong>📊 Regular Season Final Results (Historical)</strong><br>
+            The following season challenges are finalized from the regular season (Weeks 1-14).
+        </div>
+        
+        <h3>Season-Long Challenges</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Challenge</th>
+                    <th>Team (Owner)</th>
+                    <th>Division</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="challenge-emoji">🏆</span>Most Points Overall</td>
+                    <td>Pineapple Express<br><span style="color: #7f8c8d; font-size: 11px;">Tom</span></td>
+                    <td>Div 2</td>
+                    <td class="score">1847.56</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">💥</span>Most Points in One Game</td>
+                    <td>Thunder Cats<br><span style="color: #7f8c8d; font-size: 11px;">John</span></td>
+                    <td>Div 1</td>
+                    <td class="score">178.90</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">😢</span>Most Points in a Loss</td>
+                    <td>Grid Iron Giants<br><span style="color: #7f8c8d; font-size: 11px;">Mike</span></td>
+                    <td>Div 1</td>
+                    <td class="score">156.23</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">🍀</span>Least Points in a Win</td>
+                    <td>Sunday Funday<br><span style="color: #7f8c8d; font-size: 11px;">Alex</span></td>
+                    <td>Div 2</td>
+                    <td class="score">89.45</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">😅</span>Closest Victory</td>
+                    <td>End Zone Warriors<br><span style="color: #7f8c8d; font-size: 11px;">Pat</span></td>
+                    <td>Div 3</td>
+                    <td class="score">0.12</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="footer">
+            <p>Fantasy Football Challenge Tracker • Generated for 2025 Season • Week 15 Playoffs</p>
+        </div>
+    </div>
+</body>
+</html>

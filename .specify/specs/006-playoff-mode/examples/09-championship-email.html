@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Football Championship Week (Week 17)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.4;
+            margin: 0;
+            padding: 10px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 100%;
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            font-size: 20px;
+            margin: 0 0 10px 0;
+            text-align: center;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        h2 {
+            color: #34495e;
+            font-size: 16px;
+            margin: 20px 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #ffd700;
+        }
+        h3 {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin: 15px 0 8px 0;
+            font-weight: bold;
+            background-color: #ecf0f1;
+            padding: 8px 10px;
+            border-radius: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0 20px 0;
+            font-size: 13px;
+        }
+        th {
+            background-color: #ffd700;
+            color: #2c3e50;
+            padding: 10px 8px;
+            text-align: left;
+            font-weight: bold;
+        }
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+        .champion-row {
+            background: linear-gradient(135deg, #fff9e6 0%, #ffe8a3 100%) !important;
+            font-weight: bold;
+            border-left: 6px solid #ffd700 !important;
+        }
+        .champion-row td {
+            font-size: 15px;
+            padding: 12px 8px;
+        }
+        .medal {
+            font-size: 24px;
+            text-align: center;
+        }
+        .champion-banner {
+            background: linear-gradient(135deg, #ffd700 0%, #ffed4e 50%, #ffd700 100%);
+            color: #2c3e50;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+            font-weight: bold;
+            font-size: 18px;
+            border: 3px solid #f39c12;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .champion-banner .trophy {
+            font-size: 48px;
+            display: block;
+            margin-bottom: 10px;
+        }
+        .champion-banner .team-name {
+            font-size: 22px;
+            margin: 10px 0;
+        }
+        .champion-banner .owner-name {
+            font-size: 16px;
+            color: #555;
+        }
+        .score {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+        .historical-note {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px;
+            margin: 15px 0;
+            border-radius: 4px;
+            color: #856404;
+            font-size: 13px;
+        }
+        .challenge-emoji {
+            font-size: 16px;
+            margin-right: 5px;
+        }
+        .player-note {
+            background-color: #e7f3ff;
+            border-left: 4px solid #3498db;
+            padding: 8px 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #2c3e50;
+        }
+        .footer {
+            text-align: center;
+            color: #95a5a6;
+            font-size: 11px;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #ecf0f1;
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 5px;
+            }
+            .container {
+                padding: 10px;
+            }
+            h1 {
+                font-size: 16px;
+                padding: 10px;
+            }
+            .champion-banner {
+                padding: 15px;
+                font-size: 16px;
+            }
+            .champion-banner .trophy {
+                font-size: 36px;
+            }
+            .champion-banner .team-name {
+                font-size: 18px;
+            }
+            table {
+                font-size: 11px;
+            }
+            th, td {
+                padding: 6px 4px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏆 CHAMPIONSHIP WEEK - WEEK 17 🏆</h1>
+        <p style="text-align: center; color: #7f8c8d; font-size: 15px; margin: 10px 0;">
+            <strong>HIGHEST SCORE WINS OVERALL!</strong>
+        </p>
+        
+        <!-- Championship Leaderboard -->
+        <h2>🏆 Championship Week Leaderboard</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 60px; text-align: center;">Rank</th>
+                    <th>Team (Owner)</th>
+                    <th>Division Champion</th>
+                    <th style="text-align: right;">Final Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="champion-row">
+                    <td class="medal">🥇</td>
+                    <td>
+                        <strong style="font-size: 15px;">Pineapple Express</strong><br>
+                        <span style="color: #7f8c8d; font-size: 11px;">Tom</span>
+                    </td>
+                    <td>Division 2</td>
+                    <td class="score" style="text-align: right; font-size: 16px;">162.78</td>
+                </tr>
+                <tr>
+                    <td class="medal">🥈</td>
+                    <td>
+                        Thunder Cats<br>
+                        <span style="color: #7f8c8d; font-size: 11px;">John</span>
+                    </td>
+                    <td>Division 1</td>
+                    <td class="score" style="text-align: right;">158.45</td>
+                </tr>
+                <tr>
+                    <td class="medal">🥉</td>
+                    <td>
+                        Hail Mary Heroes<br>
+                        <span style="color: #7f8c8d; font-size: 11px;">Sam</span>
+                    </td>
+                    <td>Division 3</td>
+                    <td class="score" style="text-align: right;">154.23</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <!-- Champion Banner -->
+        <div class="champion-banner">
+            <span class="trophy">🏆🏆🏆</span>
+            <div style="font-size: 16px; margin-bottom: 5px;">OVERALL CHAMPION</div>
+            <div class="team-name">Pineapple Express</div>
+            <div class="owner-name">Tom • Division 2 Champion</div>
+        </div>
+        
+        <!-- Weekly Player Highlights Section -->
+        <h2>🌟 Weekly Player Highlights - Week 17</h2>
+        <div class="player-note">
+            <strong>Note:</strong> Player highlights include all players across all 30 teams, not just championship participants.
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Challenge</th>
+                    <th>Player (Position)</th>
+                    <th>Team</th>
+                    <th>Points</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="challenge-emoji">🏆</span>Top Scorer</td>
+                    <td>Lamar Jackson (QB)</td>
+                    <td>Pineapple Express</td>
+                    <td class="score">45.23</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">🎯</span>Best QB</td>
+                    <td>Lamar Jackson (QB)</td>
+                    <td>Pineapple Express</td>
+                    <td class="score">45.23</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">🏃</span>Best RB</td>
+                    <td>Saquon Barkley (RB)</td>
+                    <td>Thunder Cats</td>
+                    <td class="score">38.90</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">🙌</span>Best WR</td>
+                    <td>CeeDee Lamb (WR)</td>
+                    <td>Hail Mary Heroes</td>
+                    <td class="score">35.60</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">🏈</span>Best TE</td>
+                    <td>George Kittle (TE)</td>
+                    <td>Pineapple Express</td>
+                    <td class="score">26.40</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">⚡</span>Best K</td>
+                    <td>Jake Elliott (K)</td>
+                    <td>Thunder Cats</td>
+                    <td class="score">17.00</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">🛡️</span>Best D/ST</td>
+                    <td>Ravens D/ST (D/ST)</td>
+                    <td>Hail Mary Heroes</td>
+                    <td class="score">25.00</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <!-- Historical Season Challenges -->
+        <div class="historical-note">
+            <strong>📊 Regular Season Final Results (Historical)</strong><br>
+            The following season challenges are finalized from the regular season (Weeks 1-14).
+        </div>
+        
+        <h3>Season-Long Challenges</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Challenge</th>
+                    <th>Team (Owner)</th>
+                    <th>Division</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><span class="challenge-emoji">🏆</span>Most Points Overall</td>
+                    <td>Pineapple Express<br><span style="color: #7f8c8d; font-size: 11px;">Tom</span></td>
+                    <td>Div 2</td>
+                    <td class="score">1847.56</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">💥</span>Most Points in One Game</td>
+                    <td>Thunder Cats<br><span style="color: #7f8c8d; font-size: 11px;">John</span></td>
+                    <td>Div 1</td>
+                    <td class="score">178.90</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">😢</span>Most Points in a Loss</td>
+                    <td>Grid Iron Giants<br><span style="color: #7f8c8d; font-size: 11px;">Mike</span></td>
+                    <td>Div 1</td>
+                    <td class="score">156.23</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">🍀</span>Least Points in a Win</td>
+                    <td>Sunday Funday<br><span style="color: #7f8c8d; font-size: 11px;">Alex</span></td>
+                    <td>Div 2</td>
+                    <td class="score">89.45</td>
+                </tr>
+                <tr>
+                    <td><span class="challenge-emoji">😅</span>Closest Victory</td>
+                    <td>End Zone Warriors<br><span style="color: #7f8c8d; font-size: 11px;">Pat</span></td>
+                    <td>Div 3</td>
+                    <td class="score">0.12</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="footer">
+            <p>Fantasy Football Challenge Tracker • Generated for 2025 Season • Championship Week</p>
+        </div>
+    </div>
+</body>
+</html>
