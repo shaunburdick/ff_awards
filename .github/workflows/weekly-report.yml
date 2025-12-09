@@ -65,7 +65,7 @@ jobs:
       run: |
         # Hardcoded note for this week (set to empty string to disable)
         # Example: HARDCODED_NOTE="Playoffs start next week! 🏆"
-        HARDCODED_NOTE="The last game of the regular season is week 14! Playoffs begin week 15. Good luck to all teams! 🏈"
+        HARDCODED_NOTE="Playoffs begin this week. Please do not make any changes to your roster if you are not in the playoffs. Good luck to all teams! 🏈"
 
         # Determine if private leagues are needed
         if [ -n "${{ secrets.ESPN_SWID }}" ] && [ -n "${{ secrets.ESPN_S2 }}" ]; then
