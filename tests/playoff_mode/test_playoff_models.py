@@ -8,6 +8,7 @@ validation and error handling.
 
 from __future__ import annotations
 
+from ff_tracker.exceptions import DataValidationError, DivisionSyncError
 from ff_tracker.models import (
     ChampionshipEntry,
     ChampionshipLeaderboard,
@@ -17,7 +18,6 @@ from ff_tracker.models import (
     PlayoffMatchup,
     TeamStats,
 )
-from ff_tracker.exceptions import DataValidationError, DivisionSyncError
 
 
 def test_playoff_matchup():

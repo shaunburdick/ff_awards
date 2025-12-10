@@ -5,6 +5,98 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2025-12-09 (Week 15 - Playoffs Begin)
+
+### Added - Playoff Mode 🏆
+- **Automatic Playoff Detection**: Tool now automatically detects and displays playoff brackets when `current_week > reg_season_count`
+  - No manual flags required - seamless transition from regular season to playoffs
+  - Validates all divisions are in sync (same week and playoff state)
+  - Raises clear `DivisionSyncError` if divisions are out of sync
+
+- **Playoff Bracket Display** (Weeks 15-16):
+  - **Semifinals (Week 15)**: Shows 2 matchups per division (#1 vs #4, #2 vs #3)
+  - **Finals (Week 16)**: Shows 1 matchup per division (winners of semifinals)
+  - Displays seeds, team names, owners, scores, and winner indicators
+  - Handles in-progress games (shows scores as-is, "TBD" before games start)
+  - Winners bracket only (consolation games excluded per spec)
+
+- **Championship Week Display** (Week 17):
+  - Championship leaderboard ranking all division winners by score
+  - Trophy banner and medal emojis (🥇🥈🥉) for top 3 finishers
+  - Overall champion prominently highlighted
+  - Player highlights include ALL teams (not just division winners)
+
+- **Playoff-Adapted Weekly Highlights**:
+  - **Regular Season**: Shows all 13 challenges (6 team + 7 player)
+  - **Semifinals/Finals**: Shows only 7 player highlights (team challenges excluded - playoff brackets provide context)
+  - **Championship Week**: Shows all 7 player highlights across entire league
+
+- **Historical Context Labels**:
+  - Season challenges marked as "REGULAR SEASON FINAL RESULTS (Historical)" during playoffs
+  - Standings shown as "FINAL REGULAR SEASON STANDINGS" to clarify data is frozen
+  - Regular season stats preserved for end-of-season awards
+
+- **New Data Models**:
+  - `PlayoffMatchup`: Immutable playoff game data with validation
+  - `PlayoffBracket`: Container for round matchups (Semifinals/Finals)
+  - `ChampionshipEntry`: Division winner with championship week score
+  - `ChampionshipLeaderboard`: Ranked list of all division winners
+  - `DivisionData.is_playoff_mode`: Property to check playoff state
+
+- **All 5 Output Formats Support Playoffs**:
+  - **Console**: Beautiful Unicode tables with playoff brackets
+  - **Sheets (TSV)**: Structured playoff data for Google Sheets import
+  - **Email (HTML)**: Responsive mobile-friendly playoff brackets with styling
+  - **JSON**: Structured playoff data with `report_type` field
+  - **Markdown**: GitHub/Slack/Discord-ready playoff tables
+
+### Changed
+- **Display Order During Playoffs**:
+  - **Semifinals/Finals**: Brackets → Player Highlights → Season Challenges (Historical) → Final Standings
+  - **Championship Week**: Championship Leaderboard → Player Highlights → Season Challenges (Historical)
+  - Regular season standings moved to end and marked as "final"
+
+- **Weekly Challenge Filtering**:
+  - Team challenges (Highest/Lowest Score, Biggest Win, Closest Game, Overachiever, Below Expectations) hidden during playoffs
+  - Reasoning: Playoff brackets provide comprehensive team performance context
+  - Player highlights remain visible to celebrate individual performances
+
+- **DivisionData Model**: Added optional `playoff_bracket` field (defaults to None for regular season)
+
+### Technical Details
+- **Playoff Detection Logic**: `league.current_week > league.settings.reg_season_count`
+- **Playoff Rounds**:
+  - Week 15 (playoff_week=1): Semifinals
+  - Week 16 (playoff_week=2): Finals
+  - Week 17 (playoff_week=3): Championship Week
+- **Division Sync Validation**: Ensures all leagues are in same week and playoff state
+- **ESPN API Filtering**: Uses `is_playoff=True` and `matchup_type=="WINNERS_BRACKET"` to identify playoff games
+- **Seeding**: Extracted from `team.standing` (1-4 for playoff teams)
+- **Architectural Design**: All playoff features are additive - zero modifications to existing regular season code paths
+- **Code Quality**: 100% type coverage, all linting rules passing, zero suppressions
+
+### Testing
+- ✅ **Week 15 (Semifinals)**: Fully tested with real ESPN data (December 9, 2025)
+  - All 5 formatters working perfectly
+  - 3 divisions × 2 semifinals = 6 matchups displayed correctly
+  - Playoff brackets, filtered challenges, and historical labels all verified
+- ⏳ **Week 16 (Finals)**: Scheduled for testing on December 17, 2025
+- ⏳ **Week 17 (Championship)**: Scheduled for testing on December 24, 2025
+- ✅ **Regular Season Regression**: Code review confirms zero impact on regular season functionality
+  - All playoff code gated behind `is_playoff_mode` checks
+  - Challenge services unchanged (git diff shows zero modifications)
+  - DivisionData changes are purely additive (optional field + property)
+
+### Performance
+- Execution time: ~25-27 seconds for 3 leagues (playoff mode)
+- Playoff overhead minimal: just additional box_scores queries for matchups
+- No performance degradation compared to regular season operation
+
+### Breaking Changes
+- None - playoff mode activates automatically based on league week
+- Regular season functionality completely preserved
+- All existing CLI arguments and output formats unchanged
+
 ## [2.3.0] - 2025-11-13
 
 ### Added

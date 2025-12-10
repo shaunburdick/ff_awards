@@ -11,8 +11,8 @@ This script will help us understand:
 
 from __future__ import annotations
 
-import json
 import os
+
 from dotenv import load_dotenv
 from espn_api.football import League
 
@@ -78,7 +78,7 @@ def main() -> None:
             print(f"  ERROR getting box scores: {e}")
 
         # Team standings and playoff info
-        print(f"\n📋 Team Standings (with playoff info):")
+        print("\n📋 Team Standings (with playoff info):")
         for team in sorted(league.teams, key=lambda t: t.standing):
             print(
                 f"  {team.standing:2d}. {team.team_name:30s} "
@@ -89,7 +89,7 @@ def main() -> None:
             )
 
         # Check if there's matchup_periods data
-        print(f"\n🗓️  Matchup Periods:")
+        print("\n🗓️  Matchup Periods:")
         print(f"  {league.settings.matchup_periods}")
 
         print("\n" + "=" * 80)

@@ -10,8 +10,8 @@ from __future__ import annotations
 from unittest.mock import Mock
 
 from ff_tracker.config import FFTrackerConfig
-from ff_tracker.services.espn_service import ESPNService
 from ff_tracker.exceptions import ESPNAPIError
+from ff_tracker.services.espn_service import ESPNService
 
 
 def create_mock_league(

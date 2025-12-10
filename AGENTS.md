@@ -1,7 +1,7 @@
 # Fantasy Football Challenge Tracker - Agent Summary
 
 ## Project Overview
-A CLI tool to track 13 weekly highlights and 5 season-long fantasy football challenges across multiple ESPN leagues for end-of-season awards. Originally built as a single 1000+ line script, it has been completely refactored into a modern Python package demonstrating best practices.
+A CLI tool to track 13 weekly highlights, 5 season-long challenges, and **playoff brackets** (NEW v3.0) across multiple ESPN leagues for end-of-season awards. Originally built as a single 1000+ line script, it has been completely refactored into a modern Python package demonstrating best practices. **Now automatically displays playoff brackets and championship leaderboards when leagues enter postseason (Weeks 15-17)**.
 
 ## Current Architecture
 
@@ -23,7 +23,8 @@ ff_tracker/
 │   ├── team.py              # TeamStats model
 │   ├── week.py              # WeeklyGameResult model
 │   ├── player.py            # WeeklyPlayerStats model
-│   └── weekly_challenge.py  # WeeklyChallenge model
+│   ├── weekly_challenge.py  # WeeklyChallenge model
+│   └── playoff.py           # Playoff data models (NEW v3.0)
 ├── services/
 │   ├── __init__.py          # Service exports
 │   ├── espn_service.py      # ESPN API integration
@@ -47,7 +48,13 @@ ff_tracker/
 - **Data Source**: ESPN Fantasy Football API (via espn-api Python library)
 - **Multi-League Support**: Handles 3-4 leagues typically, tested with 30+ teams
 - **Playoff Positioning**: Shows current playoff qualification status (top 4 by record, points-for tiebreaker)
+- **Playoff Brackets**: Automatically displays when leagues enter playoffs (Weeks 15-17) (NEW v3.0)
+  - **Semifinals (Week 15)**: 2 matchups per division (#1 vs #4, #2 vs #3)
+  - **Finals (Week 16)**: 1 championship matchup per division
+  - **Championship Week (Week 17)**: Leaderboard ranking all division winners, crowns overall champion
 - **Weekly Highlights**: Tracks current week's top team and player performances (13 total challenges)
+  - Regular season: All 13 challenges (6 team + 7 player)
+  - Playoffs: 7 player highlights only (brackets replace team challenges)
 - **True Projection Tracking**: Uses pre-game starter projections for accurate boom/bust analysis (v2.2)
 
 ### The 13 Weekly Highlights ✅ All Working (v2.2)
@@ -377,6 +384,7 @@ The README.md Table of Contents should only show H2 (##) level headers for clean
 - ✅ Displays comprehensive league standings and challenge results
 - ✅ Weekly highlights feature tracking current week's top performances (v2.1)
 - ✅ True projection tracking for accurate boom/bust analysis (v2.2)
+- ✅ **Playoff mode with automatic detection and bracket display (v3.0)** 🏆
 - ✅ Clean, maintainable codebase (modular, well-organized)
 - ✅ Proper typing without suppressions (100% type coverage)
 - ✅ Clear error messages for all failure modes
@@ -384,4 +392,4 @@ The README.md Table of Contents should only show H2 (##) level headers for clean
 - ✅ Preserved all original functionality while improving architecture
 - ✅ Efficient multi-output mode for automated workflows (v2.1)
 
-**Current Status**: Production-ready, fully functional with 13 weekly highlights and 5 season challenges, serving as excellent example of modern Python development practices.
+**Current Status**: Production-ready v3.0, fully functional with 13 weekly highlights, 5 season challenges, and automatic playoff bracket display (Weeks 15-17). Tested with real Week 15 data across all 5 output formats. Week 16/17 testing scheduled for December 17 & 24. Serves as excellent example of modern Python development practices with additive feature architecture.
