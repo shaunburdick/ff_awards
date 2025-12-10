@@ -10,7 +10,7 @@ from collections.abc import Sequence
 
 from tabulate import tabulate
 
-from ..models import ChallengeResult, DivisionData, WeeklyChallenge
+from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, WeeklyChallenge
 from .base import BaseFormatter
 
 
@@ -39,7 +39,8 @@ class ConsoleFormatter(BaseFormatter):
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
-        current_week: int | None = None
+        current_week: int | None = None,
+        championship: ChampionshipLeaderboard | None = None,
     ) -> str:
         """Format complete output for console display."""
         # Get format arguments
@@ -62,10 +63,7 @@ class ConsoleFormatter(BaseFormatter):
             # Use tabulate to create a single-cell table for the note
             # This handles Unicode width and formatting edge cases properly
             note_content = f"⚠️  {note}"
-            note_table = tabulate(
-                [[note_content]],
-                tablefmt="fancy_grid"
-            )
+            note_table = tabulate([[note_content]], tablefmt="fancy_grid")
             output_lines.append("")
             output_lines.append(note_table)
 
@@ -113,19 +111,21 @@ class ConsoleFormatter(BaseFormatter):
             team_name = team.name
             if team.in_playoff_position:
                 team_name = f"* {team.name}"
-            division_table.append([
-                str(i),
-                self._truncate_text(team_name, 25),
-                self._truncate_text(team.owner.full_name, 20),
-                f"{team.points_for:.2f}",
-                f"{team.points_against:.2f}",
-                f"{team.wins}-{team.losses}"
-            ])
+            division_table.append(
+                [
+                    str(i),
+                    self._truncate_text(team_name, 25),
+                    self._truncate_text(team.owner.full_name, 20),
+                    f"{team.points_for:.2f}",
+                    f"{team.points_against:.2f}",
+                    f"{team.wins}-{team.losses}",
+                ]
+            )
 
         return tabulate(
             division_table,
             headers=["Rank", "Team", "Owner", "Points For", "Points Against", "Record"],
-            tablefmt="grid"
+            tablefmt="grid",
         )
 
     def _format_overall_table(self, divisions: Sequence[DivisionData]) -> str:
@@ -139,20 +139,22 @@ class ConsoleFormatter(BaseFormatter):
             if team.in_playoff_position:
                 team_name = f"* {team.name}"
 
-            overall_table.append([
-                str(i),
-                self._truncate_text(team_name, 20),
-                self._truncate_text(team.owner.full_name, 15),
-                self._truncate_text(team.division, 15),
-                f"{team.points_for:.2f}",
-                f"{team.points_against:.2f}",
-                f"{team.wins}-{team.losses}"
-            ])
+            overall_table.append(
+                [
+                    str(i),
+                    self._truncate_text(team_name, 20),
+                    self._truncate_text(team.owner.full_name, 15),
+                    self._truncate_text(team.division, 15),
+                    f"{team.points_for:.2f}",
+                    f"{team.points_against:.2f}",
+                    f"{team.wins}-{team.losses}",
+                ]
+            )
 
         return tabulate(
             overall_table,
             headers=["Rank", "Team", "Owner", "Division", "Points For", "Points Against", "Record"],
-            tablefmt="grid"
+            tablefmt="grid",
         )
 
     def _format_challenge_table(self, challenges: Sequence[ChallengeResult]) -> str:
@@ -160,18 +162,20 @@ class ConsoleFormatter(BaseFormatter):
         challenge_table: list[list[str]] = []
 
         for challenge in challenges:
-            challenge_table.append([
-                challenge.challenge_name,
-                self._truncate_text(challenge.winner, 25),
-                self._truncate_text(challenge.owner.full_name, 20),
-                self._truncate_text(challenge.division, 15),
-                self._truncate_text(challenge.description, 35)
-            ])
+            challenge_table.append(
+                [
+                    challenge.challenge_name,
+                    self._truncate_text(challenge.winner, 25),
+                    self._truncate_text(challenge.owner.full_name, 20),
+                    self._truncate_text(challenge.division, 15),
+                    self._truncate_text(challenge.description, 35),
+                ]
+            )
 
         return tabulate(
             challenge_table,
             headers=["Challenge", "Winner", "Owner", "Division", "Details"],
-            tablefmt="grid"
+            tablefmt="grid",
         )
 
     def _format_weekly_table(self, weekly_challenges: Sequence[WeeklyChallenge]) -> str:
@@ -186,19 +190,21 @@ class ConsoleFormatter(BaseFormatter):
         if team_challenges:
             team_table: list[list[str]] = []
             for challenge in team_challenges:
-                team_table.append([
-                    challenge.challenge_name,
-                    self._truncate_text(challenge.winner, 30),
-                    self._truncate_text(challenge.division, 15),
-                    challenge.value
-                ])
+                team_table.append(
+                    [
+                        challenge.challenge_name,
+                        self._truncate_text(challenge.winner, 30),
+                        self._truncate_text(challenge.division, 15),
+                        challenge.value,
+                    ]
+                )
 
             output_parts.append("Team Challenges:")
-            output_parts.append(tabulate(
-                team_table,
-                headers=["Challenge", "Team", "Division", "Value"],
-                tablefmt="grid"
-            ))
+            output_parts.append(
+                tabulate(
+                    team_table, headers=["Challenge", "Team", "Division", "Value"], tablefmt="grid"
+                )
+            )
 
         # Player challenges table
         if player_challenges:
@@ -208,19 +214,19 @@ class ConsoleFormatter(BaseFormatter):
                 position = challenge.additional_info.get("position", "")
                 winner_display = f"{challenge.winner} ({position})"
 
-                player_table.append([
-                    challenge.challenge_name,
-                    self._truncate_text(winner_display, 30),
-                    challenge.value
-                ])
+                player_table.append(
+                    [
+                        challenge.challenge_name,
+                        self._truncate_text(winner_display, 30),
+                        challenge.value,
+                    ]
+                )
 
             if output_parts:
                 output_parts.append("")  # Blank line between tables
             output_parts.append("Player Highlights:")
-            output_parts.append(tabulate(
-                player_table,
-                headers=["Challenge", "Player", "Points"],
-                tablefmt="grid"
-            ))
+            output_parts.append(
+                tabulate(player_table, headers=["Challenge", "Player", "Points"], tablefmt="grid")
+            )
 
         return "\n".join(output_parts)

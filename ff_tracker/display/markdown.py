@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ..models import ChallengeResult, DivisionData, WeeklyChallenge
+from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, WeeklyChallenge
 from .base import BaseFormatter
 
 
@@ -39,7 +39,8 @@ class MarkdownFormatter(BaseFormatter):
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
-        current_week: int | None = None
+        current_week: int | None = None,
+        championship: ChampionshipLeaderboard | None = None,
     ) -> str:
         """Format complete output for Markdown display."""
         # Get format arguments
@@ -70,12 +71,16 @@ class MarkdownFormatter(BaseFormatter):
             output_lines.append("")
             # Add TOC entries for each major section
             for division in divisions:
-                output_lines.append(f"- [{division.name} Standings](#{division.name.lower().replace(' ', '-')}-standings)")
+                output_lines.append(
+                    f"- [{division.name} Standings](#{division.name.lower().replace(' ', '-')}-standings)"
+                )
             output_lines.append("- [Overall Top Teams](#-overall-top-teams-across-all-divisions)")
             if challenges:
                 output_lines.append("- [Season Challenge Results](#-season-challenge-results)")
             if weekly_challenges and current_week:
-                output_lines.append(f"- [Week {current_week} Highlights](#-week-{current_week}-highlights)")
+                output_lines.append(
+                    f"- [Week {current_week} Highlights](#-week-{current_week}-highlights)"
+                )
             output_lines.append("")
 
         # Division standings
@@ -129,7 +134,7 @@ class MarkdownFormatter(BaseFormatter):
         # Table header
         lines = [
             "| Rank | Team | Owner | Points For | Points Against | Record |",
-            "|------|------|-------|------------|----------------|--------|"
+            "|------|------|-------|------------|----------------|--------|",
         ]
 
         # Table rows
@@ -154,7 +159,7 @@ class MarkdownFormatter(BaseFormatter):
         # Table header
         lines = [
             "| Rank | Team | Owner | Division | Points For | Points Against | Record |",
-            "|------|------|-------|----------|------------|----------------|--------|"
+            "|------|------|-------|----------|------------|----------------|--------|",
         ]
 
         # Table rows
@@ -177,7 +182,7 @@ class MarkdownFormatter(BaseFormatter):
         # Table header
         lines = [
             "| Challenge | Winner | Owner | Division | Details |",
-            "|-----------|--------|-------|----------|---------|"
+            "|-----------|--------|-------|----------|---------|",
         ]
 
         # Table rows

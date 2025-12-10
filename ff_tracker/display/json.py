@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 
-from ..models import ChallengeResult, DivisionData, Owner, WeeklyChallenge
+from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, Owner, WeeklyChallenge
 from .base import BaseFormatter
 
 
@@ -36,7 +36,7 @@ class JsonFormatter(BaseFormatter):
             "last_name": owner.last_name,
             "full_name": owner.full_name,
             "id": owner.id,
-            "is_likely_username": owner.is_likely_username
+            "is_likely_username": owner.is_likely_username,
         }
 
     def format_output(
@@ -44,7 +44,8 @@ class JsonFormatter(BaseFormatter):
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
-        current_week: int | None = None
+        current_week: int | None = None,
+        championship: ChampionshipLeaderboard | None = None,
     ) -> str:
         """Format results as JSON string."""
         # Get format arguments
@@ -93,7 +94,9 @@ class JsonFormatter(BaseFormatter):
                             "true_projection_diff": game.true_projection_diff,
                         }
                         for game in div.weekly_games
-                    ] if div.weekly_games else []
+                    ]
+                    if div.weekly_games
+                    else [],
                 }
                 for div in divisions
             ],
@@ -105,11 +108,15 @@ class JsonFormatter(BaseFormatter):
                     "division": challenge.division,
                     "value": challenge.value,
                     "description": challenge.description,
-                    "challenge_type": "player" if "position" in challenge.additional_info else "team",
+                    "challenge_type": "player"
+                    if "position" in challenge.additional_info
+                    else "team",
                     "additional_info": challenge.additional_info,
                 }
                 for challenge in weekly_challenges
-            ] if weekly_challenges else [],
+            ]
+            if weekly_challenges
+            else [],
             "challenges": [
                 {
                     "name": challenge.challenge_name,
@@ -119,7 +126,7 @@ class JsonFormatter(BaseFormatter):
                     "description": challenge.description,
                 }
                 for challenge in challenges
-            ]
+            ],
         }
         data.update(main_sections)
 

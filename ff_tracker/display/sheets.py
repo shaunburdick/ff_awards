@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ..models import ChallengeResult, DivisionData, WeeklyChallenge
+from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, WeeklyChallenge
 from .base import BaseFormatter
 
 
@@ -30,7 +30,8 @@ class SheetsFormatter(BaseFormatter):
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
-        current_week: int | None = None
+        current_week: int | None = None,
+        championship: ChampionshipLeaderboard | None = None,
     ) -> str:
         """Format complete output for Google Sheets TSV."""
         output_lines: list[str] = []
@@ -62,7 +63,9 @@ class SheetsFormatter(BaseFormatter):
 
         # Overall top teams
         output_lines.append("OVERALL TOP TEAMS (Across All Divisions)")
-        output_lines.append("Rank\tTeam\tOwner\tDivision\tPoints For\tPoints Against\tRecord\tPlayoffs")
+        output_lines.append(
+            "Rank\tTeam\tOwner\tDivision\tPoints For\tPoints Against\tRecord\tPlayoffs"
+        )
 
         top_teams = self._get_overall_top_teams(divisions, limit=20)
         for i, team in enumerate(top_teams, 1):

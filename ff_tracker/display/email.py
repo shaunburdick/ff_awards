@@ -24,7 +24,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from importlib.metadata import version
 
-from ..models import ChallengeResult, DivisionData, WeeklyChallenge
+from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, WeeklyChallenge
 from .base import BaseFormatter
 
 
@@ -55,7 +55,8 @@ class EmailFormatter(BaseFormatter):
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
-        current_week: int | None = None
+        current_week: int | None = None,
+        championship: ChampionshipLeaderboard | None = None,
     ) -> str:
         """Format complete output for mobile-friendly HTML email."""
         # Get format arguments
@@ -208,11 +209,11 @@ class EmailFormatter(BaseFormatter):
 
         # Optional note/alert
         if note:
-            html_content += f'''
+            html_content += f"""
         <div class="alert-box">
             📢 {self._escape_html(note)}
         </div>
-'''
+"""
 
         # Weekly highlights (at the top for email - most relevant)
         if weekly_challenges and current_week:
@@ -221,31 +222,33 @@ class EmailFormatter(BaseFormatter):
             player_challenges = [c for c in weekly_challenges if "position" in c.additional_info]
 
             html_content += '<div class="weekly-highlight">\n'
-            html_content += f'<h2>🔥 Week {current_week} Highlights</h2>\n'
+            html_content += f"<h2>🔥 Week {current_week} Highlights</h2>\n"
 
             # Team challenges
             if team_challenges:
-                html_content += '<h3>Team Challenges</h3>\n'
-                html_content += '<table>\n'
-                html_content += '<tr><th>Challenge</th><th>Team</th><th>Division</th><th>Value</th></tr>\n'
+                html_content += "<h3>Team Challenges</h3>\n"
+                html_content += "<table>\n"
+                html_content += (
+                    "<tr><th>Challenge</th><th>Team</th><th>Division</th><th>Value</th></tr>\n"
+                )
 
                 for challenge in team_challenges:
                     html_content += (
-                        f'<tr>'
+                        f"<tr>"
                         f'<td class="challenge-name">{self._escape_html(challenge.challenge_name)}</td>'
                         f'<td class="winner">{self._escape_html(challenge.winner)}</td>'
-                        f'<td>{self._escape_html(challenge.division)}</td>'
+                        f"<td>{self._escape_html(challenge.division)}</td>"
                         f'<td class="number">{self._escape_html(challenge.value)}</td>'
-                        f'</tr>\n'
+                        f"</tr>\n"
                     )
 
-                html_content += '</table>\n'
+                html_content += "</table>\n"
 
             # Player highlights
             if player_challenges:
-                html_content += '<h3>Player Highlights</h3>\n'
-                html_content += '<table>\n'
-                html_content += '<tr><th>Challenge</th><th>Player</th><th>Points</th></tr>\n'
+                html_content += "<h3>Player Highlights</h3>\n"
+                html_content += "<table>\n"
+                html_content += "<tr><th>Challenge</th><th>Player</th><th>Points</th></tr>\n"
 
                 for challenge in player_challenges:
                     # Include position in player display
@@ -253,21 +256,21 @@ class EmailFormatter(BaseFormatter):
                     winner_display = f"{challenge.winner} ({position})"
 
                     html_content += (
-                        f'<tr>'
+                        f"<tr>"
                         f'<td class="challenge-name">{self._escape_html(challenge.challenge_name)}</td>'
                         f'<td class="winner">{self._escape_html(winner_display)}</td>'
                         f'<td class="number">{self._escape_html(challenge.value)}</td>'
-                        f'</tr>\n'
+                        f"</tr>\n"
                     )
 
-                html_content += '</table>\n'
+                html_content += "</table>\n"
 
-            html_content += '</div>\n'
+            html_content += "</div>\n"
 
         # Division standings
         for division in divisions:
             html_content += f'<h2><a href="https://fantasy.espn.com/football/league?leagueId={division.league_id}" style="color: #3498db; text-decoration: none;">{division.name} 🔗</a> Standings</h2>\n'
-            html_content += '<table>\n'
+            html_content += "<table>\n"
             html_content += '<tr><th>Rank</th><th>Team</th><th>Owner</th><th class="number">PF</th><th class="number">PA</th><th>Record</th></tr>\n'
 
             sorted_teams = self._get_sorted_teams_by_division(division)
@@ -278,23 +281,22 @@ class EmailFormatter(BaseFormatter):
                     team_name = f"* {team.name}"
 
                 html_content += (
-                    f'<tr>'
-                    f'<td>{i}</td>'
-                    f'<td>{self._escape_html(team_name)}</td>'
-                    f'<td>{self._escape_html(team.owner.full_name)}</td>'
+                    f"<tr>"
+                    f"<td>{i}</td>"
+                    f"<td>{self._escape_html(team_name)}</td>"
+                    f"<td>{self._escape_html(team.owner.full_name)}</td>"
                     f'<td class="number">{team.points_for:.2f}</td>'
                     f'<td class="number">{team.points_against:.2f}</td>'
-                    f'<td>{team.wins}-{team.losses}</td>'
-                    f'</tr>\n'
+                    f"<td>{team.wins}-{team.losses}</td>"
+                    f"</tr>\n"
                 )
 
-            html_content += '</table>\n'
+            html_content += "</table>\n"
             html_content += '<p style="margin-top: 15px; font-style: italic; color: #666;"><strong>*</strong> = Currently in playoff position</p>\n'
 
-
         # Overall top teams
-        html_content += '<h2>Overall Top Teams (Across All Divisions)</h2>\n'
-        html_content += '<table>\n'
+        html_content += "<h2>Overall Top Teams (Across All Divisions)</h2>\n"
+        html_content += "<table>\n"
         html_content += '<tr><th>Rank</th><th>Team</th><th>Owner</th><th>Division</th><th class="number">PF</th><th class="number">PA</th><th>Record</th></tr>\n'
 
         top_teams = self._get_overall_top_teams(divisions, limit=max_teams)
@@ -305,42 +307,46 @@ class EmailFormatter(BaseFormatter):
                 team_name = f"* {team.name}"
 
             html_content += (
-                f'<tr>'
-                f'<td>{i}</td>'
-                f'<td>{self._escape_html(team_name)}</td>'
-                f'<td>{self._escape_html(team.owner.full_name)}</td>'
-                f'<td>{self._escape_html(team.division)}</td>'
+                f"<tr>"
+                f"<td>{i}</td>"
+                f"<td>{self._escape_html(team_name)}</td>"
+                f"<td>{self._escape_html(team.owner.full_name)}</td>"
+                f"<td>{self._escape_html(team.division)}</td>"
                 f'<td class="number">{team.points_for:.2f}</td>'
                 f'<td class="number">{team.points_against:.2f}</td>'
-                f'<td>{team.wins}-{team.losses}</td>'
-                f'</tr>\n'
+                f"<td>{team.wins}-{team.losses}</td>"
+                f"</tr>\n"
             )
 
-        html_content += '</table>\n'
+        html_content += "</table>\n"
         html_content += '<p style="margin-top: 15px; font-style: italic; color: #666;"><strong>*</strong> = Currently in playoff position</p>\n'
 
         # Challenge results
         if challenges:
-            html_content += '<h2>Season Challenge Results</h2>\n'
+            html_content += "<h2>Season Challenge Results</h2>\n"
             html_content += '<table class="challenge-table">\n'
-            html_content += '<tr><th>Challenge</th><th>Winner</th><th>Owner</th><th>Division</th><th>Details</th></tr>\n'
+            html_content += "<tr><th>Challenge</th><th>Winner</th><th>Owner</th><th>Division</th><th>Details</th></tr>\n"
 
             for challenge in challenges:
                 html_content += (
-                    f'<tr>'
+                    f"<tr>"
                     f'<td class="challenge-name">{self._escape_html(challenge.challenge_name)}</td>'
                     f'<td class="winner">{self._escape_html(challenge.winner)}</td>'
-                    f'<td>{self._escape_html(challenge.owner.full_name)}</td>'
-                    f'<td>{self._escape_html(challenge.division)}</td>'
-                    f'<td>{self._escape_html(challenge.description)}</td>'
-                    f'</tr>\n'
+                    f"<td>{self._escape_html(challenge.owner.full_name)}</td>"
+                    f"<td>{self._escape_html(challenge.division)}</td>"
+                    f"<td>{self._escape_html(challenge.description)}</td>"
+                    f"</tr>\n"
                 )
 
-            html_content += '</table>\n'
+            html_content += "</table>\n"
 
         # Footer section (always present)
         total_games = self._calculate_total_games(divisions)
-        game_data_text = f'Game data: {total_games} individual results processed' if total_games > 0 else 'Game data: Limited - some challenges may be incomplete'
+        game_data_text = (
+            f"Game data: {total_games} individual results processed"
+            if total_games > 0
+            else "Game data: Limited - some challenges may be incomplete"
+        )
 
         html_content += f"""
         <div class="footer">
@@ -359,9 +365,10 @@ class EmailFormatter(BaseFormatter):
 
     def _escape_html(self, text: str) -> str:
         """Escape HTML special characters."""
-        return (text
-                .replace('&', '&amp;')
-                .replace('<', '&lt;')
-                .replace('>', '&gt;')
-                .replace('"', '&quot;')
-                .replace("'", '&#x27;'))
+        return (
+            text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&#x27;")
+        )

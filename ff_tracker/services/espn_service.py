@@ -981,6 +981,203 @@ class ESPNService:
                 league_id=league.league_id,
             ) from e
 
+    def extract_championship_entry(
+        self, league: League, division_name: str, championship_week: int
+    ) -> Any:  # Returns ChampionshipEntry but using Any to avoid circular import
+        """
+        Extract championship entry for a division winner.
+
+        Finds the division champion from the Finals matchup and gets their
+        Championship Week score for the overall championship competition.
+
+        Args:
+            league: ESPN League object
+            division_name: Name of the division
+            championship_week: Week number for championship (typically 17)
+
+        Returns:
+            ChampionshipEntry object (rank will be set later by leaderboard builder)
+
+        Raises:
+            ESPNAPIError: If championship data extraction fails
+
+        Note:
+            This method may need adjustment after Week 17 testing to confirm
+            the exact structure of championship week data.
+
+        Examples:
+            >>> entry = service.extract_championship_entry(league, "Division 1", 17)
+            >>> entry.team_name  # Division champion
+            "Thunder Cats"
+            >>> entry.score  # Championship week score
+            163.45
+        """
+        from ..models import ChampionshipEntry
+
+        try:
+            # Find the division winner from Finals (week before championship)
+            finals_week = championship_week - 1
+
+            # Get Finals matchup to determine winner
+            finals_box_scores = league.box_scores(finals_week)
+            finals_matchups = [
+                bs
+                for bs in finals_box_scores
+                if bs.is_playoff and bs.matchup_type == "WINNERS_BRACKET"
+            ]
+
+            if not finals_matchups:
+                raise ESPNAPIError(
+                    f"No Finals matchup found for {division_name} in week {finals_week}",
+                    league_id=league.league_id,
+                )
+
+            if len(finals_matchups) > 1:
+                logger.warning(
+                    f"Found {len(finals_matchups)} Finals matchups, expected 1. Using first."
+                )
+
+            finals_matchup = finals_matchups[0]
+
+            # Determine winner from Finals
+            if finals_matchup.home_score > finals_matchup.away_score:
+                winner_team = finals_matchup.home_team
+                winner_score = finals_matchup.home_score
+            else:
+                winner_team = finals_matchup.away_team
+                winner_score = finals_matchup.away_score
+
+            # Validate winner has non-zero score
+            if winner_score <= 0:
+                raise ESPNAPIError(
+                    f"Finals matchup in {division_name} appears incomplete (scores: "
+                    f"{finals_matchup.home_score} - {finals_matchup.away_score})",
+                    league_id=league.league_id,
+                )
+
+            winner_name = winner_team.team_name or f"Team {winner_team.team_id}"
+
+            # Get owner information
+            owners = self.convert_team_owners(winner_team)
+            owner_name = owners[0].full_name if owners else "Unknown Owner"
+
+            # Get championship week score
+            # Try to find the team's score in championship week
+            champ_box_scores = league.box_scores(championship_week)
+            champ_score = 0.0
+
+            # Find the winner's score in championship week
+            for box_score in champ_box_scores:
+                if box_score.home_team.team_id == winner_team.team_id:
+                    champ_score = box_score.home_score
+                    break
+                elif box_score.away_team.team_id == winner_team.team_id:
+                    champ_score = box_score.away_score
+                    break
+
+            # If we couldn't find a matchup, try getting score directly from team
+            if champ_score <= 0:
+                # Fall back to trying to get the team's score directly
+                # This may need adjustment after Week 17 testing
+                logger.warning(
+                    f"Could not find {winner_name} in championship week matchups, "
+                    f"using score 0.0 (may need adjustment after Week 17 testing)"
+                )
+
+            # Create entry with rank=1 (will be updated by leaderboard builder)
+            entry = ChampionshipEntry(
+                rank=1,  # Placeholder, will be set by leaderboard builder
+                team_name=winner_name,
+                owner_name=owner_name,
+                division_name=division_name,
+                score=champ_score,
+                is_champion=False,  # Will be set by leaderboard builder
+            )
+
+            logger.info(
+                f"Extracted championship entry for {division_name}: "
+                f"{winner_name} ({owner_name}) - Score: {champ_score}"
+            )
+
+            return entry
+
+        except Exception as e:
+            raise ESPNAPIError(
+                f"Failed to extract championship entry for {division_name}: {e}",
+                league_id=league.league_id,
+            ) from e
+
+    def build_championship_leaderboard(
+        self, leagues: list[Any], division_names: list[str], championship_week: int
+    ) -> Any:  # Returns ChampionshipLeaderboard but using Any to avoid circular import
+        """
+        Build championship leaderboard from all division winners.
+
+        Collects championship entries from all divisions, sorts by score,
+        and declares the overall champion (highest scorer).
+
+        Args:
+            leagues: List of ESPN League objects
+            division_names: List of division names (parallel to leagues)
+            championship_week: Week number for championship (typically 17)
+
+        Returns:
+            ChampionshipLeaderboard with ranked entries
+
+        Raises:
+            ESPNAPIError: If leaderboard building fails
+
+        Note:
+            This method may need adjustment after Week 17 testing.
+
+        Examples:
+            >>> leaderboard = service.build_championship_leaderboard(
+            ...     [league1, league2, league3],
+            ...     ["Division 1", "Division 2", "Division 3"],
+            ...     17
+            ... )
+            >>> leaderboard.champion.team_name
+            "Pineapple Express"
+        """
+        from ..models import ChampionshipEntry, ChampionshipLeaderboard
+
+        try:
+            # Extract entries for all divisions
+            entries: list[ChampionshipEntry] = []
+
+            for league, division_name in zip(leagues, division_names):
+                entry = self.extract_championship_entry(league, division_name, championship_week)
+                entries.append(entry)
+
+            # Sort by score (highest first)
+            sorted_entries = sorted(entries, key=lambda e: e.score, reverse=True)
+
+            # Rebuild entries with correct ranks and champion flag
+            ranked_entries: list[ChampionshipEntry] = []
+            for rank, entry in enumerate(sorted_entries, start=1):
+                ranked_entry = ChampionshipEntry(
+                    rank=rank,
+                    team_name=entry.team_name,
+                    owner_name=entry.owner_name,
+                    division_name=entry.division_name,
+                    score=entry.score,
+                    is_champion=(rank == 1),
+                )
+                ranked_entries.append(ranked_entry)
+
+            # Create leaderboard
+            leaderboard = ChampionshipLeaderboard(week=championship_week, entries=ranked_entries)
+
+            logger.info(
+                f"Built championship leaderboard: {leaderboard.champion.team_name} "
+                f"({leaderboard.champion.owner_name}) wins with {leaderboard.champion.score} points"
+            )
+
+            return leaderboard
+
+        except Exception as e:
+            raise ESPNAPIError(f"Failed to build championship leaderboard: {e}") from e
+
     def load_division_data(self, league_id: int) -> DivisionData:
         """
         Load complete data for a single division.
