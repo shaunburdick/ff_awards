@@ -215,7 +215,7 @@ class MarkdownFormatter(BaseFormatter):
                 # Team 1 row
                 team1_result = "✓ Winner" if matchup.winner_name == matchup.team1_name else ""
                 team1_score = (
-                    f"{matchup.team1_score:.2f}" if matchup.team1_score is not None else "TBD"
+                    f"{matchup.score1:.2f}" if matchup.score1 is not None else "TBD"
                 )
                 output_parts.append(
                     f"| **{matchup_name}** | {matchup.team1_name} ({matchup.owner1_name}) | "
@@ -225,7 +225,7 @@ class MarkdownFormatter(BaseFormatter):
                 # Team 2 row
                 team2_result = "✓ Winner" if matchup.winner_name == matchup.team2_name else ""
                 team2_score = (
-                    f"{matchup.team2_score:.2f}" if matchup.team2_score is not None else "TBD"
+                    f"{matchup.score2:.2f}" if matchup.score2 is not None else "TBD"
                 )
                 output_parts.append(
                     f"|  | {matchup.team2_name} ({matchup.owner2_name}) | "

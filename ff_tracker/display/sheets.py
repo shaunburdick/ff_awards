@@ -228,14 +228,14 @@ class SheetsFormatter(BaseFormatter):
                 result1 = "WINNER" if matchup.winner_seed == matchup.seed1 else "---"
                 lines.append(
                     f"{matchup_label}\t{matchup.seed1}\t{matchup.team1_name}\t"
-                    f"{matchup.owner1_name}\t{matchup.team1_score:.2f}\t{result1}"
+                    f"{matchup.owner1_name}\t{matchup.score1:.2f}\t{result1}"
                 )
 
                 # Team 2
                 result2 = "WINNER" if matchup.winner_seed == matchup.seed2 else "---"
                 lines.append(
                     f"{matchup_label}\t{matchup.seed2}\t{matchup.team2_name}\t"
-                    f"{matchup.owner2_name}\t{matchup.team2_score:.2f}\t{result2}"
+                    f"{matchup.owner2_name}\t{matchup.score2:.2f}\t{result2}"
                 )
 
                 lines.append("")

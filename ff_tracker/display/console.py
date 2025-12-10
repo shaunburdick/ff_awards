@@ -200,7 +200,7 @@ class ConsoleFormatter(BaseFormatter):
                         matchup_name,
                         f"{matchup.team1_name} ({matchup.owner1_name})",
                         f"#{matchup.seed1}",
-                        f"{matchup.team1_score:.2f}" if matchup.team1_score is not None else "TBD",
+                        f"{matchup.score1:.2f}" if matchup.score1 is not None else "TBD",
                         team1_result,
                     ]
                 )
@@ -212,7 +212,7 @@ class ConsoleFormatter(BaseFormatter):
                         "",  # Empty matchup cell for second team
                         f"{matchup.team2_name} ({matchup.owner2_name})",
                         f"#{matchup.seed2}",
-                        f"{matchup.team2_score:.2f}" if matchup.team2_score is not None else "TBD",
+                        f"{matchup.score2:.2f}" if matchup.score2 is not None else "TBD",
                         team2_result,
                     ]
                 )
