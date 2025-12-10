@@ -218,7 +218,7 @@ class MarkdownFormatter(BaseFormatter):
                     f"{matchup.team1_score:.2f}" if matchup.team1_score is not None else "TBD"
                 )
                 output_parts.append(
-                    f"| **{matchup_name}** | {matchup.team1_name} ({matchup.team1_owner}) | "
+                    f"| **{matchup_name}** | {matchup.team1_name} ({matchup.owner1_name}) | "
                     f"#{matchup.seed1} | {team1_score} | {team1_result} |"
                 )
 
@@ -228,7 +228,7 @@ class MarkdownFormatter(BaseFormatter):
                     f"{matchup.team2_score:.2f}" if matchup.team2_score is not None else "TBD"
                 )
                 output_parts.append(
-                    f"|  | {matchup.team2_name} ({matchup.team2_owner}) | "
+                    f"|  | {matchup.team2_name} ({matchup.owner2_name}) | "
                     f"#{matchup.seed2} | {team2_score} | {team2_result} |"
                 )
 
