@@ -509,16 +509,18 @@ class EmailFormatter(BaseFormatter):
 
                 # Team 1
                 winner_class1 = " playoff-winner" if matchup.winner_seed == matchup.seed1 else ""
+                score1_display = f"{matchup.score1:.2f}" if matchup.score1 is not None else "TBD"
                 html_content += f'<div class="playoff-team{winner_class1}">\n'
                 html_content += f"  <span>#{matchup.seed1} {self._escape_html(matchup.team1_name)} ({self._escape_html(matchup.owner1_name)})</span>\n"
-                html_content += f"  <strong>{matchup.score1:.2f}</strong>\n"
+                html_content += f"  <strong>{score1_display}</strong>\n"
                 html_content += "</div>\n"
 
                 # Team 2
                 winner_class2 = " playoff-winner" if matchup.winner_seed == matchup.seed2 else ""
+                score2_display = f"{matchup.score2:.2f}" if matchup.score2 is not None else "TBD"
                 html_content += f'<div class="playoff-team{winner_class2}">\n'
                 html_content += f"  <span>#{matchup.seed2} {self._escape_html(matchup.team2_name)} ({self._escape_html(matchup.owner2_name)})</span>\n"
-                html_content += f"  <strong>{matchup.score2:.2f}</strong>\n"
+                html_content += f"  <strong>{score2_display}</strong>\n"
                 html_content += "</div>\n"
 
                 html_content += "</div>\n"
