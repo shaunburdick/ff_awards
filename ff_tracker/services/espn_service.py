@@ -61,15 +61,14 @@ class ESPNService:
             if self.config.private:
                 if not self.config.espn_credentials:
                     raise PrivateLeagueError(
-                        "Private league credentials not configured",
-                        league_id=league_id
+                        "Private league credentials not configured", league_id=league_id
                     )
 
                 league = League(
                     league_id=league_id,
                     year=self.config.year,
                     espn_s2=self.config.espn_credentials.s2,
-                    swid=self.config.espn_credentials.swid
+                    swid=self.config.espn_credentials.swid,
                 )
             else:
                 league = League(league_id=league_id, year=self.config.year)
@@ -83,18 +82,15 @@ class ESPNService:
 
             if "404" in error_msg or "not found" in error_msg.lower():
                 raise LeagueConnectionError(
-                    f"League {league_id} not found or not accessible",
-                    league_id=league_id
+                    f"League {league_id} not found or not accessible", league_id=league_id
                 ) from e
             elif "401" in error_msg or "unauthorized" in error_msg.lower():
                 raise PrivateLeagueError(
-                    f"Invalid credentials for private league {league_id}",
-                    league_id=league_id
+                    f"Invalid credentials for private league {league_id}", league_id=league_id
                 ) from e
             else:
                 raise LeagueConnectionError(
-                    f"Failed to connect to league {league_id}: {error_msg}",
-                    league_id=league_id
+                    f"Failed to connect to league {league_id}: {error_msg}", league_id=league_id
                 ) from e
 
     def _calculate_playoff_status(self, teams: list[TeamStats]) -> dict[str, bool]:
@@ -113,11 +109,7 @@ class ESPNService:
             Dictionary mapping team names to playoff qualification status
         """
         # Sort teams by record (wins desc, losses asc), then by points_for desc
-        sorted_teams = sorted(
-            teams,
-            key=lambda t: (t.wins, -t.losses, t.points_for),
-            reverse=True
-        )
+        sorted_teams = sorted(teams, key=lambda t: (t.wins, -t.losses, t.points_for), reverse=True)
 
         # Top 4 teams make playoffs
         playoff_teams: set[str] = set()
@@ -156,16 +148,18 @@ class ESPNService:
                 owners = self.convert_team_owners(team)
                 owner = owners[0] if owners else self._create_unknown_owner()
 
-                temp_teams.append(TeamStats(
-                    name=team_name,
-                    owner=owner,
-                    points_for=team.points_for,
-                    points_against=team.points_against,
-                    wins=team.wins,
-                    losses=team.losses,
-                    division=division_name,
-                    in_playoff_position=False  # Will be updated below
-                ))
+                temp_teams.append(
+                    TeamStats(
+                        name=team_name,
+                        owner=owner,
+                        points_for=team.points_for,
+                        points_against=team.points_against,
+                        wins=team.wins,
+                        losses=team.losses,
+                        division=division_name,
+                        in_playoff_position=False,  # Will be updated below
+                    )
+                )
 
             # Calculate playoff status for all teams
             playoff_status = self._calculate_playoff_status(temp_teams)
@@ -180,7 +174,7 @@ class ESPNService:
                     wins=temp_team.wins,
                     losses=temp_team.losses,
                     division=temp_team.division,
-                    in_playoff_position=playoff_status[temp_team.name]
+                    in_playoff_position=playoff_status[temp_team.name],
                 )
                 for temp_team in temp_teams
             ]
@@ -193,8 +187,6 @@ class ESPNService:
                 f"Failed to extract teams from {division_name}: {e}",
             ) from e
 
-
-
     def _looks_like_username(self, name: str) -> bool:
         """Check if a name looks like a username rather than a real name."""
         name = name.strip()
@@ -203,8 +195,8 @@ class ESPNService:
 
         # Common username patterns (from original script)
         username_indicators = [
-            name.startswith('ESPNFAN'),
-            name.startswith('espn'),
+            name.startswith("ESPNFAN"),
+            name.startswith("espn"),
             len(name) > 15 and any(c.isdigit() for c in name),
             name.islower() and len(name) > 8,
             sum(c.isdigit() for c in name) > len(name) // 2,
@@ -214,12 +206,7 @@ class ESPNService:
 
     def _create_unknown_owner(self) -> Owner:
         """Create an Owner object for when owner information is missing."""
-        return Owner(
-            display_name="Unknown Owner",
-            first_name="",
-            last_name="",
-            id="unknown"
-        )
+        return Owner(display_name="Unknown Owner", first_name="", last_name="", id="unknown")
 
     def convert_team_owners(self, team: Team) -> list[Owner]:
         """
@@ -237,19 +224,16 @@ class ESPNService:
         # Convert ESPN Owner TypedDict to our Owner model
         return [
             Owner(
-                display_name=espn_owner.get('displayName', ''),
-                first_name=espn_owner.get('firstName', ''),
-                last_name=espn_owner.get('lastName', ''),
-                id=espn_owner.get('id', ''),
+                display_name=espn_owner.get("displayName", ""),
+                first_name=espn_owner.get("firstName", ""),
+                last_name=espn_owner.get("lastName", ""),
+                id=espn_owner.get("id", ""),
             )
             for espn_owner in team.owners
         ]
 
     def extract_games(
-        self,
-        league: League,
-        division_name: str,
-        max_week: int | None = None
+        self, league: League, division_name: str, max_week: int | None = None
     ) -> list[GameResult]:
         """
         Extract game results from ESPN league.
@@ -282,7 +266,9 @@ class ESPNService:
             # This is the max_week we're actually processing, not ESPN's current_week
             if self.current_week is None:
                 self.current_week = max_week
-                logger.info(f"Set current week to {max_week} (last complete week) from {division_name}")
+                logger.info(
+                    f"Set current week to {max_week} (last complete week) from {division_name}"
+                )
 
             logger.info(f"Processing weeks 1-{max_week} for {division_name}")
 
@@ -332,7 +318,9 @@ class ESPNService:
 
                         # Both teams at 0 means game hasn't been played
                         if home_score == 0 and away_score == 0:
-                            logger.info(f"Week {current_week} has unplayed games (0-0), using week {max_week_candidate - 1}")
+                            logger.info(
+                                f"Week {current_week} has unplayed games (0-0), using week {max_week_candidate - 1}"
+                            )
                             return max_week_candidate - 1
 
                         # Very low scores might indicate incomplete/in-progress games
@@ -342,7 +330,9 @@ class ESPNService:
                             continue
                         elif home_score == 0 or away_score == 0:
                             # One team at 0 while the other has points likely means incomplete
-                            logger.info(f"Week {current_week} appears in progress (partial scores), using week {max_week_candidate - 1}")
+                            logger.info(
+                                f"Week {current_week} appears in progress (partial scores), using week {max_week_candidate - 1}"
+                            )
                             return max_week_candidate - 1
 
                     # All games appear to have valid scores
@@ -350,17 +340,23 @@ class ESPNService:
                     return max_week_candidate
                 else:
                     # No box scores available, week hasn't started
-                    logger.info(f"No box scores for week {current_week}, using week {max_week_candidate - 1}")
+                    logger.info(
+                        f"No box scores for week {current_week}, using week {max_week_candidate - 1}"
+                    )
                     return max_week_candidate - 1
 
             except Exception as e:
                 # If we can't check, assume it's incomplete to be safe
-                logger.info(f"Unable to verify week {current_week} ({e}), using week {max_week_candidate - 1}")
+                logger.info(
+                    f"Unable to verify week {current_week} ({e}), using week {max_week_candidate - 1}"
+                )
                 return max_week_candidate - 1
 
         return max_week_candidate
 
-    def _extract_week_games(self, league: League, week: int, division_name: str) -> list[GameResult]:
+    def _extract_week_games(
+        self, league: League, week: int, division_name: str
+    ) -> list[GameResult]:
         """Extract games for a specific week."""
         games: list[GameResult] = []
 
@@ -379,8 +375,10 @@ class ESPNService:
 
                     # Validate game data with better type awareness
                     if not home_team or not away_team or home_score <= 0 or away_score <= 0:
-                        logger.debug(f"Skipping invalid game in week {week}: "
-                                   f"home_score={home_score}, away_score={away_score}")
+                        logger.debug(
+                            f"Skipping invalid game in week {week}: "
+                            f"home_score={home_score}, away_score={away_score}"
+                        )
                         continue
 
                     # Get team names with fallbacks
@@ -390,28 +388,30 @@ class ESPNService:
                     margin = abs(home_score - away_score)
 
                     # Create game results for both teams
-                    games.extend([
-                        GameResult(
-                            team_name=home_name,
-                            score=home_score,
-                            opponent_name=away_name,
-                            opponent_score=away_score,
-                            won=home_score > away_score,
-                            week=week,
-                            margin=margin,
-                            division=division_name
-                        ),
-                        GameResult(
-                            team_name=away_name,
-                            score=away_score,
-                            opponent_name=home_name,
-                            opponent_score=home_score,
-                            won=away_score > home_score,
-                            week=week,
-                            margin=margin,
-                            division=division_name
-                        )
-                    ])
+                    games.extend(
+                        [
+                            GameResult(
+                                team_name=home_name,
+                                score=home_score,
+                                opponent_name=away_name,
+                                opponent_score=away_score,
+                                won=home_score > away_score,
+                                week=week,
+                                margin=margin,
+                                division=division_name,
+                            ),
+                            GameResult(
+                                team_name=away_name,
+                                score=away_score,
+                                opponent_name=home_name,
+                                opponent_score=home_score,
+                                won=away_score > home_score,
+                                week=week,
+                                margin=margin,
+                                division=division_name,
+                            ),
+                        ]
+                    )
 
                 except Exception as e:
                     logger.warning(f"Error processing matchup in week {week}: {e}")
@@ -423,10 +423,7 @@ class ESPNService:
         return games
 
     def extract_weekly_games(
-        self,
-        league: League,
-        division_name: str,
-        week: int
+        self, league: League, division_name: str, week: int
     ) -> list[WeeklyGameResult]:
         """
         Extract game results for a specific week with projections.
@@ -458,8 +455,12 @@ class ESPNService:
                     home_team = box_score.home_team
                     away_team = box_score.away_team
 
-                    home_name = home_team.team_name or home_team.team_abbrev or f"Team {home_team.team_id}"
-                    away_name = away_team.team_name or away_team.team_abbrev or f"Team {away_team.team_id}"
+                    home_name = (
+                        home_team.team_name or home_team.team_abbrev or f"Team {home_team.team_id}"
+                    )
+                    away_name = (
+                        away_team.team_name or away_team.team_abbrev or f"Team {away_team.team_id}"
+                    )
 
                     home_score = box_score.home_score
                     away_score = box_score.away_score
@@ -467,45 +468,55 @@ class ESPNService:
                     away_projected = box_score.away_projected
 
                     # Calculate starter-based projections (sum of starters' pre-game projections)
-                    home_starter_projected = self._calculate_starter_projections(box_score.home_lineup)
-                    away_starter_projected = self._calculate_starter_projections(box_score.away_lineup)
+                    home_starter_projected = self._calculate_starter_projections(
+                        box_score.home_lineup
+                    )
+                    away_starter_projected = self._calculate_starter_projections(
+                        box_score.away_lineup
+                    )
 
                     # Calculate margins
                     margin = abs(home_score - away_score)
 
                     # Create WeeklyGameResult for both teams
-                    weekly_games.extend([
-                        WeeklyGameResult(
-                            team_name=home_name,
-                            score=home_score,
-                            projected_score=home_projected,
-                            opponent_name=away_name,
-                            opponent_score=away_score,
-                            opponent_projected_score=away_projected,
-                            won=home_score > away_score,
-                            week=week,
-                            margin=margin,
-                            projection_diff=home_score - home_projected,
-                            division=division_name,
-                            starter_projected_score=home_starter_projected,
-                            true_projection_diff=home_score - home_starter_projected if home_starter_projected is not None else None
-                        ),
-                        WeeklyGameResult(
-                            team_name=away_name,
-                            score=away_score,
-                            projected_score=away_projected,
-                            opponent_name=home_name,
-                            opponent_score=home_score,
-                            opponent_projected_score=home_projected,
-                            won=away_score > home_score,
-                            week=week,
-                            margin=margin,
-                            projection_diff=away_score - away_projected,
-                            division=division_name,
-                            starter_projected_score=away_starter_projected,
-                            true_projection_diff=away_score - away_starter_projected if away_starter_projected is not None else None
-                        )
-                    ])
+                    weekly_games.extend(
+                        [
+                            WeeklyGameResult(
+                                team_name=home_name,
+                                score=home_score,
+                                projected_score=home_projected,
+                                opponent_name=away_name,
+                                opponent_score=away_score,
+                                opponent_projected_score=away_projected,
+                                won=home_score > away_score,
+                                week=week,
+                                margin=margin,
+                                projection_diff=home_score - home_projected,
+                                division=division_name,
+                                starter_projected_score=home_starter_projected,
+                                true_projection_diff=home_score - home_starter_projected
+                                if home_starter_projected is not None
+                                else None,
+                            ),
+                            WeeklyGameResult(
+                                team_name=away_name,
+                                score=away_score,
+                                projected_score=away_projected,
+                                opponent_name=home_name,
+                                opponent_score=home_score,
+                                opponent_projected_score=home_projected,
+                                won=away_score > home_score,
+                                week=week,
+                                margin=margin,
+                                projection_diff=away_score - away_projected,
+                                division=division_name,
+                                starter_projected_score=away_starter_projected,
+                                true_projection_diff=away_score - away_starter_projected
+                                if away_starter_projected is not None
+                                else None,
+                            ),
+                        ]
+                    )
 
                 except Exception as e:
                     logger.warning(f"Error processing box score for week {week}: {e}")
@@ -520,10 +531,7 @@ class ESPNService:
             ) from e
 
     def extract_weekly_players(
-        self,
-        league: League,
-        division_name: str,
-        week: int
+        self, league: League, division_name: str, week: int
     ) -> list[WeeklyPlayerStats]:
         """
         Extract player performances for a specific week.
@@ -553,29 +561,27 @@ class ESPNService:
                 try:
                     # Process home team lineup
                     home_team = box_score.home_team
-                    home_name = home_team.team_name or home_team.team_abbrev or f"Team {home_team.team_id}"
+                    home_name = (
+                        home_team.team_name or home_team.team_abbrev or f"Team {home_team.team_id}"
+                    )
 
                     for box_player in box_score.home_lineup:
                         weekly_players.append(
                             self._create_weekly_player_stat(
-                                box_player,
-                                home_name,
-                                division_name,
-                                week
+                                box_player, home_name, division_name, week
                             )
                         )
 
                     # Process away team lineup
                     away_team = box_score.away_team
-                    away_name = away_team.team_name or away_team.team_abbrev or f"Team {away_team.team_id}"
+                    away_name = (
+                        away_team.team_name or away_team.team_abbrev or f"Team {away_team.team_id}"
+                    )
 
                     for box_player in box_score.away_lineup:
                         weekly_players.append(
                             self._create_weekly_player_stat(
-                                box_player,
-                                away_name,
-                                division_name,
-                                week
+                                box_player, away_name, division_name, week
                             )
                         )
 
@@ -592,11 +598,7 @@ class ESPNService:
             ) from e
 
     def _create_weekly_player_stat(
-        self,
-        box_player: Any,
-        team_name: str,
-        division: str,
-        week: int
+        self, box_player: Any, team_name: str, division: str, week: int
     ) -> WeeklyPlayerStats:
         """
         Create WeeklyPlayerStats from a BoxPlayer object.
@@ -620,8 +622,8 @@ class ESPNService:
             projection_diff=box_player.points - box_player.projected_points,
             slot_position=box_player.slot_position,
             week=week,
-            pro_team=box_player.proTeam if hasattr(box_player, 'proTeam') else "UNK",
-            pro_opponent=box_player.pro_opponent if hasattr(box_player, 'pro_opponent') else ""
+            pro_team=box_player.proTeam if hasattr(box_player, "proTeam") else "UNK",
+            pro_opponent=box_player.pro_opponent if hasattr(box_player, "pro_opponent") else "",
         )
 
     def _calculate_starter_projections(self, lineup: list[Any]) -> float | None:
@@ -641,13 +643,163 @@ class ESPNService:
             total_projected = 0.0
             for player in lineup:
                 # Only include starters (slot_position != 'BE' for bench)
-                if hasattr(player, 'slot_position') and player.slot_position != 'BE':
-                    if hasattr(player, 'projected_points'):
+                if hasattr(player, "slot_position") and player.slot_position != "BE":
+                    if hasattr(player, "projected_points"):
                         total_projected += player.projected_points
             return total_projected
         except Exception as e:
             logger.warning(f"Could not calculate starter projections: {e}")
             return None
+
+    def is_in_playoffs(self, league: League) -> bool:
+        """
+        Check if a league is currently in playoffs.
+
+        Playoff detection is based on ESPN's week numbering: playoffs start
+        when the current week exceeds the regular season count.
+
+        Args:
+            league: ESPN League object
+
+        Returns:
+            True if league is in playoffs, False otherwise
+
+        Examples:
+            >>> # Regular season: Week 14, reg_season_count=14
+            >>> service.is_in_playoffs(league)  # False
+            >>> # Playoffs: Week 15, reg_season_count=14
+            >>> service.is_in_playoffs(league)  # True
+        """
+        return league.current_week > league.settings.reg_season_count
+
+    def get_playoff_round(self, league: League) -> str:
+        """
+        Determine the current playoff round for a league.
+
+        Args:
+            league: ESPN League object
+
+        Returns:
+            Playoff round name: "Semifinals", "Finals", or "Championship Week"
+
+        Raises:
+            ESPNAPIError: If not in playoffs or unexpected playoff week
+
+        Examples:
+            >>> # Week 15 (first playoff week)
+            >>> service.get_playoff_round(league)  # "Semifinals"
+            >>> # Week 16 (second playoff week)
+            >>> service.get_playoff_round(league)  # "Finals"
+            >>> # Week 17 (championship week)
+            >>> service.get_playoff_round(league)  # "Championship Week"
+        """
+        if not self.is_in_playoffs(league):
+            raise ESPNAPIError(
+                f"League is not in playoffs. Current week: {league.current_week}, "
+                f"Regular season ends: {league.settings.reg_season_count}",
+                league_id=league.league_id,
+            )
+
+        # Calculate which playoff week we're in
+        playoff_week = league.current_week - league.settings.reg_season_count
+
+        if playoff_week == 1:
+            return "Semifinals"
+        elif playoff_week == 2:
+            return "Finals"
+        elif playoff_week == 3:
+            return "Championship Week"
+        else:
+            raise ESPNAPIError(
+                f"Unexpected playoff week: {playoff_week} (current week: {league.current_week}, "
+                f"regular season: {league.settings.reg_season_count})",
+                league_id=league.league_id,
+            )
+
+    def check_division_sync(self, leagues: list[League]) -> tuple[bool, str]:
+        """
+        Check if all divisions are synchronized for multi-league operations.
+
+        For playoff mode to work correctly, all divisions must be in the same state:
+        - All in same week number
+        - All in playoffs OR all in regular season
+        - If in playoffs, all in same playoff round
+
+        Args:
+            leagues: List of ESPN League objects to check
+
+        Returns:
+            Tuple of (is_synced, error_message)
+            - is_synced: True if all leagues are synchronized
+            - error_message: Empty string if synced, detailed error if not
+
+        Examples:
+            >>> # All leagues in Week 15 Semifinals
+            >>> synced, msg = service.check_division_sync([league1, league2, league3])
+            >>> assert synced and msg == ""
+
+            >>> # Mixed: Week 14 and Week 15
+            >>> synced, msg = service.check_division_sync([league1, league2])
+            >>> assert not synced
+            >>> print(msg)  # "Divisions are out of sync..."
+        """
+        if not leagues:
+            return True, ""
+
+        # Check current week sync
+        first_week = leagues[0].current_week
+        for league in leagues[1:]:
+            if league.current_week != first_week:
+                # Build detailed error message with all league states
+                states: dict[str, str] = {}
+                for lg in leagues:
+                    league_name = lg.settings.name or f"League {lg.league_id}"
+                    states[league_name] = f"Week {lg.current_week}"
+
+                error_msg = (
+                    f"Divisions are out of sync (different weeks). "
+                    f"States: {', '.join(f'{name}: {state}' for name, state in states.items())}"
+                )
+                return False, error_msg
+
+        # Check playoff state sync
+        first_in_playoffs = self.is_in_playoffs(leagues[0])
+        for league in leagues[1:]:
+            if self.is_in_playoffs(league) != first_in_playoffs:
+                # Build detailed error message showing playoff states
+                states: dict[str, str] = {}
+                for lg in leagues:
+                    league_name = lg.settings.name or f"League {lg.league_id}"
+                    if self.is_in_playoffs(lg):
+                        states[league_name] = f"Week {lg.current_week} (Playoffs)"
+                    else:
+                        states[league_name] = f"Week {lg.current_week} (Regular Season)"
+
+                error_msg = (
+                    f"Divisions are out of sync (mixed playoff states). "
+                    f"States: {', '.join(f'{name}: {state}' for name, state in states.items())}"
+                )
+                return False, error_msg
+
+        # If in playoffs, check playoff round sync
+        if first_in_playoffs:
+            first_round = self.get_playoff_round(leagues[0])
+            for league in leagues[1:]:
+                if self.get_playoff_round(league) != first_round:
+                    # Build detailed error message showing playoff rounds
+                    states: dict[str, str] = {}
+                    for lg in leagues:
+                        league_name = lg.settings.name or f"League {lg.league_id}"
+                        round_name = self.get_playoff_round(lg)
+                        states[league_name] = f"Week {lg.current_week} ({round_name})"
+
+                    error_msg = (
+                        f"Divisions are out of sync (different playoff rounds). "
+                        f"States: {', '.join(f'{name}: {state}' for name, state in states.items())}"
+                    )
+                    return False, error_msg
+
+        return True, ""
 
     def load_division_data(self, league_id: int) -> DivisionData:
         """
@@ -693,7 +845,7 @@ class ESPNService:
             teams=teams,
             games=games,
             weekly_games=weekly_games,
-            weekly_players=weekly_players
+            weekly_players=weekly_players,
         )
 
     def load_all_divisions(self) -> list[DivisionData]:
