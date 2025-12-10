@@ -19,6 +19,7 @@ class FFTrackerError(Exception):
 
 class ConfigurationError(FFTrackerError):
     """Raised when there are configuration or environment issues."""
+
     pass
 
 
@@ -31,7 +32,7 @@ class ESPNAPIError(FFTrackerError):
         *,
         league_id: int | None = None,
         status_code: int | None = None,
-        response_data: str | None = None
+        response_data: str | None = None,
     ) -> None:
         self.status_code = status_code
         self.response_data = response_data
@@ -40,24 +41,46 @@ class ESPNAPIError(FFTrackerError):
 
 class LeagueConnectionError(ESPNAPIError):
     """Raised when unable to connect to a specific league."""
+
     pass
 
 
 class PrivateLeagueError(ESPNAPIError):
     """Raised when private league credentials are missing or invalid."""
+
     pass
 
 
 class DataValidationError(FFTrackerError):
     """Raised when data validation fails."""
+
     pass
 
 
 class InsufficientDataError(FFTrackerError):
     """Raised when there isn't enough data to complete challenge calculations."""
+
     pass
 
 
 class OutputFormatError(FFTrackerError):
     """Raised when output formatting fails."""
+
     pass
+
+
+class DivisionSyncError(FFTrackerError):
+    """
+    Raised when divisions are out of sync for playoff operations.
+
+    This error occurs when divisions are in different playoff states
+    (e.g., some in playoffs, some in regular season) or different
+    playoff rounds (e.g., some in semifinals, some in finals).
+
+    Attributes:
+        division_states: Dictionary mapping division names to their current state descriptions
+    """
+
+    def __init__(self, message: str, division_states: dict[str, str]) -> None:
+        self.division_states = division_states
+        super().__init__(message)

@@ -5,12 +5,16 @@ Division data model representing a complete league.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from ..exceptions import DataValidationError
 from .game import GameResult
 from .player import WeeklyPlayerStats
 from .team import TeamStats
 from .week import WeeklyGameResult
+
+if TYPE_CHECKING:
+    from .playoff import PlayoffBracket
 
 
 def _empty_weekly_games() -> list[WeeklyGameResult]:
@@ -29,14 +33,17 @@ class DivisionData:
     Complete data for a single division (league).
 
     Contains all teams and games for one ESPN league,
-    plus optional weekly statistics for the current week.
+    plus optional weekly statistics for the current week,
+    and optional playoff bracket information.
     """
+
     league_id: int
     name: str
     teams: list[TeamStats]
     games: list[GameResult]
     weekly_games: list[WeeklyGameResult] = field(default_factory=_empty_weekly_games)
     weekly_players: list[WeeklyPlayerStats] = field(default_factory=_empty_weekly_players)
+    playoff_bracket: PlayoffBracket | None = None
 
     def __post_init__(self) -> None:
         """Validate division data after construction."""
@@ -83,3 +90,8 @@ class DivisionData:
             if team.name == team_name:
                 return team
         return None
+
+    @property
+    def is_playoff_mode(self) -> bool:
+        """Check if this division is in playoff mode."""
+        return self.playoff_bracket is not None
