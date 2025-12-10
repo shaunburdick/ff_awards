@@ -801,6 +801,186 @@ class ESPNService:
 
         return True, ""
 
+    def extract_playoff_matchups(
+        self, league: League, division_name: str
+    ) -> list[Any]:  # Returns list[PlayoffMatchup] but using Any to avoid circular import
+        """
+        Extract playoff matchups from ESPN API for the current week.
+
+        Filters to winners bracket only (excludes consolation games) and extracts
+        all matchup information including seeds, teams, owners, scores, and winners.
+
+        Args:
+            league: ESPN League object
+            division_name: Name of the division (for matchup IDs)
+
+        Returns:
+            List of PlayoffMatchup objects
+
+        Raises:
+            ESPNAPIError: If matchup extraction fails
+
+        Examples:
+            >>> # Week 15 (Semifinals)
+            >>> matchups = service.extract_playoff_matchups(league, "Division 1")
+            >>> len(matchups)  # 2 semifinal matchups
+            2
+            >>> # Week 16 (Finals)
+            >>> matchups = service.extract_playoff_matchups(league, "Division 2")
+            >>> len(matchups)  # 1 finals matchup
+            1
+        """
+        from ..models import PlayoffMatchup
+
+        try:
+            # Get box scores for current week
+            box_scores = league.box_scores(league.current_week)
+
+            # Filter to winners bracket playoff games only
+            playoff_box_scores = [
+                bs for bs in box_scores if bs.is_playoff and bs.matchup_type == "WINNERS_BRACKET"
+            ]
+
+            if not playoff_box_scores:
+                logger.warning(
+                    f"No playoff matchups found for {division_name} in week {league.current_week}"
+                )
+                return []
+
+            matchups: list[Any] = []
+            playoff_round = self.get_playoff_round(league)
+
+            # Determine round name for matchup IDs
+            round_prefix = "sf" if playoff_round == "Semifinals" else "finals"
+
+            for idx, box_score in enumerate(playoff_box_scores, start=1):
+                # Extract teams
+                home_team = box_score.home_team
+                away_team = box_score.away_team
+
+                # Get team names
+                team1_name = home_team.team_name or f"Team {home_team.team_id}"
+                team2_name = away_team.team_name or f"Team {away_team.team_id}"
+
+                # Get seeds from team.standing
+                seed1 = home_team.standing
+                seed2 = away_team.standing
+
+                # Get owner names
+                owner1_names = self.convert_team_owners(home_team)
+                owner2_names = self.convert_team_owners(away_team)
+                owner1_name = owner1_names[0].full_name if owner1_names else "Unknown Owner"
+                owner2_name = owner2_names[0].full_name if owner2_names else "Unknown Owner"
+
+                # Get scores
+                score1 = box_score.home_score
+                score2 = box_score.away_score
+
+                # Determine winner (None if game not complete)
+                winner_name: str | None = None
+                winner_seed: int | None = None
+
+                # Only set winner if both scores are non-zero and different
+                if score1 > 0 and score2 > 0 and score1 != score2:
+                    if score1 > score2:
+                        winner_name = team1_name
+                        winner_seed = seed1
+                    else:
+                        winner_name = team2_name
+                        winner_seed = seed2
+
+                # Create round name for display
+                if playoff_round == "Semifinals":
+                    round_display = f"Semifinal {idx}"
+                else:
+                    round_display = "Finals"
+
+                # Create matchup ID
+                matchup_id = f"{division_name.lower().replace(' ', '_')}_{round_prefix}{idx if playoff_round == 'Semifinals' else ''}"
+
+                matchup = PlayoffMatchup(
+                    matchup_id=matchup_id,
+                    round_name=round_display,
+                    seed1=seed1,
+                    team1_name=team1_name,
+                    owner1_name=owner1_name,
+                    score1=score1 if score1 > 0 else None,
+                    seed2=seed2,
+                    team2_name=team2_name,
+                    owner2_name=owner2_name,
+                    score2=score2 if score2 > 0 else None,
+                    winner_name=winner_name,
+                    winner_seed=winner_seed,
+                    division_name=division_name,
+                )
+
+                matchups.append(matchup)
+                logger.debug(
+                    f"Extracted {round_display}: {team1_name} (#{seed1}) vs {team2_name} (#{seed2})"
+                )
+
+            return matchups
+
+        except Exception as e:
+            raise ESPNAPIError(
+                f"Failed to extract playoff matchups from {division_name}: {e}",
+                league_id=league.league_id,
+            ) from e
+
+    def build_playoff_bracket(
+        self, league: League, division_name: str
+    ) -> Any:  # Returns PlayoffBracket but using Any to avoid circular import
+        """
+        Build a complete playoff bracket for a division.
+
+        Combines playoff round detection with matchup extraction to create
+        a validated PlayoffBracket object.
+
+        Args:
+            league: ESPN League object
+            division_name: Name of the division
+
+        Returns:
+            PlayoffBracket object with all matchups
+
+        Raises:
+            ESPNAPIError: If bracket building fails
+
+        Examples:
+            >>> bracket = service.build_playoff_bracket(league, "Division 1")
+            >>> bracket.round  # "Semifinals" or "Finals"
+            "Semifinals"
+            >>> bracket.week
+            15
+            >>> len(bracket.matchups)  # 2 for semifinals, 1 for finals
+            2
+        """
+        from ..models import PlayoffBracket
+
+        try:
+            # Get playoff round
+            playoff_round = self.get_playoff_round(league)
+
+            # Extract matchups
+            matchups = self.extract_playoff_matchups(league, division_name)
+
+            # Create bracket
+            bracket = PlayoffBracket(
+                round=playoff_round, week=league.current_week, matchups=matchups
+            )
+
+            logger.info(
+                f"Built {playoff_round} bracket for {division_name}: {len(matchups)} matchup(s)"
+            )
+
+            return bracket
+
+        except Exception as e:
+            raise ESPNAPIError(
+                f"Failed to build playoff bracket for {division_name}: {e}",
+                league_id=league.league_id,
+            ) from e
+
     def load_division_data(self, league_id: int) -> DivisionData:
         """
         Load complete data for a single division.
@@ -809,7 +989,7 @@ class ESPNService:
             league_id: ESPN league ID to load
 
         Returns:
-            Complete division data
+            Complete division data (includes playoff bracket if in playoffs)
 
         Raises:
             LeagueConnectionError: If unable to connect to league
@@ -839,6 +1019,21 @@ class ESPNService:
                 logger.warning(f"Could not extract weekly data for week {self.current_week}: {e}")
                 # Continue without weekly data - not a fatal error
 
+        # Extract playoff bracket if in playoffs
+        playoff_bracket = None
+        if self.is_in_playoffs(league):
+            try:
+                playoff_round = self.get_playoff_round(league)
+                # Only build bracket for Semifinals and Finals (not Championship Week)
+                if playoff_round in ("Semifinals", "Finals"):
+                    logger.info(f"Building playoff bracket for {playoff_round}")
+                    playoff_bracket = self.build_playoff_bracket(league, league_name)
+                else:
+                    logger.info("Championship Week detected - no bracket needed")
+            except Exception as e:
+                logger.warning(f"Could not extract playoff bracket: {e}")
+                # Continue without playoff bracket - will fall back to regular display
+
         return DivisionData(
             league_id=league_id,
             name=league_name,
@@ -846,11 +1041,14 @@ class ESPNService:
             games=games,
             weekly_games=weekly_games,
             weekly_players=weekly_players,
+            playoff_bracket=playoff_bracket,
         )
 
     def load_all_divisions(self) -> list[DivisionData]:
         """
         Load data for all configured divisions.
+
+        Validates division synchronization for playoff operations.
 
         Returns:
             List of complete division data for all leagues
@@ -858,9 +1056,37 @@ class ESPNService:
         Raises:
             LeagueConnectionError: If unable to connect to any league
             ESPNAPIError: If data extraction fails for any league
+            DivisionSyncError: If divisions are out of sync
         """
-        divisions: list[DivisionData] = []
+        from ..exceptions import DivisionSyncError
 
+        # Load all leagues first (need League objects for sync check)
+        leagues: list[Any] = []  # List[League]
+        for league_id in self.config.league_ids:
+            try:
+                league = self.connect_to_league(league_id)
+                leagues.append(league)
+            except Exception as e:
+                logger.error(f"Failed to connect to league {league_id}: {e}")
+                raise
+
+        # Check division synchronization
+        synced, error_msg = self.check_division_sync(leagues)
+        if not synced:
+            # Build state dictionary for error
+            states: dict[str, str] = {}
+            for league in leagues:
+                league_name = league.settings.name or f"League {league.league_id}"
+                if self.is_in_playoffs(league):
+                    round_name = self.get_playoff_round(league)
+                    states[league_name] = f"Week {league.current_week} ({round_name})"
+                else:
+                    states[league_name] = f"Week {league.current_week} (Regular Season)"
+
+            raise DivisionSyncError(error_msg, division_states=states)
+
+        # Now load division data for all leagues
+        divisions: list[DivisionData] = []
         for league_id in self.config.league_ids:
             try:
                 division_data = self.load_division_data(league_id)
