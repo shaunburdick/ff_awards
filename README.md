@@ -17,18 +17,27 @@ A modern, type-safe command-line tool to analyze ESPN Fantasy Football leagues a
 
 ## Features
 
+- **🏆 Automatic Playoff Mode** (NEW in v3.0): Seamlessly transitions to playoff brackets when playoffs begin
+  - **Semifinals (Week 15)**: Displays matchup brackets (#1 vs #4, #2 vs #3) for all divisions
+  - **Finals (Week 16)**: Shows championship matchups with winner tracking
+  - **Championship Week (Week 17)**: Ranks all division winners to crown overall champion
+  - No manual configuration - automatically detects playoff status based on league week
 - **13 Weekly Highlights**: Track current week's top performances including team challenges (highest/lowest scores, biggest win, closest game, overachiever, below expectations) and player highlights (top scorers by position)
+  - During playoffs: Shows 7 player highlights only (team challenges replaced by playoff brackets)
+  - Championship week: Player highlights include ALL teams across all divisions
 - **5 Season Challenges**: Track Most Points Overall, Most Points in One Game, Most Points in a Loss, Least Points in a Win, and Closest Victory
+  - During playoffs: Marked as "Historical" to clarify regular season final results
 - **Playoff Positioning**: Shows current playoff qualification (top 4 by record, points-for tiebreaker) with visual indicators
 - **Multi-Division Support**: Analyze multiple leagues as divisions with overall rankings
 - **Flexible League Input**: Pass league IDs via CLI (comma-separated), environment variable, or .env file
 - **Private League Support**: Works with both public and private ESPN leagues
 - **Multiple Output Formats**: Console tables, Google Sheets TSV, mobile-friendly HTML email, JSON, and Markdown
+  - All formats support playoff brackets and championship leaderboards
 - **Multi-Output Mode**: Generate all formats in one execution with `--output-dir`
 - **Type Safety**: Comprehensive type annotations with modern Python syntax
 - **Fast Error Handling**: Fail-fast approach with clear error messages
 - **Modular Architecture**: Clean separation of concerns for easy maintenance and extension
-- **Mobile-Friendly**: HTML email format optimized for mobile devices
+- **Mobile-Friendly**: HTML email format optimized for mobile devices with responsive playoff brackets
 
 ## Installation
 
@@ -540,6 +549,85 @@ Automatically tracks the current week's top performances across team and player 
 - Only regular season games count (playoffs excluded)
 - Ties go to the first team to achieve the result
 - If still tied after that, the award splits between tied teams
+
+## Playoff Mode 🏆
+
+**NEW in v3.0**: The tool automatically detects and displays playoff information when your league enters the postseason. No configuration required!
+
+### How It Works
+
+The tool detects playoff mode when `current_week > regular_season_count` (typically Week 15+). All divisions must be in sync (same week and playoff state).
+
+### Playoff Phases
+
+#### **Semifinals (Week 15)**
+- Displays 2 matchups per division: #1 seed vs #4 seed, #2 seed vs #3 seed
+- Shows team names, owners, seeds, current scores, and winners (✓)
+- Handles in-progress games (scores update as games are played)
+- Winners bracket only (consolation games excluded)
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    ROAD REPO DIVISION - SEMIFINALS                           ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━━━┓
+┃ Matchup      ┃ Team (Owner)             ┃ Seed ┃ Score ┃ Result ┃
+┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━━━┩
+│ Semifinal 1  │ ILikeTurtles             │ #1   │ TBD   │        │
+│              │ Billieve the Champ       │ #4   │ TBD   │        │
+├──────────────┼──────────────────────────┼──────┼───────┼────────┤
+│ Semifinal 2  │ Can't All Be Bangers     │ #2   │ TBD   │        │
+│              │ Team Flower Cupcake      │ #3   │ TBD   │        │
+└──────────────┴──────────────────────────┴──────┴───────┴────────┘
+```
+
+#### **Finals (Week 16)**
+- Displays 1 championship matchup per division
+- Winners of the two semifinals face off
+- Same format as semifinals
+
+#### **Championship Week (Week 17)**
+- **Championship Leaderboard**: Ranks all division winners by their Week 17 score
+- **Overall Champion**: Team with highest score crowned supreme champion
+- **Medal Ranks**: 🥇 Gold, 🥈 Silver, 🥉 Bronze for top 3 finishers
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          🏆 CHAMPIONSHIP WEEK 🏆                             ║
+║                                                                              ║
+║                              OVERALL CHAMPION                                ║
+║                            Lightning Bolts (Team Owner A)                    ║
+║                          Road Repo Division - 156.8 pts                      ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┏━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━┓
+┃ Rank ┃ Team (Owner)                ┃ Division    ┃ Score ┃ Status    ┃
+┡━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━┩
+│ 🥇 1 │ Lightning Bolts             │ Road Repo   │ 156.8 │ CHAMPION! │
+│ 🥈 2 │ Thunder Hawks               │ East Coast  │ 142.3 │           │
+│ 🥉 3 │ Fire Dragons                │ West Coast  │ 138.1 │           │
+└──────┴─────────────────────────────┴─────────────┴───────┴───────────┘
+```
+
+### Playoff Adaptations
+
+**Weekly Challenges:**
+- **Semifinals/Finals**: Shows 7 player highlights only (team challenges replaced by bracket context)
+- **Championship Week**: Shows 7 player highlights across ALL teams (not just division winners)
+
+**Season Challenges:**
+- Marked as "REGULAR SEASON FINAL RESULTS (Historical)"
+- Data is frozen at end of Week 14 (regular season finale)
+- Preserved for end-of-season awards
+
+**Regular Season Standings:**
+- Shown at bottom of output as "FINAL REGULAR SEASON STANDINGS"
+- Hidden during Championship Week (focus on championship leaderboard)
+
+### All Formats Support Playoffs
+
+Every output format (console, sheets, email, JSON, markdown) automatically displays playoff brackets and championship data when detected.
 
 ## Automated Weekly Reports (GitHub Actions)
 

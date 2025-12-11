@@ -11,7 +11,13 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import Protocol
 
-from ..models import ChallengeResult, DivisionData, TeamStats, WeeklyChallenge
+from ..models import (
+    ChallengeResult,
+    ChampionshipLeaderboard,
+    DivisionData,
+    TeamStats,
+    WeeklyChallenge,
+)
 
 
 class OutputFormatter(Protocol):
@@ -22,7 +28,8 @@ class OutputFormatter(Protocol):
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
-        current_week: int | None = None
+        current_week: int | None = None,
+        championship: ChampionshipLeaderboard | None = None,
     ) -> str:
         """
         Format the complete output for display.
@@ -32,6 +39,7 @@ class OutputFormatter(Protocol):
             challenges: List of season challenge results
             weekly_challenges: List of weekly challenge results (optional)
             current_week: Current fantasy week number
+            championship: Championship leaderboard (optional, for Championship Week only)
 
         Returns:
             Formatted output string
@@ -121,7 +129,8 @@ class BaseFormatter(ABC):
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
-        current_week: int | None = None
+        current_week: int | None = None,
+        championship: ChampionshipLeaderboard | None = None,
     ) -> str:
         """Format the complete output for display."""
         pass
@@ -130,7 +139,9 @@ class BaseFormatter(ABC):
         """Get teams sorted by wins (descending) then points for (descending)."""
         return sorted(division.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
 
-    def _get_overall_top_teams(self, divisions: Sequence[DivisionData], limit: int = 20) -> list[TeamStats]:
+    def _get_overall_top_teams(
+        self, divisions: Sequence[DivisionData], limit: int = 20
+    ) -> list[TeamStats]:
         """Get top teams across all divisions."""
         all_teams: list[TeamStats] = []
         for division in divisions:
@@ -152,4 +163,4 @@ class BaseFormatter(ABC):
         """Truncate text to maximum length, preserving readability."""
         if len(text) <= max_length:
             return text
-        return text[:max_length - 1] + "…"
+        return text[: max_length - 1] + "…"

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gmail CSS Emulator - Bookmarklets</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        .bookmarklet {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            text-decoration: none;
+            display: inline-block;
+            margin: 10px 0;
+            cursor: move;
+            border: 2px solid #5a67d8;
+        }
+        .bookmarklet:hover {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+        .instructions {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        code {
+            background-color: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        .feature-box {
+            border: 2px solid #ddd;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .feature-box h3 {
+            margin-top: 0;
+            color: #34495e;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📧 Gmail CSS Emulator - Browser Bookmarklets</h1>
+        
+        <p>These bookmarklets help you test how Gmail and other email clients will render your HTML email by simulating their CSS restrictions.</p>
+        
+        <div class="instructions">
+            <h3>📋 How to Install Bookmarklets:</h3>
+            <ol>
+                <li><strong>Show Bookmarks Bar</strong> - Press Ctrl+Shift+B (Cmd+Shift+B on Mac)</li>
+                <li><strong>Drag the buttons below</strong> to your bookmarks bar</li>
+                <li><strong>Open your email HTML</strong> in the browser</li>
+                <li><strong>Click the bookmarklet</strong> to apply Gmail CSS restrictions</li>
+                <li><strong>Refresh page</strong> to reset and try again</li>
+            </ol>
+        </div>
+        
+        <hr style="margin: 30px 0;">
+        
+        <h2>🔖 Bookmarklets (Drag to Bookmarks Bar)</h2>
+        
+        <div class="feature-box">
+            <h3>1. Strip Flexbox (Gmail doesn't support it)</h3>
+            <p>Removes all flexbox properties to simulate Gmail's CSS stripping</p>
+            <a class="bookmarklet" href="javascript:(function(){var style=document.createElement('style');style.innerHTML='*{display:block!important;flex:none!important;flex-direction:initial!important;justify-content:initial!important;align-items:initial!important;}';document.head.appendChild(style);alert('Flexbox disabled! This simulates Gmail rendering.');})();">🚫 Strip Flexbox</a>
+        </div>
+        
+        <div class="feature-box">
+            <h3>2. Email Client Width (600px max)</h3>
+            <p>Resizes viewport to typical email client width</p>
+            <a class="bookmarklet" href="javascript:(function(){document.body.style.maxWidth='600px';document.body.style.margin='0 auto';document.body.style.border='2px solid red';alert('Viewport set to 600px (standard email width)');})();">📏 Set Email Width</a>
+        </div>
+        
+        <div class="feature-box">
+            <h3>3. Mobile Gmail (320px width)</h3>
+            <p>Simulates mobile Gmail rendering</p>
+            <a class="bookmarklet" href="javascript:(function(){document.body.style.width='320px';document.body.style.margin='0 auto';document.body.style.border='2px solid blue';alert('Mobile Gmail width (320px)');})();">📱 Mobile View</a>
+        </div>
+        
+        <div class="feature-box">
+            <h3>4. Highlight Tables</h3>
+            <p>Shows all table elements with borders (helpful for debugging layout)</p>
+            <a class="bookmarklet" href="javascript:(function(){var style=document.createElement('style');style.innerHTML='table{border:2px solid red!important;}td{border:1px solid blue!important;}';document.head.appendChild(style);alert('Tables highlighted!');})();">🔍 Show Tables</a>
+        </div>
+        
+        <div class="feature-box">
+            <h3>5. Reset All</h3>
+            <p>Refresh the page to reset all changes</p>
+            <a class="bookmarklet" href="javascript:location.reload();">🔄 Reset Page</a>
+        </div>
+        
+        <hr style="margin: 30px 0;">
+        
+        <h2>📊 Gmail CSS Support Reference</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>CSS Feature</th>
+                    <th>Gmail Support</th>
+                    <th>Email-Safe Alternative</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>display: flex</code></td>
+                    <td style="color: red;">❌ Not Supported</td>
+                    <td>Use <code>&lt;table&gt;</code> layouts</td>
+                </tr>
+                <tr>
+                    <td><code>display: grid</code></td>
+                    <td style="color: red;">❌ Not Supported</td>
+                    <td>Use <code>&lt;table&gt;</code> layouts</td>
+                </tr>
+                <tr>
+                    <td><code>position: fixed/sticky</code></td>
+                    <td style="color: red;">❌ Not Supported</td>
+                    <td>Use <code>position: relative</code></td>
+                </tr>
+                <tr>
+                    <td><code>@media queries</code></td>
+                    <td style="color: orange;">⚠️ Limited</td>
+                    <td>Use max-width on tables</td>
+                </tr>
+                <tr>
+                    <td><code>&lt;style&gt;</code> in head</td>
+                    <td style="color: orange;">⚠️ Partial</td>
+                    <td>Use inline styles</td>
+                </tr>
+                <tr>
+                    <td>Inline styles</td>
+                    <td style="color: green;">✅ Supported</td>
+                    <td>Best practice!</td>
+                </tr>
+                <tr>
+                    <td><code>&lt;table&gt;</code> layouts</td>
+                    <td style="color: green;">✅ Supported</td>
+                    <td>Use this!</td>
+                </tr>
+                <tr>
+                    <td><code>border-radius</code></td>
+                    <td style="color: orange;">⚠️ Inconsistent</td>
+                    <td>Use, but don't rely on it</td>
+                </tr>
+                <tr>
+                    <td><code>background-color</code></td>
+                    <td style="color: green;">✅ Supported</td>
+                    <td>Safe to use</td>
+                </tr>
+                <tr>
+                    <td><code>padding/margin</code></td>
+                    <td style="color: green;">✅ Supported</td>
+                    <td>Safe to use inline</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <hr style="margin: 30px 0;">
+        
+        <h2>🧪 Testing Workflow</h2>
+        
+        <div class="warning">
+            <h3>⚠️ Best Practice: Send Real Test Email</h3>
+            <p>Browser emulation is helpful but not 100% accurate. <strong>Always send a real test email to yourself</strong> before sending to your league!</p>
+        </div>
+        
+        <ol style="font-size: 16px; line-height: 1.6;">
+            <li><strong>Generate email HTML</strong>
+                <pre style="background-color: #f5f5f5; padding: 10px; border-radius: 5px;">uv run ff-tracker --env --format email > test-output.html</pre>
+            </li>
+            <li><strong>Open in browser</strong> and use bookmarklets to test</li>
+            <li><strong>Check mobile rendering</strong> using Chrome DevTools (F12 → Toggle Device Toolbar)</li>
+            <li><strong>Send real test email</strong> to your Gmail account</li>
+            <li><strong>Check on desktop</strong> Gmail web interface</li>
+            <li><strong>Check on mobile</strong> Gmail app (iOS/Android)</li>
+            <li><strong>Verify</strong>:
+                <ul>
+                    <li>Scores are separated from team names</li>
+                    <li>Scores are right-aligned</li>
+                    <li>Winner highlights show (green background)</li>
+                    <li>Layout doesn't break on narrow screens</li>
+                </ul>
+            </li>
+        </ol>
+        
+        <hr style="margin: 30px 0;">
+        
+        <h2>🔗 Additional Resources</h2>
+        
+        <ul style="font-size: 16px;">
+            <li><strong>Can I Email:</strong> <a href="https://www.caniemail.com/" target="_blank">caniemail.com</a> - CSS support across email clients</li>
+            <li><strong>Email Client CSS Support:</strong> <a href="https://www.campaignmonitor.com/css/" target="_blank">Campaign Monitor Guide</a></li>
+            <li><strong>Mailtrap (Free):</strong> <a href="https://mailtrap.io/" target="_blank">mailtrap.io</a> - Email testing sandbox</li>
+            <li><strong>Litmus (Paid):</strong> <a href="https://www.litmus.com/" target="_blank">litmus.com</a> - Professional email testing</li>
+        </ul>
+    </div>
+</body>
+</html>

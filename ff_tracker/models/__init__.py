@@ -13,6 +13,12 @@ from .division import DivisionData
 from .game import GameResult
 from .owner import Owner
 from .player import WeeklyPlayerStats
+from .playoff import (
+    ChampionshipEntry,
+    ChampionshipLeaderboard,
+    PlayoffBracket,
+    PlayoffMatchup,
+)
 from .team import TeamStats
 from .week import WeeklyGameResult
 from .weekly_challenge import WeeklyChallenge
@@ -27,4 +33,8 @@ __all__ = [
     "WeeklyGameResult",
     "WeeklyPlayerStats",
     "WeeklyChallenge",
+    "PlayoffMatchup",
+    "PlayoffBracket",
+    "ChampionshipEntry",
+    "ChampionshipLeaderboard",
 ]

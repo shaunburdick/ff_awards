@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ..models import ChallengeResult, DivisionData, WeeklyChallenge
+from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, WeeklyChallenge
 from .base import BaseFormatter
 
 
@@ -39,20 +39,38 @@ class MarkdownFormatter(BaseFormatter):
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
-        current_week: int | None = None
+        current_week: int | None = None,
+        championship: ChampionshipLeaderboard | None = None,
     ) -> str:
         """Format complete output for Markdown display."""
         # Get format arguments
         note = self._get_arg("note")
         include_toc = self._get_arg_bool("include_toc", False)
 
+        # Detect playoff mode
+        is_playoff_mode = any(d.is_playoff_mode for d in divisions)
+        is_championship_week = championship is not None
+
         output_lines: list[str] = []
 
-        # Header
-        total_divisions, total_teams = self._calculate_total_stats(divisions)
-        output_lines.append(f"# 🏈 Fantasy Football Multi-Division Challenge Tracker ({self.year})")
-        output_lines.append("")
-        output_lines.append(f"📊 **{total_divisions} divisions**, **{total_teams} teams total**")
+        # Header with playoff styling
+        if is_championship_week:
+            output_lines.append("# 🏆 CHAMPIONSHIP WEEK 🏆")
+            output_lines.append("## HIGHEST SCORE WINS OVERALL!")
+        elif is_playoff_mode:
+            playoff_round = (
+                divisions[0].playoff_bracket.round if divisions[0].playoff_bracket else "PLAYOFFS"
+            )
+            output_lines.append(f"# 🏈 {playoff_round.upper()} 🏈")
+        else:
+            total_divisions, total_teams = self._calculate_total_stats(divisions)
+            output_lines.append(
+                f"# 🏈 Fantasy Football Multi-Division Challenge Tracker ({self.year})"
+            )
+            output_lines.append("")
+            output_lines.append(
+                f"📊 **{total_divisions} divisions**, **{total_teams} teams total**"
+            )
 
         if current_week is not None:
             output_lines.append(f"📅 **Current Week:** {current_week}")
@@ -64,56 +82,103 @@ class MarkdownFormatter(BaseFormatter):
             output_lines.append(f"> ⚠️ **{note}**")
             output_lines.append("")
 
-        # Optional table of contents
-        if include_toc:
+        # Skip TOC in playoff mode for simplicity
+        if include_toc and not is_playoff_mode:
             output_lines.append("## 📋 Table of Contents")
             output_lines.append("")
-            # Add TOC entries for each major section
             for division in divisions:
-                output_lines.append(f"- [{division.name} Standings](#{division.name.lower().replace(' ', '-')}-standings)")
+                output_lines.append(
+                    f"- [{division.name} Standings](#{division.name.lower().replace(' ', '-')}-standings)"
+                )
             output_lines.append("- [Overall Top Teams](#-overall-top-teams-across-all-divisions)")
             if challenges:
                 output_lines.append("- [Season Challenge Results](#-season-challenge-results)")
             if weekly_challenges and current_week:
-                output_lines.append(f"- [Week {current_week} Highlights](#-week-{current_week}-highlights)")
+                output_lines.append(
+                    f"- [Week {current_week} Highlights](#-week-{current_week}-highlights)"
+                )
             output_lines.append("")
 
-        # Division standings
-        for division in divisions:
-            output_lines.append(f"## 🏆 {division.name} STANDINGS")
+        # PLAYOFF MODE: Championship leaderboard FIRST
+        if is_championship_week and championship:
+            championship_output = self._format_championship_leaderboard(championship)
+            output_lines.append(championship_output)
             output_lines.append("")
-            division_table = self._format_division_table(division)
-            output_lines.append(division_table)
-            output_lines.append("")
-            output_lines.append("_\\* = Currently in playoff position_")
+            output_lines.append("---")
             output_lines.append("")
 
-        # Overall top teams
-        output_lines.append("## 🌟 OVERALL TOP TEAMS (Across All Divisions)")
-        output_lines.append("")
-        overall_table = self._format_overall_table(divisions)
-        output_lines.append(overall_table)
-        output_lines.append("")
-        output_lines.append("_\\* = Currently in playoff position_")
-        output_lines.append("")
+        # PLAYOFF MODE: Playoff brackets FIRST
+        if is_playoff_mode and not is_championship_week:
+            playoff_output = self._format_playoff_brackets(divisions)
+            output_lines.append(playoff_output)
+            output_lines.append("---")
+            output_lines.append("")
 
-        # Weekly challenges (appears before season challenges)
+        # Weekly challenges (filter for playoffs)
         if weekly_challenges and current_week:
-            output_lines.append(f"## 🔥 WEEK {current_week} HIGHLIGHTS")
-            output_lines.append("")
-            weekly_table = self._format_weekly_table(weekly_challenges)
-            output_lines.append(weekly_table)
-            output_lines.append("")
+            filtered_challenges = [c for c in weekly_challenges if "position" in c.additional_info]
+            if filtered_challenges and (is_playoff_mode or is_championship_week):
+                output_lines.append(f"# 🌟 WEEKLY PLAYER HIGHLIGHTS - WEEK {current_week} 🌟")
+                output_lines.append("")
+                player_table = self._format_weekly_player_table(filtered_challenges)
+                output_lines.append(player_table)
+                output_lines.append("")
+                if is_championship_week:
+                    output_lines.append(
+                        "_Note: Player highlights include all players across all teams._"
+                    )
+                    output_lines.append("")
+                output_lines.append("---")
+                output_lines.append("")
+            elif not is_playoff_mode:
+                # Regular season: show all challenges
+                output_lines.append(f"## 🔥 WEEK {current_week} HIGHLIGHTS")
+                output_lines.append("")
+                weekly_table = self._format_weekly_table(weekly_challenges)
+                output_lines.append(weekly_table)
+                output_lines.append("")
 
-        # Challenge results
+        # Season challenges (with historical note if in playoffs)
         if challenges:
-            output_lines.append("## 💰 OVERALL SEASON CHALLENGES")
+            if is_playoff_mode:
+                output_lines.append("# 📊 REGULAR SEASON FINAL RESULTS (Historical) 📊")
+            else:
+                output_lines.append("## 💰 OVERALL SEASON CHALLENGES")
             output_lines.append("")
             challenge_table = self._format_challenge_table(challenges)
             output_lines.append(challenge_table)
             output_lines.append("")
+            if is_playoff_mode:
+                output_lines.append("---")
+                output_lines.append("")
 
-            # Game data summary
+        # Regular season standings (LAST in playoff mode, or skip in championship)
+        if not is_championship_week:
+            if is_playoff_mode:
+                output_lines.append("## FINAL REGULAR SEASON STANDINGS")
+                output_lines.append("")
+            for division in divisions:
+                output_lines.append(f"### {division.name}")
+                output_lines.append("")
+                division_table = self._format_division_table(division)
+                output_lines.append(division_table)
+                output_lines.append("")
+                if not is_playoff_mode:
+                    output_lines.append("_\\* = Currently in playoff position_")
+                    output_lines.append("")
+
+            # Overall top teams (only if not in playoffs)
+            if not is_playoff_mode:
+                output_lines.append("## 🌟 OVERALL TOP TEAMS (Across All Divisions)")
+                output_lines.append("")
+                overall_table = self._format_overall_table(divisions)
+                output_lines.append(overall_table)
+                output_lines.append("")
+                output_lines.append("_\\* = Currently in playoff position_")
+                output_lines.append("")
+
+        # Game data summary (only in regular season)
+        if challenges and not is_playoff_mode:
             total_games = self._calculate_total_games(divisions)
             if total_games > 0:
                 output_lines.append(f"📊 **Game data:** {total_games} individual results processed")
@@ -122,6 +187,129 @@ class MarkdownFormatter(BaseFormatter):
 
         return "\n".join(output_lines)
 
+    def _format_playoff_brackets(self, divisions: Sequence[DivisionData]) -> str:
+        """
+        Format playoff brackets for all divisions in Markdown.
+
+        Args:
+            divisions: List of division data with playoff brackets
+
+        Returns:
+            Formatted playoff bracket string in Markdown tables
+        """
+        output_parts: list[str] = []
+
+        for division in divisions:
+            if not division.playoff_bracket:
+                continue
+
+            bracket = division.playoff_bracket
+            output_parts.append(f"## {division.name} - {bracket.round}")
+            output_parts.append("")
+            output_parts.append("| Matchup | Team (Owner) | Seed | Score | Result |")
+            output_parts.append("|---------|--------------|------|-------|--------|")
+
+            for i, matchup in enumerate(bracket.matchups, 1):
+                matchup_name = f"Semifinal {i}" if bracket.round == "Semifinals" else "Finals"
+
+                # Team 1 row
+                team1_result = "✓ Winner" if matchup.winner_name == matchup.team1_name else ""
+                team1_score = (
+                    f"{matchup.score1:.2f}" if matchup.score1 is not None else "TBD"
+                )
+                output_parts.append(
+                    f"| **{matchup_name}** | {matchup.team1_name} ({matchup.owner1_name}) | "
+                    f"#{matchup.seed1} | {team1_score} | {team1_result} |"
+                )
+
+                # Team 2 row
+                team2_result = "✓ Winner" if matchup.winner_name == matchup.team2_name else ""
+                team2_score = (
+                    f"{matchup.score2:.2f}" if matchup.score2 is not None else "TBD"
+                )
+                output_parts.append(
+                    f"|  | {matchup.team2_name} ({matchup.owner2_name}) | "
+                    f"#{matchup.seed2} | {team2_score} | {team2_result} |"
+                )
+
+            output_parts.append("")
+
+        return "\n".join(output_parts)
+
+    def _format_championship_leaderboard(self, championship: ChampionshipLeaderboard) -> str:
+        """
+        Format championship week leaderboard in Markdown.
+
+        Args:
+            championship: Championship leaderboard with ranked entries
+
+        Returns:
+            Formatted championship leaderboard string
+        """
+        output_parts: list[str] = []
+
+        output_parts.append("## CHAMPIONSHIP WEEK LEADERBOARD")
+        output_parts.append("")
+        output_parts.append("| Rank | Team (Owner) | Division Champion | Final Score |")
+        output_parts.append("|------|--------------|-------------------|-------------|")
+
+        for entry in championship.entries:
+            # Add medal emoji for top 3
+            if entry.rank == 1:
+                rank_display = "🥇"
+                team_display = f"**{entry.team_name} ({entry.owner_name})**"
+                score_display = f"**{entry.score:.2f}**"
+            elif entry.rank == 2:
+                rank_display = "🥈"
+                team_display = f"{entry.team_name} ({entry.owner_name})"
+                score_display = f"{entry.score:.2f}"
+            elif entry.rank == 3:
+                rank_display = "🥉"
+                team_display = f"{entry.team_name} ({entry.owner_name})"
+                score_display = f"{entry.score:.2f}"
+            else:
+                rank_display = str(entry.rank)
+                team_display = f"{entry.team_name} ({entry.owner_name})"
+                score_display = f"{entry.score:.2f}"
+
+            output_parts.append(
+                f"| {rank_display} | {team_display} | {entry.division_name} | {score_display} |"
+            )
+
+        # Champion announcement
+        champion = championship.champion
+        output_parts.append("")
+        output_parts.append(
+            f"### 🎉 OVERALL CHAMPION: {champion.team_name} ({champion.owner_name}) - {champion.division_name} 🎉"
+        )
+
+        return "\n".join(output_parts)
+
+    def _format_weekly_player_table(self, player_challenges: Sequence[WeeklyChallenge]) -> str:
+        """
+        Format player highlights table for playoffs in Markdown.
+
+        Args:
+            player_challenges: Player-only challenges
+
+        Returns:
+            Formatted player highlights table
+        """
+        lines: list[str] = []
+        lines.append("| Challenge | Player (Position) | Team | Points |")
+        lines.append("|-----------|-------------------|------|--------|")
+
+        for challenge in player_challenges:
+            position = challenge.additional_info.get("position", "")
+            winner_display = f"{challenge.winner} ({position})"
+            team_name = challenge.additional_info.get("team_name", challenge.division)
+
+            lines.append(
+                f"| {challenge.challenge_name} | {winner_display} | {team_name} | {challenge.value} |"
+            )
+
+        return "\n".join(lines)
+
     def _format_division_table(self, division: DivisionData) -> str:
         """Format a single division's standings table in Markdown."""
         sorted_teams = self._get_sorted_teams_by_division(division)
@@ -129,7 +317,7 @@ class MarkdownFormatter(BaseFormatter):
         # Table header
         lines = [
             "| Rank | Team | Owner | Points For | Points Against | Record |",
-            "|------|------|-------|------------|----------------|--------|"
+            "|------|------|-------|------------|----------------|--------|",
         ]
 
         # Table rows
@@ -154,7 +342,7 @@ class MarkdownFormatter(BaseFormatter):
         # Table header
         lines = [
             "| Rank | Team | Owner | Division | Points For | Points Against | Record |",
-            "|------|------|-------|----------|------------|----------------|--------|"
+            "|------|------|-------|----------|------------|----------------|--------|",
         ]
 
         # Table rows
@@ -177,7 +365,7 @@ class MarkdownFormatter(BaseFormatter):
         # Table header
         lines = [
             "| Challenge | Winner | Owner | Division | Details |",
-            "|-----------|--------|-------|----------|---------|"
+            "|-----------|--------|-------|----------|---------|",
         ]
 
         # Table rows

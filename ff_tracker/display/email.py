@@ -24,7 +24,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from importlib.metadata import version
 
-from ..models import ChallengeResult, DivisionData, WeeklyChallenge
+from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, WeeklyChallenge
 from .base import BaseFormatter
 
 
@@ -55,7 +55,8 @@ class EmailFormatter(BaseFormatter):
         divisions: Sequence[DivisionData],
         challenges: Sequence[ChallengeResult],
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
-        current_week: int | None = None
+        current_week: int | None = None,
+        championship: ChampionshipLeaderboard | None = None,
     ) -> str:
         """Format complete output for mobile-friendly HTML email."""
         # Get format arguments
@@ -169,6 +170,70 @@ class EmailFormatter(BaseFormatter):
             color: #27ae60;
             font-weight: bold;
         }}
+        .playoff-bracket {{
+            background-color: #e8f4f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3498db;
+        }}
+        .playoff-bracket h2 {{
+            color: #2c3e50;
+            margin-top: 0;
+        }}
+        .playoff-matchup {{
+            background-color: white;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            border: 1px solid #bdc3c7;
+        }}
+        .playoff-matchup h4 {{
+            margin: 0 0 10px 0;
+            color: #34495e;
+            font-size: 13px;
+        }}
+        .playoff-team {{
+            width: 100%;
+            margin-bottom: 5px;
+            background-color: #f8f9fa;
+            border-radius: 3px;
+        }}
+        .playoff-winner {{
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+        }}
+        .championship-box {{
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border: 3px solid #d63384;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+        }}
+        .championship-box h2 {{
+            color: white;
+            border-bottom: 2px solid white;
+            margin-top: 0;
+        }}
+        .champion-announcement {{
+            background-color: rgba(255,255,255,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 16px;
+        }}
+        .historical-note {{
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+            font-style: italic;
+            color: #856404;
+        }}
         .footer {{
             text-align: center;
             color: #95a5a6;
@@ -206,46 +271,67 @@ class EmailFormatter(BaseFormatter):
         <div class="summary">{total_divisions} divisions • {total_teams} teams total • Week {current_week or "Not Found"}</div>
 """
 
+        # Detect playoff mode
+        is_playoff_mode = any(d.is_playoff_mode for d in divisions)
+        is_championship_week = championship is not None
+
         # Optional note/alert
         if note:
-            html_content += f'''
+            html_content += f"""
         <div class="alert-box">
             📢 {self._escape_html(note)}
         </div>
-'''
+"""
 
-        # Weekly highlights (at the top for email - most relevant)
-        if weekly_challenges and current_week:
+        # Championship leaderboard (first, if championship week)
+        if is_championship_week and championship:
+            html_content += self._format_championship_leaderboard(championship)
+
+        # Playoff brackets (first, if Semifinals/Finals)
+        if is_playoff_mode and not is_championship_week:
+            html_content += self._format_playoff_brackets(divisions)
+
+        # Weekly player highlights (playoffs only show player challenges)
+        if weekly_challenges and current_week and (is_playoff_mode or is_championship_week):
+            # Filter to player challenges only
+            player_challenges = [c for c in weekly_challenges if "position" in c.additional_info]
+            if player_challenges:
+                html_content += self._format_weekly_player_table(player_challenges, current_week)
+
+        # Regular season weekly highlights (both team and player)
+        elif weekly_challenges and current_week:
             # Split into team and player challenges
             team_challenges = [c for c in weekly_challenges if "position" not in c.additional_info]
             player_challenges = [c for c in weekly_challenges if "position" in c.additional_info]
 
             html_content += '<div class="weekly-highlight">\n'
-            html_content += f'<h2>🔥 Week {current_week} Highlights</h2>\n'
+            html_content += f"<h2>🔥 Week {current_week} Highlights</h2>\n"
 
             # Team challenges
             if team_challenges:
-                html_content += '<h3>Team Challenges</h3>\n'
-                html_content += '<table>\n'
-                html_content += '<tr><th>Challenge</th><th>Team</th><th>Division</th><th>Value</th></tr>\n'
+                html_content += "<h3>Team Challenges</h3>\n"
+                html_content += "<table>\n"
+                html_content += (
+                    "<tr><th>Challenge</th><th>Team</th><th>Division</th><th>Value</th></tr>\n"
+                )
 
                 for challenge in team_challenges:
                     html_content += (
-                        f'<tr>'
+                        f"<tr>"
                         f'<td class="challenge-name">{self._escape_html(challenge.challenge_name)}</td>'
                         f'<td class="winner">{self._escape_html(challenge.winner)}</td>'
-                        f'<td>{self._escape_html(challenge.division)}</td>'
+                        f"<td>{self._escape_html(challenge.division)}</td>"
                         f'<td class="number">{self._escape_html(challenge.value)}</td>'
-                        f'</tr>\n'
+                        f"</tr>\n"
                     )
 
-                html_content += '</table>\n'
+                html_content += "</table>\n"
 
             # Player highlights
             if player_challenges:
-                html_content += '<h3>Player Highlights</h3>\n'
-                html_content += '<table>\n'
-                html_content += '<tr><th>Challenge</th><th>Player</th><th>Points</th></tr>\n'
+                html_content += "<h3>Player Highlights</h3>\n"
+                html_content += "<table>\n"
+                html_content += "<tr><th>Challenge</th><th>Player</th><th>Points</th></tr>\n"
 
                 for challenge in player_challenges:
                     # Include position in player display
@@ -253,21 +339,56 @@ class EmailFormatter(BaseFormatter):
                     winner_display = f"{challenge.winner} ({position})"
 
                     html_content += (
-                        f'<tr>'
+                        f"<tr>"
                         f'<td class="challenge-name">{self._escape_html(challenge.challenge_name)}</td>'
                         f'<td class="winner">{self._escape_html(winner_display)}</td>'
                         f'<td class="number">{self._escape_html(challenge.value)}</td>'
-                        f'</tr>\n'
+                        f"</tr>\n"
                     )
 
-                html_content += '</table>\n'
+                html_content += "</table>\n"
 
-            html_content += '</div>\n'
+            html_content += "</div>\n"
 
-        # Division standings
+        # Season challenges with historical note in playoff mode
+        if challenges:
+            if is_playoff_mode:
+                html_content += """
+        <div class="historical-note">
+            <strong>Note:</strong> Regular season challenges finalized at end of week 14
+        </div>
+"""
+            html_content += "<h2>Season Challenge Results</h2>\n"
+            html_content += '<table class="challenge-table">\n'
+            html_content += "<tr><th>Challenge</th><th>Winner</th><th>Owner</th><th>Division</th><th>Details</th></tr>\n"
+
+            for challenge in challenges:
+                html_content += (
+                    f"<tr>"
+                    f'<td class="challenge-name">{self._escape_html(challenge.challenge_name)}</td>'
+                    f'<td class="winner">{self._escape_html(challenge.winner)}</td>'
+                    f"<td>{self._escape_html(challenge.owner.full_name)}</td>"
+                    f"<td>{self._escape_html(challenge.division)}</td>"
+                    f"<td>{self._escape_html(challenge.description)}</td>"
+                    f"</tr>\n"
+                )
+
+            html_content += "</table>\n"
+
+        # Division standings (labeled as historical if playoff mode)
+        if is_playoff_mode:
+            html_content += """
+        <div class="historical-note">
+            Final regular season standings from week 14
+        </div>
+"""
+            html_content += "<h2>Final Regular Season Standings</h2>\n"
+        else:
+            html_content += "<h2>Current Standings</h2>\n"
+
         for division in divisions:
             html_content += f'<h2><a href="https://fantasy.espn.com/football/league?leagueId={division.league_id}" style="color: #3498db; text-decoration: none;">{division.name} 🔗</a> Standings</h2>\n'
-            html_content += '<table>\n'
+            html_content += "<table>\n"
             html_content += '<tr><th>Rank</th><th>Team</th><th>Owner</th><th class="number">PF</th><th class="number">PA</th><th>Record</th></tr>\n'
 
             sorted_teams = self._get_sorted_teams_by_division(division)
@@ -278,23 +399,25 @@ class EmailFormatter(BaseFormatter):
                     team_name = f"* {team.name}"
 
                 html_content += (
-                    f'<tr>'
-                    f'<td>{i}</td>'
-                    f'<td>{self._escape_html(team_name)}</td>'
-                    f'<td>{self._escape_html(team.owner.full_name)}</td>'
+                    f"<tr>"
+                    f"<td>{i}</td>"
+                    f"<td>{self._escape_html(team_name)}</td>"
+                    f"<td>{self._escape_html(team.owner.full_name)}</td>"
                     f'<td class="number">{team.points_for:.2f}</td>'
                     f'<td class="number">{team.points_against:.2f}</td>'
-                    f'<td>{team.wins}-{team.losses}</td>'
-                    f'</tr>\n'
+                    f"<td>{team.wins}-{team.losses}</td>"
+                    f"</tr>\n"
                 )
 
-            html_content += '</table>\n'
+            html_content += "</table>\n"
             html_content += '<p style="margin-top: 15px; font-style: italic; color: #666;"><strong>*</strong> = Currently in playoff position</p>\n'
 
-
-        # Overall top teams
-        html_content += '<h2>Overall Top Teams (Across All Divisions)</h2>\n'
-        html_content += '<table>\n'
+        # Overall top teams (labeled as historical if playoff mode)
+        if is_playoff_mode:
+            html_content += "<h2>Overall Top Teams (Final Regular Season - Week 14)</h2>\n"
+        else:
+            html_content += "<h2>Overall Top Teams (Across All Divisions)</h2>\n"
+        html_content += "<table>\n"
         html_content += '<tr><th>Rank</th><th>Team</th><th>Owner</th><th>Division</th><th class="number">PF</th><th class="number">PA</th><th>Record</th></tr>\n'
 
         top_teams = self._get_overall_top_teams(divisions, limit=max_teams)
@@ -305,42 +428,27 @@ class EmailFormatter(BaseFormatter):
                 team_name = f"* {team.name}"
 
             html_content += (
-                f'<tr>'
-                f'<td>{i}</td>'
-                f'<td>{self._escape_html(team_name)}</td>'
-                f'<td>{self._escape_html(team.owner.full_name)}</td>'
-                f'<td>{self._escape_html(team.division)}</td>'
+                f"<tr>"
+                f"<td>{i}</td>"
+                f"<td>{self._escape_html(team_name)}</td>"
+                f"<td>{self._escape_html(team.owner.full_name)}</td>"
+                f"<td>{self._escape_html(team.division)}</td>"
                 f'<td class="number">{team.points_for:.2f}</td>'
                 f'<td class="number">{team.points_against:.2f}</td>'
-                f'<td>{team.wins}-{team.losses}</td>'
-                f'</tr>\n'
+                f"<td>{team.wins}-{team.losses}</td>"
+                f"</tr>\n"
             )
 
-        html_content += '</table>\n'
+        html_content += "</table>\n"
         html_content += '<p style="margin-top: 15px; font-style: italic; color: #666;"><strong>*</strong> = Currently in playoff position</p>\n'
-
-        # Challenge results
-        if challenges:
-            html_content += '<h2>Season Challenge Results</h2>\n'
-            html_content += '<table class="challenge-table">\n'
-            html_content += '<tr><th>Challenge</th><th>Winner</th><th>Owner</th><th>Division</th><th>Details</th></tr>\n'
-
-            for challenge in challenges:
-                html_content += (
-                    f'<tr>'
-                    f'<td class="challenge-name">{self._escape_html(challenge.challenge_name)}</td>'
-                    f'<td class="winner">{self._escape_html(challenge.winner)}</td>'
-                    f'<td>{self._escape_html(challenge.owner.full_name)}</td>'
-                    f'<td>{self._escape_html(challenge.division)}</td>'
-                    f'<td>{self._escape_html(challenge.description)}</td>'
-                    f'</tr>\n'
-                )
-
-            html_content += '</table>\n'
 
         # Footer section (always present)
         total_games = self._calculate_total_games(divisions)
-        game_data_text = f'Game data: {total_games} individual results processed' if total_games > 0 else 'Game data: Limited - some challenges may be incomplete'
+        game_data_text = (
+            f"Game data: {total_games} individual results processed"
+            if total_games > 0
+            else "Game data: Limited - some challenges may be incomplete"
+        )
 
         html_content += f"""
         <div class="footer">
@@ -359,9 +467,141 @@ class EmailFormatter(BaseFormatter):
 
     def _escape_html(self, text: str) -> str:
         """Escape HTML special characters."""
-        return (text
-                .replace('&', '&amp;')
-                .replace('<', '&lt;')
-                .replace('>', '&gt;')
-                .replace('"', '&quot;')
-                .replace("'", '&#x27;'))
+        return (
+            text.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&#x27;")
+        )
+
+    def _format_playoff_brackets(self, divisions: Sequence[DivisionData]) -> str:
+        """Format playoff bracket matchups as HTML."""
+        html_content = ""
+
+        playoff_divisions = [d for d in divisions if d.playoff_bracket]
+        if not playoff_divisions:
+            return html_content
+
+        bracket_round = (
+            playoff_divisions[0].playoff_bracket.round
+            if playoff_divisions[0].playoff_bracket
+            else "Unknown"
+        )
+
+        html_content += '<div class="playoff-bracket">\n'
+        html_content += f"<h2>🏆 Playoff Bracket - {bracket_round}</h2>\n"
+
+        for div in playoff_divisions:
+            if not div.playoff_bracket:
+                continue
+
+            html_content += f"<h3>{div.name}</h3>\n"
+
+            for i, matchup in enumerate(div.playoff_bracket.matchups, 1):
+                matchup_label = f"Semifinal {i}" if bracket_round == "Semifinals" else "Finals"
+
+                html_content += '<div class="playoff-matchup">\n'
+                html_content += f"<h4>{matchup_label}</h4>\n"
+
+                # Team 1
+                winner_class1 = " playoff-winner" if matchup.winner_seed == matchup.seed1 else ""
+                score1_display = f"{matchup.score1:.2f}" if matchup.score1 is not None else "TBD"
+                html_content += f'<table class="playoff-team{winner_class1}" cellpadding="10" cellspacing="0" border="0">\n'
+                html_content += "  <tr>\n"
+                html_content += f'    <td style="width: 75%; padding: 10px;">#{matchup.seed1} {self._escape_html(matchup.team1_name)} ({self._escape_html(matchup.owner1_name)})</td>\n'
+                html_content += f'    <td style="width: 25%; padding: 10px; text-align: right; font-size: 16px; font-weight: bold; color: #2c3e50;">{score1_display}</td>\n'
+                html_content += "  </tr>\n"
+                html_content += "</table>\n"
+
+                # Team 2
+                winner_class2 = " playoff-winner" if matchup.winner_seed == matchup.seed2 else ""
+                score2_display = f"{matchup.score2:.2f}" if matchup.score2 is not None else "TBD"
+                html_content += f'<table class="playoff-team{winner_class2}" cellpadding="10" cellspacing="0" border="0">\n'
+                html_content += "  <tr>\n"
+                html_content += f'    <td style="width: 75%; padding: 10px;">#{matchup.seed2} {self._escape_html(matchup.team2_name)} ({self._escape_html(matchup.owner2_name)})</td>\n'
+                html_content += f'    <td style="width: 25%; padding: 10px; text-align: right; font-size: 16px; font-weight: bold; color: #2c3e50;">{score2_display}</td>\n'
+                html_content += "  </tr>\n"
+                html_content += "</table>\n"
+
+                html_content += "</div>\n"
+
+        html_content += "</div>\n"
+
+        return html_content
+
+    def _format_championship_leaderboard(self, championship: ChampionshipLeaderboard) -> str:
+        """Format championship leaderboard as HTML."""
+        html_content = ""
+
+        html_content += '<div class="championship-box">\n'
+        html_content += "<h2>🏆 Championship Week - Final Leaderboard 🏆</h2>\n"
+        html_content += "<p>Highest score wins overall championship</p>\n"
+
+        html_content += "<table>\n"
+        html_content += '<tr><th>Rank</th><th>Team</th><th>Owner</th><th>Division</th><th class="number">Score</th></tr>\n'
+
+        for entry in championship.entries:
+            medal = ""
+            if entry.rank == 1:
+                medal = "🥇 "
+            elif entry.rank == 2:
+                medal = "🥈 "
+            elif entry.rank == 3:
+                medal = "🥉 "
+
+            html_content += (
+                f"<tr>"
+                f"<td>{medal}{entry.rank}</td>"
+                f"<td>{self._escape_html(entry.team_name)}</td>"
+                f"<td>{self._escape_html(entry.owner_name)}</td>"
+                f"<td>{self._escape_html(entry.division_name)}</td>"
+                f'<td class="number">{entry.score:.2f}</td>'
+                f"</tr>\n"
+            )
+
+        html_content += "</table>\n"
+
+        # Champion announcement
+        champion = championship.champion
+        html_content += '<div class="champion-announcement">\n'
+        html_content += "🎉 <strong>OVERALL CHAMPION</strong> 🎉<br>\n"
+        html_content += f"<strong>{self._escape_html(champion.team_name)}</strong><br>\n"
+        html_content += f"{self._escape_html(champion.owner_name)}<br>\n"
+        html_content += (
+            f"{self._escape_html(champion.division_name)} Champion - {champion.score:.2f} points\n"
+        )
+        html_content += "</div>\n"
+
+        html_content += "</div>\n"
+
+        return html_content
+
+    def _format_weekly_player_table(
+        self, player_challenges: Sequence[WeeklyChallenge], current_week: int
+    ) -> str:
+        """Format weekly player highlights table for playoff mode."""
+        html_content = ""
+
+        html_content += '<div class="weekly-highlight">\n'
+        html_content += f"<h2>⭐ Week {current_week} Player Highlights</h2>\n"
+        html_content += "<table>\n"
+        html_content += "<tr><th>Challenge</th><th>Player</th><th>Points</th></tr>\n"
+
+        for challenge in player_challenges:
+            # Include position in player display
+            position = challenge.additional_info.get("position", "")
+            winner_display = f"{challenge.winner} ({position})"
+
+            html_content += (
+                f"<tr>"
+                f'<td class="challenge-name">{self._escape_html(challenge.challenge_name)}</td>'
+                f'<td class="winner">{self._escape_html(winner_display)}</td>'
+                f'<td class="number">{self._escape_html(challenge.value)}</td>'
+                f"</tr>\n"
+            )
+
+        html_content += "</table>\n"
+        html_content += "</div>\n"
+
+        return html_content

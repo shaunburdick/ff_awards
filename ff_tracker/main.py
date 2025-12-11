@@ -104,8 +104,7 @@ def parse_format_args(args_list: list[str] | None) -> dict[str, dict[str, str]]:
             parts = key.split(".", 1)
             if len(parts) != 2 or not parts[0] or not parts[1]:
                 raise ValueError(
-                    f"Invalid formatter-specific argument: '{arg}'. "
-                    f"Must be: formatter.key=value"
+                    f"Invalid formatter-specific argument: '{arg}'. Must be: formatter.key=value"
                 )
 
             formatter, arg_key = parts
@@ -120,8 +119,7 @@ def parse_format_args(args_list: list[str] | None) -> dict[str, dict[str, str]]:
 
 
 def get_formatter_args(
-    format_name: str,
-    format_args_dict: dict[str, dict[str, str]]
+    format_name: str, format_args_dict: dict[str, dict[str, str]]
 ) -> dict[str, str]:
     """
     Get merged arguments for a specific formatter.
@@ -176,45 +174,39 @@ Private League Setup:
   Create a .env file with:
     ESPN_S2=your_espn_s2_cookie
     SWID=your_swid_cookie
-        """
+        """,
     )
 
     parser.add_argument(
         "league_id",
         type=str,
-        nargs='?',  # Make league_id optional
-        help="ESPN Fantasy Football League ID(s) - single ID or comma-separated (e.g., 123456 or 123456,789012,345678). Alternative: use --env for LEAGUE_IDS from environment"
+        nargs="?",  # Make league_id optional
+        help="ESPN Fantasy Football League ID(s) - single ID or comma-separated (e.g., 123456 or 123456,789012,345678). Alternative: use --env for LEAGUE_IDS from environment",
     )
 
     parser.add_argument(
-        "--env",
-        action="store_true",
-        help="Load league IDs from LEAGUE_IDS environment variable"
+        "--env", action="store_true", help="Load league IDs from LEAGUE_IDS environment variable"
     )
 
-    parser.add_argument(
-        "--year",
-        type=int,
-        help="Fantasy season year (default: current year)"
-    )
+    parser.add_argument("--year", type=int, help="Fantasy season year (default: current year)")
 
     parser.add_argument(
         "--private",
         action="store_true",
-        help="Access private league (requires ESPN_S2 and SWID in .env)"
+        help="Access private league (requires ESPN_S2 and SWID in .env)",
     )
 
     parser.add_argument(
         "--format",
         choices=["console", "sheets", "email", "json", "markdown"],
         default="console",
-        help="Output format (default: console). Ignored if --output-dir is specified."
+        help="Output format (default: console). Ignored if --output-dir is specified.",
     )
 
     parser.add_argument(
         "--output-dir",
         type=Path,
-        help="Directory to write all output formats. When specified, generates all formats automatically."
+        help="Directory to write all output formats. When specified, generates all formats automatically.",
     )
 
     parser.add_argument(
@@ -245,21 +237,22 @@ Examples:
   --format-arg note="Season ends Week 14!"
   --format-arg email.accent_color="#ff0000"
   --format-arg json.pretty="false"
-        """
+        """,
     )
 
     parser.add_argument(
         "--env-file",
         type=Path,
         default=Path(".env"),
-        help="Path to environment file (default: .env)"
+        help="Path to environment file (default: .env)",
     )
 
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="count",
         default=0,
-        help="Enable verbose logging output (-v for INFO, -vv for DEBUG)"
+        help="Enable verbose logging output (-v for INFO, -vv for DEBUG)",
     )
 
     return parser
@@ -281,21 +274,19 @@ def setup_logging(verbose: int = 0) -> None:
     # Configure root logger
     logging.basicConfig(
         level=level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%H:%M:%S'
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%H:%M:%S",
     )
 
     # Reduce noise from third-party libraries unless in debug mode
     if verbose < 2:
-        logging.getLogger('urllib3').setLevel(logging.WARNING)
-        logging.getLogger('requests').setLevel(logging.WARNING)
-        logging.getLogger('espn_api').setLevel(logging.WARNING)
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
+        logging.getLogger("requests").setLevel(logging.WARNING)
+        logging.getLogger("espn_api").setLevel(logging.WARNING)
 
 
 def create_formatter(
-    format_name: str,
-    year: int,
-    format_args_dict: dict[str, dict[str, str]]
+    format_name: str, year: int, format_args_dict: dict[str, dict[str, str]]
 ) -> BaseFormatter:
     """
     Create formatter instance based on format name with merged arguments.
@@ -353,21 +344,15 @@ def main() -> int:
 
         # Load configuration
         from .config import create_config
+
         if args.env:
             # Load multiple leagues from environment
-            config = create_config(
-                use_env=True,
-                year=args.year,
-                private=args.private
-            )
+            config = create_config(use_env=True, year=args.year, private=args.private)
         else:
             # Parse league IDs from command line (single or comma-separated)
             league_ids = parse_league_ids_from_arg(args.league_id)
             config = create_config(
-                league_ids=league_ids,
-                year=args.year,
-                private=args.private,
-                use_env=False
+                league_ids=league_ids, year=args.year, private=args.private, use_env=False
             )
 
         # Initialize services
@@ -379,6 +364,28 @@ def main() -> int:
         with espn_service:
             divisions = espn_service.load_all_divisions()
             challenges = challenge_calculator.calculate_all_challenges(divisions)
+
+            # Check if Championship Week and build leaderboard
+            championship = None
+            if divisions and divisions[0].is_playoff_mode:
+                # We're in playoffs - check if Championship Week
+                # Reconnect to first league to check playoff round
+                test_league = espn_service.connect_to_league(config.league_ids[0])
+                try:
+                    playoff_round = espn_service.get_playoff_round(test_league)
+                    if playoff_round == "Championship Week":
+                        # Build championship leaderboard
+                        logging.info("Championship Week detected - building leaderboard")
+                        all_leagues = [
+                            espn_service.connect_to_league(lid) for lid in config.league_ids
+                        ]
+                        division_names = [div.name for div in divisions]
+                        championship = espn_service.build_championship_leaderboard(
+                            all_leagues, division_names, test_league.current_week
+                        )
+                except Exception as e:
+                    logging.warning(f"Could not build championship leaderboard: {e}")
+                    # Continue without championship - not fatal
 
             # Calculate weekly challenges if we have weekly data
             weekly_challenges: list[WeeklyChallenge] = []
@@ -394,9 +401,7 @@ def main() -> int:
                 if all_weekly_games or all_weekly_players:
                     try:
                         weekly_challenges = weekly_calculator.calculate_all_weekly_challenges(
-                            all_weekly_games,
-                            all_weekly_players,
-                            espn_service.current_week
+                            all_weekly_games, all_weekly_players, espn_service.current_week
                         )
                     except Exception as e:
                         logging.warning(f"Could not calculate weekly challenges: {e}")
@@ -424,7 +429,8 @@ def main() -> int:
                     divisions,
                     challenges,
                     weekly_challenges if weekly_challenges else None,
-                    espn_service.current_week
+                    espn_service.current_week,
+                    championship,
                 )
                 file_path.write_text(output, encoding="utf-8")
                 print(f"Generated {format_name} output: {file_path}")
@@ -437,7 +443,8 @@ def main() -> int:
                 divisions,
                 challenges,
                 weekly_challenges if weekly_challenges else None,
-                espn_service.current_week
+                espn_service.current_week,
+                championship,
             )
             print(output)
             return 0
