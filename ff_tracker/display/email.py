@@ -194,9 +194,7 @@ class EmailFormatter(BaseFormatter):
             font-size: 13px;
         }}
         .playoff-team {{
-            display: flex;
-            justify-content: space-between;
-            padding: 8px;
+            width: 100%;
             margin-bottom: 5px;
             background-color: #f8f9fa;
             border-radius: 3px;
@@ -204,7 +202,6 @@ class EmailFormatter(BaseFormatter):
         .playoff-winner {{
             background-color: #d4edda;
             border-left: 4px solid #28a745;
-            font-weight: bold;
         }}
         .championship-box {{
             background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
@@ -510,18 +507,22 @@ class EmailFormatter(BaseFormatter):
                 # Team 1
                 winner_class1 = " playoff-winner" if matchup.winner_seed == matchup.seed1 else ""
                 score1_display = f"{matchup.score1:.2f}" if matchup.score1 is not None else "TBD"
-                html_content += f'<div class="playoff-team{winner_class1}">\n'
-                html_content += f"  <span>#{matchup.seed1} {self._escape_html(matchup.team1_name)} ({self._escape_html(matchup.owner1_name)})</span>\n"
-                html_content += f"  <strong>{score1_display}</strong>\n"
-                html_content += "</div>\n"
+                html_content += f'<table class="playoff-team{winner_class1}" cellpadding="10" cellspacing="0" border="0">\n'
+                html_content += "  <tr>\n"
+                html_content += f'    <td style="width: 75%; padding: 10px;">#{matchup.seed1} {self._escape_html(matchup.team1_name)} ({self._escape_html(matchup.owner1_name)})</td>\n'
+                html_content += f'    <td style="width: 25%; padding: 10px; text-align: right; font-size: 16px; font-weight: bold; color: #2c3e50;">{score1_display}</td>\n'
+                html_content += "  </tr>\n"
+                html_content += "</table>\n"
 
                 # Team 2
                 winner_class2 = " playoff-winner" if matchup.winner_seed == matchup.seed2 else ""
                 score2_display = f"{matchup.score2:.2f}" if matchup.score2 is not None else "TBD"
-                html_content += f'<div class="playoff-team{winner_class2}">\n'
-                html_content += f"  <span>#{matchup.seed2} {self._escape_html(matchup.team2_name)} ({self._escape_html(matchup.owner2_name)})</span>\n"
-                html_content += f"  <strong>{score2_display}</strong>\n"
-                html_content += "</div>\n"
+                html_content += f'<table class="playoff-team{winner_class2}" cellpadding="10" cellspacing="0" border="0">\n'
+                html_content += "  <tr>\n"
+                html_content += f'    <td style="width: 75%; padding: 10px;">#{matchup.seed2} {self._escape_html(matchup.team2_name)} ({self._escape_html(matchup.owner2_name)})</td>\n'
+                html_content += f'    <td style="width: 25%; padding: 10px; text-align: right; font-size: 16px; font-weight: bold; color: #2c3e50;">{score2_display}</td>\n'
+                html_content += "  </tr>\n"
+                html_content += "</table>\n"
 
                 html_content += "</div>\n"
 
