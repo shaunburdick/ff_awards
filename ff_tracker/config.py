@@ -18,6 +18,7 @@ from .exceptions import ConfigurationError
 @dataclass(frozen=True)
 class ESPNCredentials:
     """ESPN private league authentication credentials."""
+
     swid: str
     s2: str
 
@@ -32,10 +33,12 @@ class ESPNCredentials:
 @dataclass(frozen=True)
 class FFTrackerConfig:
     """Main configuration object for the Fantasy Football Tracker."""
+
     league_ids: list[int]
     year: int
     private: bool
     espn_credentials: ESPNCredentials | None = None
+    week: int | None = None
 
     def __post_init__(self) -> None:
         """Validate configuration consistency."""
@@ -50,6 +53,10 @@ class FFTrackerConfig:
 
         if self.year < 2000:
             raise ConfigurationError(f"Invalid year: {self.year}")
+
+        if self.week is not None:
+            if self.week < 1 or self.week > 18:
+                raise ConfigurationError(f"Week must be between 1 and 18, got: {self.week}")
 
 
 def load_environment() -> None:
@@ -116,7 +123,8 @@ def create_config(
     league_ids: list[int] | None = None,
     year: int | None = None,
     private: bool = False,
-    use_env: bool = False
+    use_env: bool = False,
+    week: int | None = None,
 ) -> FFTrackerConfig:
     """
     Create configuration object from various sources.
@@ -126,6 +134,7 @@ def create_config(
         year: Fantasy season year, or None for current year
         private: Whether to use private league authentication
         use_env: Whether to load league IDs from environment
+        week: Optional week override (1-18) for historical/testing purposes
 
     Returns:
         Configured FFTrackerConfig object
@@ -154,8 +163,10 @@ def create_config(
         league_ids=resolved_league_ids,
         year=resolved_year,
         private=private,
-        espn_credentials=espn_credentials
+        espn_credentials=espn_credentials,
+        week=week,
     )
+
 
 def detect_fantasy_year() -> int:
     """
@@ -166,5 +177,6 @@ def detect_fantasy_year() -> int:
     - If the current month is before August, return the previous year.
     """
     import datetime
+
     now = datetime.datetime.now()
     return now.year if now.month >= 8 else now.year - 1

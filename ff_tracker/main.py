@@ -148,6 +148,8 @@ def create_parser() -> argparse.ArgumentParser:
 Examples:
   %(prog)s 123456                                      # Single public league
   %(prog)s 123456 --year 2024                          # Specific year
+  %(prog)s 123456 --year 2024 --week 10                # Historical week 10 from 2024
+  %(prog)s 123456 --week 15 --private                  # Test week 15 playoff bracket
   %(prog)s 123456 --private                            # Private league (requires .env)
   %(prog)s 123456789,987654321,678998765               # Multiple leagues via CLI
   %(prog)s --env                                       # Multiple leagues from LEAGUE_IDS in .env
@@ -189,6 +191,17 @@ Private League Setup:
     )
 
     parser.add_argument("--year", type=int, help="Fantasy season year (default: current year)")
+
+    parser.add_argument(
+        "--week",
+        type=int,
+        help=(
+            "Override current week detection (1-18). "
+            "Acts as a snapshot in time - shows data as it would appear at that week. "
+            "Useful for: reviewing historical weeks, testing playoff scenarios, debugging. "
+            "Can be combined with --year. Note: Cannot specify future weeks."
+        ),
+    )
 
     parser.add_argument(
         "--private",
@@ -347,12 +360,18 @@ def main() -> int:
 
         if args.env:
             # Load multiple leagues from environment
-            config = create_config(use_env=True, year=args.year, private=args.private)
+            config = create_config(
+                use_env=True, year=args.year, private=args.private, week=args.week
+            )
         else:
             # Parse league IDs from command line (single or comma-separated)
             league_ids = parse_league_ids_from_arg(args.league_id)
             config = create_config(
-                league_ids=league_ids, year=args.year, private=args.private, use_env=False
+                league_ids=league_ids,
+                year=args.year,
+                private=args.private,
+                use_env=False,
+                week=args.week,
             )
 
         # Initialize services

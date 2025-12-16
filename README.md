@@ -89,21 +89,52 @@ cp .env.example .env
 ### Basic Usage
 
 ```bash
-# Single league (public)
+# Basic usage
 uv run ff-tracker <league_id>
-
-# Multiple leagues via CLI (comma-separated)
-uv run ff-tracker <league_id1>,<league_id2>,<league_id3>
-
-# Single private league
-uv run ff-tracker <league_id> --private
 
 # Specific year
 uv run ff-tracker <league_id> --year 2023
 
+# Specific week (snapshot in time)
+uv run ff-tracker <league_id> --week 10
+
+# Historical analysis: specific year and week
+uv run ff-tracker <league_id> --year 2024 --week 10
+
+# Test playoff scenarios
+uv run ff-tracker <league_id> --week 15 --private
+
 # Different output format
 uv run ff-tracker <league_id> --format sheets
 ```
+
+### Week Override Feature
+
+Use `--week` to view data as a snapshot in time:
+
+```bash
+# View historical week 10 data
+uv run ff-tracker 123456 --week 10
+
+# Test playoff bracket for week 15
+uv run ff-tracker 123456 --week 15
+
+# Historical analysis from previous season
+uv run ff-tracker 123456 --year 2024 --week 12
+```
+
+**How it works:**
+- Acts as a snapshot in time showing data as it appeared at that specific week
+- Season challenges are calculated only through regular season (weeks 1-14)
+- Weekly highlights show the specified week's data
+- Playoff brackets display if the week is in playoffs (15-17)
+- Cannot specify future weeks (must be ≤ current week in ESPN)
+- Useful for: reviewing past weeks, testing playoff scenarios, debugging
+
+**Examples:**
+- `--week 10`: Shows regular season through week 10
+- `--week 15`: Shows Semifinals bracket + season challenges (frozen at week 14)
+- `--week 16`: Shows Finals bracket + season challenges (frozen at week 14)
 
 ### Output Formats
 
@@ -196,6 +227,15 @@ uv run ff-tracker "123456, 789012, 345678"
 # Private league with specific year
 uv run ff-tracker 123456 --private --year 2024
 
+# Historical week from current season
+uv run ff-tracker 123456 --week 10
+
+# Historical week from previous season
+uv run ff-tracker 123456 --year 2024 --week 12
+
+# Test playoff bracket without waiting for games
+uv run ff-tracker 123456 --week 15 --private
+
 # Multiple private leagues via CLI
 uv run ff-tracker 123456789,987654321 --private --format email
 
@@ -223,6 +263,10 @@ uv run ff-tracker 123456 --format email \
 uv run ff-tracker --env --format markdown \
   --format-arg markdown.include_toc=true \
   --format-arg note="Final week of regular season"
+
+# Week override with format arguments
+uv run ff-tracker 123456 --week 15 --format email \
+  --format-arg note="Semifinals - Good luck everyone!"
 ```
 
 ## Configuration

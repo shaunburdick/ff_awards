@@ -236,12 +236,12 @@ class ESPNService:
         self, league: League, division_name: str, max_week: int | None = None
     ) -> list[GameResult]:
         """
-        Extract game results from ESPN league.
+        Extract all completed games from the league up to the specified week.
 
         Args:
             league: ESPN League object
             division_name: Name to assign to this division
-            max_week: Maximum week to process (auto-detected if None)
+            max_week: Maximum week to process (auto-detected if None, or from config.week)
 
         Returns:
             List of game results
@@ -258,17 +258,40 @@ class ESPNService:
             # Get regular season count from league settings
             reg_season_count = league.settings.reg_season_count
 
-            # Auto-detect max week if not provided
-            if max_week is None:
+            # Check if week override is provided in config
+            if self.config.week is not None:
+                # User specified a week override - validate it's not in the future
+                if self.config.week > current_week:
+                    raise ESPNAPIError(
+                        f"Cannot specify future week. Requested week {self.config.week} "
+                        f"but league is currently in week {current_week}. "
+                        f"Week override must be <= current week.",
+                        league_id=league.league_id,
+                    )
+                # Use the override week for display/weekly data
+                # But cap games at regular season for season challenges
+                requested_week = self.config.week
+                max_week = min(requested_week, reg_season_count)
+
+                # Store the requested week (for weekly data and playoff display)
+                if self.current_week is None:
+                    self.current_week = requested_week
+                    logger.info(
+                        f"Week override: {requested_week}. "
+                        f"Processing season challenge games through week {max_week} (regular season cap). "
+                        f"Weekly data will show week {requested_week}."
+                    )
+            elif max_week is None:
+                # Auto-detect max week if not provided and no override
                 max_week = self._determine_max_week(league, current_week, reg_season_count)
 
-            # Store the actual last complete week from first league processed (for display purposes)
-            # This is the max_week we're actually processing, not ESPN's current_week
-            if self.current_week is None:
-                self.current_week = max_week
-                logger.info(
-                    f"Set current week to {max_week} (last complete week) from {division_name}"
-                )
+                # Store the actual last complete week from first league processed (for display purposes)
+                # This is the max_week we're actually processing, not ESPN's current_week
+                if self.current_week is None:
+                    self.current_week = max_week
+                    logger.info(
+                        f"Set current week to {max_week} (last complete week) from {division_name}"
+                    )
 
             logger.info(f"Processing weeks 1-{max_week} for {division_name}")
 
@@ -296,6 +319,10 @@ class ESPNService:
         Checks if the current week has been played by examining box scores.
         A week is considered incomplete if any game has both teams with 0 points.
 
+        For regular season: Only processes up to reg_season_count.
+        For playoffs: Checks if previous playoff week is complete (e.g., if current_week=16,
+        checks if week 15 is complete before including it).
+
         Args:
             league: ESPN League object
             current_week: The week ESPN reports as current
@@ -304,55 +331,63 @@ class ESPNService:
         Returns:
             The last complete week number to process
         """
-        max_week_candidate = min(reg_season_count, current_week)
-
-        # Check if current week has been played
+        # Determine what week to check for completion
         if current_week <= reg_season_count:
-            try:
-                current_box_scores = league.box_scores(current_week)
-                if current_box_scores:
-                    # If ANY game has both teams at 0 points, the week hasn't started
-                    for box_score in current_box_scores:
-                        home_score = box_score.home_score
-                        away_score = box_score.away_score
+            # Regular season: check current week, max out at reg_season_count
+            week_to_check = current_week
+            max_week_candidate = min(reg_season_count, current_week)
+        else:
+            # Playoffs: check the previous week (current week - 1)
+            # We want to show completed playoff weeks, not upcoming ones
+            week_to_check = current_week - 1
+            max_week_candidate = week_to_check
 
-                        # Both teams at 0 means game hasn't been played
-                        if home_score == 0 and away_score == 0:
-                            logger.info(
-                                f"Week {current_week} has unplayed games (0-0), using week {max_week_candidate - 1}"
-                            )
-                            return max_week_candidate - 1
+        # Check if the week_to_check has been played
+        try:
+            box_scores = league.box_scores(week_to_check)
+            if box_scores:
+                # If ANY game has both teams at 0 points, the week hasn't started
+                for box_score in box_scores:
+                    home_score = box_score.home_score
+                    away_score = box_score.away_score
 
-                        # Very low scores might indicate incomplete/in-progress games
-                        # But we need at least one team to have scored something
-                        if home_score > 0 and away_score > 0:
-                            # Both teams have scored, so at least some games are complete
-                            continue
-                        elif home_score == 0 or away_score == 0:
-                            # One team at 0 while the other has points likely means incomplete
-                            logger.info(
-                                f"Week {current_week} appears in progress (partial scores), using week {max_week_candidate - 1}"
-                            )
-                            return max_week_candidate - 1
+                    # Both teams at 0 means game hasn't been played
+                    if home_score == 0 and away_score == 0:
+                        logger.info(
+                            f"Week {week_to_check} has unplayed games (0-0), using week {max_week_candidate - 1}"
+                        )
+                        return max_week_candidate - 1
 
-                    # All games appear to have valid scores
-                    logger.info(f"Week {current_week} appears complete, including it")
-                    return max_week_candidate
-                else:
-                    # No box scores available, week hasn't started
-                    logger.info(
-                        f"No box scores for week {current_week}, using week {max_week_candidate - 1}"
-                    )
-                    return max_week_candidate - 1
+                    # Very low scores might indicate incomplete/in-progress games
+                    # But we need at least one team to have scored something
+                    if home_score > 0 and away_score > 0:
+                        # Both teams have scored, so at least some games are complete
+                        continue
+                    elif home_score == 0 or away_score == 0:
+                        # One team at 0 while the other has points likely means incomplete
+                        logger.info(
+                            f"Week {week_to_check} appears in progress (partial scores), using week {max_week_candidate - 1}"
+                        )
+                        return max_week_candidate - 1
 
-            except Exception as e:
-                # If we can't check, assume it's incomplete to be safe
+                # All games appear to have valid scores
                 logger.info(
-                    f"Unable to verify week {current_week} ({e}), using week {max_week_candidate - 1}"
+                    f"Week {week_to_check} appears complete, using week {max_week_candidate}"
+                )
+                return max_week_candidate
+            else:
+                # No box scores available, week hasn't started
+                logger.info(
+                    f"No box scores for week {week_to_check}, using week {max_week_candidate - 1}"
                 )
                 return max_week_candidate - 1
 
-        return max_week_candidate
+        except Exception as e:
+            # If we can't check, assume it's incomplete to be safe
+            logger.info(
+                f"Unable to verify week {week_to_check} ({e}), using week {max_week_candidate - 1}"
+            )
+            return max_week_candidate - 1
 
     def _extract_week_games(
         self, league: League, week: int, division_name: str
@@ -670,14 +705,15 @@ class ESPNService:
             >>> # Playoffs: Week 15, reg_season_count=14
             >>> service.is_in_playoffs(league)  # True
         """
-        return league.current_week > league.settings.reg_season_count
+        return bool(league.current_week > league.settings.reg_season_count)
 
-    def get_playoff_round(self, league: League) -> str:
+    def get_playoff_round(self, league: League, week: int | None = None) -> str:
         """
-        Determine the current playoff round for a league.
+        Determine the playoff round for a league based on a specific week.
 
         Args:
             league: ESPN League object
+            week: Week number to check (uses league.current_week if None)
 
         Returns:
             Playoff round name: "Semifinals", "Finals", or "Championship Week"
@@ -687,12 +723,16 @@ class ESPNService:
 
         Examples:
             >>> # Week 15 (first playoff week)
-            >>> service.get_playoff_round(league)  # "Semifinals"
+            >>> service.get_playoff_round(league, 15)  # "Semifinals"
             >>> # Week 16 (second playoff week)
-            >>> service.get_playoff_round(league)  # "Finals"
+            >>> service.get_playoff_round(league, 16)  # "Finals"
             >>> # Week 17 (championship week)
-            >>> service.get_playoff_round(league)  # "Championship Week"
+            >>> service.get_playoff_round(league, 17)  # "Championship Week"
         """
+        # Use provided week or fallback to league's current week
+        check_week = week if week is not None else league.current_week
+
+        # Verify league is in playoffs based on ESPN's current week
         if not self.is_in_playoffs(league):
             raise ESPNAPIError(
                 f"League is not in playoffs. Current week: {league.current_week}, "
@@ -700,8 +740,8 @@ class ESPNService:
                 league_id=league.league_id,
             )
 
-        # Calculate which playoff week we're in
-        playoff_week = league.current_week - league.settings.reg_season_count
+        # Calculate which playoff week we're checking
+        playoff_week = check_week - league.settings.reg_season_count
 
         if playoff_week == 1:
             return "Semifinals"
@@ -711,7 +751,7 @@ class ESPNService:
             return "Championship Week"
         else:
             raise ESPNAPIError(
-                f"Unexpected playoff week: {playoff_week} (current week: {league.current_week}, "
+                f"Unexpected playoff week: {playoff_week} (week: {check_week}, "
                 f"regular season: {league.settings.reg_season_count})",
                 league_id=league.league_id,
             )
@@ -767,17 +807,17 @@ class ESPNService:
         for league in leagues[1:]:
             if self.is_in_playoffs(league) != first_in_playoffs:
                 # Build detailed error message showing playoff states
-                states: dict[str, str] = {}
+                playoff_states: dict[str, str] = {}
                 for lg in leagues:
                     league_name = lg.settings.name or f"League {lg.league_id}"
                     if self.is_in_playoffs(lg):
-                        states[league_name] = f"Week {lg.current_week} (Playoffs)"
+                        playoff_states[league_name] = f"Week {lg.current_week} (Playoffs)"
                     else:
-                        states[league_name] = f"Week {lg.current_week} (Regular Season)"
+                        playoff_states[league_name] = f"Week {lg.current_week} (Regular Season)"
 
                 error_msg = (
                     f"Divisions are out of sync (mixed playoff states). "
-                    f"States: {', '.join(f'{name}: {state}' for name, state in states.items())}"
+                    f"States: {', '.join(f'{name}: {state}' for name, state in playoff_states.items())}"
                 )
                 return False, error_msg
 
@@ -787,25 +827,25 @@ class ESPNService:
             for league in leagues[1:]:
                 if self.get_playoff_round(league) != first_round:
                     # Build detailed error message showing playoff rounds
-                    states: dict[str, str] = {}
+                    round_states: dict[str, str] = {}
                     for lg in leagues:
                         league_name = lg.settings.name or f"League {lg.league_id}"
                         round_name = self.get_playoff_round(lg)
-                        states[league_name] = f"Week {lg.current_week} ({round_name})"
+                        round_states[league_name] = f"Week {lg.current_week} ({round_name})"
 
                     error_msg = (
                         f"Divisions are out of sync (different playoff rounds). "
-                        f"States: {', '.join(f'{name}: {state}' for name, state in states.items())}"
+                        f"States: {', '.join(f'{name}: {state}' for name, state in round_states.items())}"
                     )
                     return False, error_msg
 
         return True, ""
 
     def extract_playoff_matchups(
-        self, league: League, division_name: str
+        self, league: League, division_name: str, playoff_week: int
     ) -> list[Any]:  # Returns list[PlayoffMatchup] but using Any to avoid circular import
         """
-        Extract playoff matchups from ESPN API for the current week.
+        Extract playoff matchups from ESPN API for a specific playoff week.
 
         Filters to winners bracket only (excludes consolation games) and extracts
         all matchup information including seeds, teams, owners, scores, and winners.
@@ -813,6 +853,7 @@ class ESPNService:
         Args:
             league: ESPN League object
             division_name: Name of the division (for matchup IDs)
+            playoff_week: The playoff week to extract matchups from (e.g., 15 for semifinals)
 
         Returns:
             List of PlayoffMatchup objects
@@ -822,19 +863,20 @@ class ESPNService:
 
         Examples:
             >>> # Week 15 (Semifinals)
-            >>> matchups = service.extract_playoff_matchups(league, "Division 1")
+            >>> matchups = service.extract_playoff_matchups(league, "Division 1", 15)
             >>> len(matchups)  # 2 semifinal matchups
             2
             >>> # Week 16 (Finals)
-            >>> matchups = service.extract_playoff_matchups(league, "Division 2")
+            >>> matchups = service.extract_playoff_matchups(league, "Division 2", 16)
             >>> len(matchups)  # 1 finals matchup
             1
         """
         from ..models import PlayoffMatchup
 
         try:
-            # Get box scores for current week
-            box_scores = league.box_scores(league.current_week)
+            # Get box scores for the specified playoff week
+            # This uses the tool's calculated current_week, not league.current_week
+            box_scores = league.box_scores(playoff_week)
 
             # Filter to winners bracket playoff games only
             playoff_box_scores = [
@@ -928,7 +970,7 @@ class ESPNService:
             ) from e
 
     def build_playoff_bracket(
-        self, league: League, division_name: str
+        self, league: League, division_name: str, playoff_week: int
     ) -> Any:  # Returns PlayoffBracket but using Any to avoid circular import
         """
         Build a complete playoff bracket for a division.
@@ -939,6 +981,7 @@ class ESPNService:
         Args:
             league: ESPN League object
             division_name: Name of the division
+            playoff_week: The playoff week to build bracket for (from self.current_week)
 
         Returns:
             PlayoffBracket object with all matchups
@@ -947,7 +990,7 @@ class ESPNService:
             ESPNAPIError: If bracket building fails
 
         Examples:
-            >>> bracket = service.build_playoff_bracket(league, "Division 1")
+            >>> bracket = service.build_playoff_bracket(league, "Division 1", 15)
             >>> bracket.round  # "Semifinals" or "Finals"
             "Semifinals"
             >>> bracket.week
@@ -958,16 +1001,14 @@ class ESPNService:
         from ..models import PlayoffBracket
 
         try:
-            # Get playoff round
-            playoff_round = self.get_playoff_round(league)
+            # Get playoff round based on the specific week we're reporting on
+            playoff_round = self.get_playoff_round(league, playoff_week)
 
-            # Extract matchups
-            matchups = self.extract_playoff_matchups(league, division_name)
+            # Extract matchups for the specific playoff week
+            matchups = self.extract_playoff_matchups(league, division_name, playoff_week)
 
-            # Create bracket
-            bracket = PlayoffBracket(
-                round=playoff_round, week=league.current_week, matchups=matchups
-            )
+            # Create bracket with the playoff week we're reporting on
+            bracket = PlayoffBracket(round=playoff_round, week=playoff_week, matchups=matchups)
 
             logger.info(
                 f"Built {playoff_round} bracket for {division_name}: {len(matchups)} matchup(s)"
@@ -1218,13 +1259,19 @@ class ESPNService:
 
         # Extract playoff bracket if in playoffs
         playoff_bracket = None
-        if self.is_in_playoffs(league):
+        # Check if the week we're displaying (self.current_week) is in playoffs
+        # Not league.current_week, which may be different when using --week override
+        if self.current_week is not None and self.current_week > league.settings.reg_season_count:
             try:
-                playoff_round = self.get_playoff_round(league)
+                # Get playoff round based on self.current_week (last complete week)
+                playoff_round = self.get_playoff_round(league, self.current_week)
                 # Only build bracket for Semifinals and Finals (not Championship Week)
                 if playoff_round in ("Semifinals", "Finals"):
                     logger.info(f"Building playoff bracket for {playoff_round}")
-                    playoff_bracket = self.build_playoff_bracket(league, league_name)
+                    # Use self.current_week (last complete week) for bracket extraction
+                    playoff_bracket = self.build_playoff_bracket(
+                        league, league_name, self.current_week
+                    )
                 else:
                     logger.info("Championship Week detected - no bracket needed")
             except Exception as e:

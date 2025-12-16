@@ -89,8 +89,8 @@ def test_extract_playoff_matchups_semifinals():
     # Create mock league (Week 15 = Semifinals)
     league = create_mock_league(123456, "Test League", 15, 14, box_scores)
 
-    # Extract matchups
-    matchups = service.extract_playoff_matchups(league, "Division 1")
+    # Extract matchups for Week 15 (Semifinals)
+    matchups = service.extract_playoff_matchups(league, "Division 1", playoff_week=15)
 
     # Validate
     assert len(matchups) == 2, f"Expected 2 matchups, got {len(matchups)}"
@@ -143,8 +143,8 @@ def test_extract_playoff_matchups_finals():
     # Create mock league (Week 16 = Finals)
     league = create_mock_league(123456, "Test League", 16, 14, box_scores)
 
-    # Extract matchups
-    matchups = service.extract_playoff_matchups(league, "Division 1")
+    # Extract matchups for Week 16
+    matchups = service.extract_playoff_matchups(league, "Division 1", playoff_week=16)
 
     # Validate
     assert len(matchups) == 1, f"Expected 1 matchup, got {len(matchups)}"
@@ -181,8 +181,8 @@ def test_extract_playoff_matchups_in_progress():
     # Create mock league
     league = create_mock_league(123456, "Test League", 15, 14, box_scores)
 
-    # Extract matchups
-    matchups = service.extract_playoff_matchups(league, "Division 1")
+    # Extract matchups for Week 15
+    matchups = service.extract_playoff_matchups(league, "Division 1", playoff_week=15)
 
     # Validate
     assert len(matchups) == 1
@@ -218,8 +218,8 @@ def test_extract_playoff_matchups_filters_consolation():
     # Create mock league
     league = create_mock_league(123456, "Test League", 15, 14, box_scores)
 
-    # Extract matchups
-    matchups = service.extract_playoff_matchups(league, "Division 1")
+    # Extract matchups for Week 15
+    matchups = service.extract_playoff_matchups(league, "Division 1", playoff_week=15)
 
     # Validate - should only have 1 matchup (consolation filtered out)
     assert len(matchups) == 1, f"Expected 1 matchup (consolation filtered), got {len(matchups)}"
@@ -251,8 +251,8 @@ def test_build_playoff_bracket():
     # Create mock league
     league = create_mock_league(123456, "Test League", 15, 14, box_scores)
 
-    # Build bracket
-    bracket = service.build_playoff_bracket(league, "Division 1")
+    # Build bracket for Week 15
+    bracket = service.build_playoff_bracket(league, "Division 1", playoff_week=15)
 
     # Validate
     assert isinstance(bracket, PlayoffBracket)
