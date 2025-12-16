@@ -8,6 +8,10 @@ on:
   # Allow manual triggering for testing
   workflow_dispatch:
     inputs:
+      week_number:
+        description: 'Week number to generate report for (1-18, leave empty for auto-detect)'
+        required: false
+        type: number
       email_recipients:
         description: 'Email recipients (comma-separated, leave empty to use default from secrets)'
         required: false
@@ -74,6 +78,17 @@ jobs:
           PRIVATE_FLAG=""
         fi
 
+        # Add week override if provided
+        if [ -n "${{ inputs.week_number }}" ]; then
+          WEEK_FLAG="--week ${{ inputs.week_number }}"
+          echo "Using week override: ${{ inputs.week_number }}"
+          echo "is_historical=true" >> $GITHUB_OUTPUT
+        else
+          WEEK_FLAG=""
+          echo "Using auto-detected current week"
+          echo "is_historical=false" >> $GITHUB_OUTPUT
+        fi
+
         # Build format args - workflow input takes precedence over hardcoded note
         if [ -n "${{ inputs.weekly_note }}" ]; then
           FORMAT_ARGS=(--format-arg "note=${{ inputs.weekly_note }}")
@@ -87,7 +102,7 @@ jobs:
         START_TIME=$(date +%s)
 
         # Generate all output formats in one execution using --output-dir
-        uv run ff-tracker --env $PRIVATE_FLAG --output-dir ./reports "${FORMAT_ARGS[@]}"
+        uv run ff-tracker --env $PRIVATE_FLAG $WEEK_FLAG --output-dir ./reports "${FORMAT_ARGS[@]}"
 
         # Calculate execution time
         END_TIME=$(date +%s)
@@ -145,7 +160,7 @@ jobs:
         secure: ${{ secrets.SMTP_SECURE || 'false' }}
         username: ${{ secrets.SMTP_USERNAME }}
         password: ${{ secrets.SMTP_PASSWORD }}
-        subject: "Weekly Fantasy Football Report - Week ${{ steps.generate-report.outputs.current_week }}"
+        subject: "${{ steps.generate-report.outputs.is_historical == 'true' && format('Historical Fantasy Football Report - Week {0}', steps.generate-report.outputs.current_week) || format('Weekly Fantasy Football Report - Week {0}', steps.generate-report.outputs.current_week) }}"
         from: "MM Fantasy Football League <${{ inputs.email_from || secrets.EMAIL_FROM }}>"
         to: ${{ inputs.email_from || secrets.EMAIL_FROM }}
         bcc: ${{ inputs.email_recipients || secrets.EMAIL_RECIPIENTS }}
@@ -155,7 +170,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: weekly-report-week-${{ steps.generate-report.outputs.current_week }}
+        name: ${{ steps.generate-report.outputs.is_historical == 'true' && format('historical-report-week-{0}', steps.generate-report.outputs.current_week) || format('weekly-report-week-{0}', steps.generate-report.outputs.current_week) }}
         path: |
           ./reports/standings.txt
           ./reports/standings.tsv
