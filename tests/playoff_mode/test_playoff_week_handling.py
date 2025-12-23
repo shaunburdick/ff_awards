@@ -75,17 +75,26 @@ def test_determine_max_week_regular_season():
     assert max_week == 14, f"Expected max_week=14 (complete regular season), got {max_week}"
     print("  ✓ Week 14 complete: max_week = 14")
 
-    # Mock Week 15 not started (current_week=15 means check Week 14 in playoffs logic)
-    # When current_week=15 and reg_season=14, it's playoffs so we check week_to_check=14
-    # If Week 14 is complete (has scores), should return 14
-    # If Week 14 is incomplete (0-0), should return 13
+    # When current_week=15 and reg_season=14, it's playoffs so we check week 15
+    # If Week 15 is incomplete (0-0), should fall back to 14
     league.current_week = 15
 
-    # Week 14 complete means we can show Week 14 data
-    league.box_scores = Mock(return_value=box_scores)  # Reuse complete Week 14 scores
+    # Mock Week 15 as incomplete (not started)
+    week15_incomplete = [create_mock_box_score(team1, team2, 0.0, 0.0, is_playoff=True)]
+
+    def mock_box_scores_week15(week: int):
+        if week == 14:
+            return box_scores  # Week 14 complete
+        elif week == 15:
+            return week15_incomplete  # Week 15 not started
+        return []
+
+    league.box_scores = mock_box_scores_week15
     max_week = service._determine_max_week(league, 15, 14)
-    assert max_week == 14, f"Expected max_week=14 (Week 14 complete), got {max_week}"
-    print("  ✓ Week 15 (but checking Week 14 complete): max_week = 14")
+    assert max_week == 14, (
+        f"Expected max_week=14 (Week 15 incomplete, fall back to 14), got {max_week}"
+    )
+    print("  ✓ Week 15 incomplete: max_week = 14 (falls back)")
 
     print("_determine_max_week (Regular Season): ALL TESTS PASSED ✅\n")
 

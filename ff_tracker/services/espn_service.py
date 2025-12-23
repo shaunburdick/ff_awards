@@ -320,12 +320,14 @@ class ESPNService:
         A week is considered incomplete if any game has both teams with 0 points.
 
         For regular season: Only processes up to reg_season_count.
-        For playoffs: Checks if previous playoff week is complete (e.g., if current_week=16,
-        checks if week 15 is complete before including it).
+        For playoffs: Checks if current playoff week is complete (e.g., if current_week=16,
+        checks if week 16 is complete; if not, falls back to week 15).
+
+        ESPN's current_week represents the active/current week in the league.
 
         Args:
             league: ESPN League object
-            current_week: The week ESPN reports as current
+            current_week: The week ESPN reports as current (active week)
             reg_season_count: Total number of regular season weeks
 
         Returns:
@@ -337,10 +339,10 @@ class ESPNService:
             week_to_check = current_week
             max_week_candidate = min(reg_season_count, current_week)
         else:
-            # Playoffs: check the previous week (current week - 1)
-            # We want to show completed playoff weeks, not upcoming ones
-            week_to_check = current_week - 1
-            max_week_candidate = week_to_check
+            # Playoffs: check current week first (ESPN's current_week represents the active week)
+            # If current week is complete, use it; if incomplete, fall back to previous week
+            week_to_check = current_week
+            max_week_candidate = current_week
 
         # Check if the week_to_check has been played
         try:
