@@ -1,6 +1,6 @@
 [project]
 name = "ff-awards"
-version = "3.0.0"
+version = "3.1.0"
 description = "A modern, type-safe CLI tool to analyze ESPN Fantasy Football leagues with automatic playoff bracket tracking and 5 season challenges across multiple divisions"
 readme = "README.md"
 license = { file = "LICENSE" }

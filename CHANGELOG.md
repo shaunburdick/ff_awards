@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2024-12-23 (Week 16 - Finals Fix)
+
+### Fixed
+- **Playoff Week Detection**: Fixed bug where tool showed Week 15 data on Tuesday after Week 16 Monday Night Football finished
+  - Changed `_determine_max_week()` to check current week first in playoffs, then fall back to previous week if incomplete
+  - Previously checked `current_week - 1` which missed completed playoff weeks
+  - Now correctly shows Week 16 Finals data on Tuesday Dec 23 instead of Week 15 Semifinals
+  - Handles both scenarios: Tuesday after MNF (shows just-completed week) and Tuesday before TNF (falls back)
+  - Updated tests to properly validate week-specific behavior
+
+### Changed
+- **GitHub Actions Workflow**: Disabled scheduled cron runs for end of 2024-2025 season
+  - Automatic Tuesday morning emails paused (can be re-enabled by uncommenting schedule)
+  - Manual `workflow_dispatch` trigger still available for testing and historical reports
+  - Updated hardcoded note for final week messaging
+
 ## [3.0.0] - 2025-12-09 (Week 15 - Playoffs Begin)
 
 ### Added - Playoff Mode 🏆
