@@ -1,11 +1,13 @@
 name: Weekly Fantasy Football Report
 
 on:
-  schedule:
-    # Run every Tuesday at 10:00 UTC (6am EDT or 5am EST)
-    - cron: '0 10 * * 2'
+  # Scheduled runs disabled for end of season (2024-2025)
+  # Uncomment the schedule below to re-enable for next season
+  # schedule:
+  #   # Run every Tuesday at 10:00 UTC (6am EDT or 5am EST)
+  #   - cron: '0 10 * * 2'
 
-  # Allow manual triggering for testing
+  # Allow manual triggering
   workflow_dispatch:
     inputs:
       week_number:
@@ -69,7 +71,7 @@ jobs:
       run: |
         # Hardcoded note for this week (set to empty string to disable)
         # Example: HARDCODED_NOTE="Playoffs start next week! 🏆"
-        HARDCODED_NOTE="Playoffs continue next week with the division finals. After the finals will be the championship game! 🏈"
+        HARDCODED_NOTE="Final week! Championship game next week to crown the overall champion! 🏆"
 
         # Determine if private leagues are needed
         if [ -n "${{ secrets.ESPN_SWID }}" ] && [ -n "${{ secrets.ESPN_S2 }}" ]; then
