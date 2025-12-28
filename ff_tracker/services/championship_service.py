@@ -32,6 +32,42 @@ logger = logging.getLogger(__name__)
 class ChampionshipService:
     """Service for Championship Week operations."""
 
+    # Standard fantasy football lineup position order
+    # This matches the typical ESPN league setup order
+    POSITION_ORDER = [
+        "QB",  # Quarterback
+        "RB",  # Running Back
+        "WR",  # Wide Receiver
+        "TE",  # Tight End
+        "FLEX",  # Flex position
+        "RB/WR/TE",  # ESPN's FLEX representation
+        "D/ST",  # Defense/Special Teams
+        "K",  # Kicker
+        "BE",  # Bench
+        "BN",  # Bench (alternate)
+        "IR",  # Injured Reserve
+    ]
+
+    @staticmethod
+    def _get_position_sort_key(position: str) -> int:
+        """
+        Get sort key for a roster position.
+
+        Returns the index in POSITION_ORDER, or a high number if not found.
+        This ensures positions are sorted in the standard fantasy lineup order.
+
+        Args:
+            position: Position string (e.g., "QB", "RB", "FLEX")
+
+        Returns:
+            Sort key (lower is earlier in lineup)
+        """
+        try:
+            return ChampionshipService.POSITION_ORDER.index(position)
+        except ValueError:
+            # Unknown positions sort to the end
+            return len(ChampionshipService.POSITION_ORDER)
+
     def get_division_winners(
         self, leagues: list[League], division_names: list[str]
     ) -> list[ChampionshipTeam]:
@@ -234,6 +270,10 @@ class ChampionshipService:
                 else:
                     bench.append(slot)
 
+            # Sort starters and bench by position order
+            starters.sort(key=lambda s: self._get_position_sort_key(s.position))
+            bench.sort(key=lambda s: self._get_position_sort_key(s.position))
+
             # Create ChampionshipRoster
             roster = ChampionshipRoster(
                 team=team,
@@ -331,6 +371,10 @@ class ChampionshipService:
                     projected_score += slot.projected_points
                 else:
                     bench.append(slot)
+
+            # Sort starters and bench by position order
+            starters.sort(key=lambda s: self._get_position_sort_key(s.position))
+            bench.sort(key=lambda s: self._get_position_sort_key(s.position))
 
             # Create ChampionshipRoster
             roster = ChampionshipRoster(
