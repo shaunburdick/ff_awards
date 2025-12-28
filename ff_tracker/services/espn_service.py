@@ -1343,12 +1343,3 @@ class ESPNService:
                 raise ESPNAPIError(f"Failed to load league {league_id}: {e}") from e
 
         return divisions
-
-    def __enter__(self) -> ESPNService:
-        """Context manager entry."""
-        return self
-
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Context manager exit - cleanup if needed."""
-        # No specific cleanup needed for ESPN API connections
-        pass

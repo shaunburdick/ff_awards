@@ -19,124 +19,16 @@ import logging
 import sys
 from pathlib import Path
 
-from .display import (
-    BaseFormatter,
-    ConsoleFormatter,
-    EmailFormatter,
-    JsonFormatter,
-    MarkdownFormatter,
-    SheetsFormatter,
+from .cli_utils import (
+    get_formatter_args,
+    parse_format_args,
+    parse_league_ids_from_arg,
+    setup_logging,
 )
+from .display import create_formatter
 from .exceptions import FFTrackerError
 from .models import WeeklyChallenge, WeeklyGameResult, WeeklyPlayerStats
 from .services import ChallengeCalculator, ESPNService, WeeklyChallengeCalculator
-
-
-def parse_league_ids_from_arg(league_id_arg: str) -> list[int]:
-    """
-    Parse league IDs from command line argument.
-
-    Args:
-        league_id_arg: Single ID or comma-separated IDs (e.g., "123456" or "123456,789012,345678")
-
-    Returns:
-        List of league IDs parsed from the argument.
-
-    Raises:
-        ValueError: If any league ID is not a valid integer.
-    """
-    try:
-        league_ids = [int(id_str.strip()) for id_str in league_id_arg.split(",") if id_str.strip()]
-        if not league_ids:
-            raise ValueError("No valid league IDs found")
-        return league_ids
-    except ValueError as e:
-        raise ValueError(
-            f"Error parsing league IDs: {e}. "
-            f"Format should be a single ID (123456) or comma-separated IDs (123456,789012,345678)"
-        ) from e
-
-
-def parse_format_args(args_list: list[str] | None) -> dict[str, dict[str, str]]:
-    """
-    Parse format arguments into nested dictionary structure.
-
-    Supports two syntaxes:
-    - Global: "key=value" -> {"_global": {"key": "value"}}
-    - Formatter-specific: "formatter.key=value" -> {"formatter": {"key": "value"}}
-
-    Global args apply to all formatters. Formatter-specific args override globals.
-
-    Args:
-        args_list: List of format argument strings from CLI
-
-    Returns:
-        Nested dict with "_global" key and formatter-specific keys
-
-    Raises:
-        ValueError: If argument format is invalid
-
-    Examples:
-        >>> parse_format_args(["note=Test", "email.accent_color=#ff0000"])
-        {"_global": {"note": "Test"}, "email": {"accent_color": "#ff0000"}}
-    """
-    if not args_list:
-        return {}
-
-    result: dict[str, dict[str, str]] = {"_global": {}}
-
-    for arg in args_list:
-        if "=" not in arg:
-            raise ValueError(
-                f"Invalid format argument: '{arg}'. "
-                f"Must be in format: key=value or formatter.key=value"
-            )
-
-        key, value = arg.split("=", 1)
-        key = key.strip()
-        value = value.strip()
-
-        if not key:
-            raise ValueError(f"Empty key in format argument: '{arg}'")
-
-        # Check if formatter-specific (contains dot)
-        if "." in key:
-            parts = key.split(".", 1)
-            if len(parts) != 2 or not parts[0] or not parts[1]:
-                raise ValueError(
-                    f"Invalid formatter-specific argument: '{arg}'. Must be: formatter.key=value"
-                )
-
-            formatter, arg_key = parts
-            if formatter not in result:
-                result[formatter] = {}
-            result[formatter][arg_key] = value
-        else:
-            # Global argument
-            result["_global"][key] = value
-
-    return result
-
-
-def get_formatter_args(
-    format_name: str, format_args_dict: dict[str, dict[str, str]]
-) -> dict[str, str]:
-    """
-    Get merged arguments for a specific formatter.
-
-    Merges global args with formatter-specific args, with formatter-specific
-    taking precedence.
-
-    Args:
-        format_name: Name of the formatter (e.g., "email", "json")
-        format_args_dict: Parsed format arguments dict
-
-    Returns:
-        Merged dictionary of arguments for this formatter
-    """
-    merged_args = dict(format_args_dict.get("_global", {}))
-    merged_args.update(format_args_dict.get(format_name, {}))
-    return merged_args
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -271,38 +163,11 @@ Examples:
     return parser
 
 
-def setup_logging(verbose: int = 0) -> None:
-    """Configure logging based on verbosity level.
-
-    Args:
-        verbose: 0 = WARNING only, 1 = INFO, 2+ = DEBUG
+def build_formatter(format_name: str, year: int, format_args_dict: dict[str, dict[str, str]]):
     """
-    if verbose == 0:
-        level = logging.WARNING
-    elif verbose == 1:
-        level = logging.INFO
-    else:  # verbose >= 2
-        level = logging.DEBUG
+    Build formatter instance with merged arguments.
 
-    # Configure root logger
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%H:%M:%S",
-    )
-
-    # Reduce noise from third-party libraries unless in debug mode
-    if verbose < 2:
-        logging.getLogger("urllib3").setLevel(logging.WARNING)
-        logging.getLogger("requests").setLevel(logging.WARNING)
-        logging.getLogger("espn_api").setLevel(logging.WARNING)
-
-
-def create_formatter(
-    format_name: str, year: int, format_args_dict: dict[str, dict[str, str]]
-) -> BaseFormatter:
-    """
-    Create formatter instance based on format name with merged arguments.
+    Wrapper around display.create_formatter() that handles argument merging.
 
     Args:
         format_name: Name of the formatter to create
@@ -318,18 +183,8 @@ def create_formatter(
     # Get merged args for this specific formatter
     merged_args = get_formatter_args(format_name, format_args_dict)
 
-    if format_name == "console":
-        return ConsoleFormatter(year, merged_args)
-    elif format_name == "sheets":
-        return SheetsFormatter(year, merged_args)
-    elif format_name == "email":
-        return EmailFormatter(year, merged_args)
-    elif format_name == "json":
-        return JsonFormatter(year, merged_args)
-    elif format_name == "markdown":
-        return MarkdownFormatter(year, merged_args)
-    else:
-        raise ValueError(f"Unknown format: {format_name}")
+    # Use factory to create formatter
+    return create_formatter(format_name, year, merged_args)
 
 
 def main() -> int:
@@ -380,51 +235,48 @@ def main() -> int:
         weekly_calculator = WeeklyChallengeCalculator()
 
         # Connect to ESPN and extract data (single API call)
-        with espn_service:
-            divisions = espn_service.load_all_divisions()
-            challenges = challenge_calculator.calculate_all_challenges(divisions)
+        divisions = espn_service.load_all_divisions()
+        challenges = challenge_calculator.calculate_all_challenges(divisions)
 
-            # Check if Championship Week and build leaderboard
-            championship = None
-            if divisions and divisions[0].is_playoff_mode:
-                # We're in playoffs - check if Championship Week
-                # Reconnect to first league to check playoff round
-                test_league = espn_service.connect_to_league(config.league_ids[0])
+        # Check if Championship Week and build leaderboard
+        championship = None
+        if divisions and divisions[0].is_playoff_mode:
+            # We're in playoffs - check if Championship Week
+            # Reconnect to first league to check playoff round
+            test_league = espn_service.connect_to_league(config.league_ids[0])
+            try:
+                playoff_round = espn_service.get_playoff_round(test_league)
+                if playoff_round == "Championship Week":
+                    # Build championship leaderboard
+                    logging.info("Championship Week detected - building leaderboard")
+                    all_leagues = [espn_service.connect_to_league(lid) for lid in config.league_ids]
+                    division_names = [div.name for div in divisions]
+                    championship = espn_service.build_championship_leaderboard(
+                        all_leagues, division_names, test_league.current_week
+                    )
+            except Exception as e:
+                logging.warning(f"Could not build championship leaderboard: {e}")
+                # Continue without championship - not fatal
+
+        # Calculate weekly challenges if we have weekly data
+        weekly_challenges: list[WeeklyChallenge] = []
+        if espn_service.current_week and espn_service.current_week > 0:
+            # Combine all weekly games and players from all divisions
+            all_weekly_games: list[WeeklyGameResult] = []
+            all_weekly_players: list[WeeklyPlayerStats] = []
+            for division in divisions:
+                all_weekly_games.extend(division.weekly_games)
+                all_weekly_players.extend(division.weekly_players)
+
+            # Calculate weekly challenges if we have data
+            if all_weekly_games or all_weekly_players:
                 try:
-                    playoff_round = espn_service.get_playoff_round(test_league)
-                    if playoff_round == "Championship Week":
-                        # Build championship leaderboard
-                        logging.info("Championship Week detected - building leaderboard")
-                        all_leagues = [
-                            espn_service.connect_to_league(lid) for lid in config.league_ids
-                        ]
-                        division_names = [div.name for div in divisions]
-                        championship = espn_service.build_championship_leaderboard(
-                            all_leagues, division_names, test_league.current_week
-                        )
+                    weekly_challenges = weekly_calculator.calculate_all_weekly_challenges(
+                        all_weekly_games, all_weekly_players, espn_service.current_week
+                    )
                 except Exception as e:
-                    logging.warning(f"Could not build championship leaderboard: {e}")
-                    # Continue without championship - not fatal
-
-            # Calculate weekly challenges if we have weekly data
-            weekly_challenges: list[WeeklyChallenge] = []
-            if espn_service.current_week and espn_service.current_week > 0:
-                # Combine all weekly games and players from all divisions
-                all_weekly_games: list[WeeklyGameResult] = []
-                all_weekly_players: list[WeeklyPlayerStats] = []
-                for division in divisions:
-                    all_weekly_games.extend(division.weekly_games)
-                    all_weekly_players.extend(division.weekly_players)
-
-                # Calculate weekly challenges if we have data
-                if all_weekly_games or all_weekly_players:
-                    try:
-                        weekly_challenges = weekly_calculator.calculate_all_weekly_challenges(
-                            all_weekly_games, all_weekly_players, espn_service.current_week
-                        )
-                    except Exception as e:
-                        logging.warning(f"Could not calculate weekly challenges: {e}")
-                        # Continue without weekly challenges - not fatal
+                    logging.warning(f"Could not calculate weekly challenges: {e}")
+                    # Continue without weekly challenges - not fatal
 
         # Handle output based on mode
         if args.output_dir:
@@ -443,7 +295,7 @@ def main() -> int:
 
             # Generate each format and write to file
             for format_name, file_path in format_files.items():
-                formatter = create_formatter(format_name, config.year, format_args_dict)
+                formatter = build_formatter(format_name, config.year, format_args_dict)
                 output = formatter.format_output(
                     divisions,
                     challenges,
@@ -457,7 +309,7 @@ def main() -> int:
             return 0
         else:
             # Single output mode: print to stdout
-            formatter = create_formatter(args.format, config.year, format_args_dict)
+            formatter = build_formatter(args.format, config.year, format_args_dict)
             output = formatter.format_output(
                 divisions,
                 challenges,

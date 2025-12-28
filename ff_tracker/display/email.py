@@ -25,6 +25,7 @@ from collections.abc import Sequence
 from importlib.metadata import version
 
 from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, WeeklyChallenge
+from ..models.championship import ChampionshipRoster
 from .base import BaseFormatter
 
 
@@ -57,7 +58,7 @@ class EmailFormatter(BaseFormatter):
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
-        championship_rosters: Sequence | None = None,
+        championship_rosters: Sequence[ChampionshipRoster] | None = None,
     ) -> str:
         """Format complete output for mobile-friendly HTML email."""
         # Get format arguments

@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, WeeklyChallenge
+from ..models.championship import ChampionshipRoster
 from .base import BaseFormatter
 
 
@@ -39,7 +40,7 @@ class SheetsFormatter(BaseFormatter):
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
-        championship_rosters: Sequence | None = None,
+        championship_rosters: Sequence[ChampionshipRoster] | None = None,
     ) -> str:
         """Format complete output for Google Sheets TSV."""
         output_lines: list[str] = []

@@ -11,18 +11,23 @@ This package provides formatters for different output formats:
 All formatters implement the BaseFormatter protocol for consistent interface.
 """
 
-from .base import BaseFormatter
+from .base import BaseFormatter, ReportContext, ReportMode
 from .console import ConsoleFormatter
 from .email import EmailFormatter
+from .factory import create_formatter, get_available_formats
 from .json import JsonFormatter
 from .markdown import MarkdownFormatter
 from .sheets import SheetsFormatter
 
 __all__ = [
-    'BaseFormatter',
-    'ConsoleFormatter',
-    'EmailFormatter',
-    'JsonFormatter',
-    'MarkdownFormatter',
-    'SheetsFormatter',
+    "BaseFormatter",
+    "ConsoleFormatter",
+    "EmailFormatter",
+    "JsonFormatter",
+    "MarkdownFormatter",
+    "SheetsFormatter",
+    "ReportContext",
+    "ReportMode",
+    "create_formatter",
+    "get_available_formats",
 ]

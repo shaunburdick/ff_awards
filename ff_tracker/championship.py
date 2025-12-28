@@ -27,14 +27,14 @@ import logging
 import sys
 from pathlib import Path
 
-from .config import create_config
-from .display import (
-    ConsoleFormatter,
-    EmailFormatter,
-    JsonFormatter,
-    MarkdownFormatter,
-    SheetsFormatter,
+from .cli_utils import (
+    get_formatter_args,
+    parse_format_args,
+    parse_league_ids_from_arg,
+    setup_logging,
 )
+from .config import create_config
+from .display import create_formatter
 from .exceptions import FFTrackerError
 from .services.championship_service import ChampionshipService
 from .services.espn_service import ESPNService
@@ -42,30 +42,6 @@ from .services.roster_validator import RosterValidator
 
 # Logger for this module
 logger = logging.getLogger(__name__)
-
-
-def parse_league_ids_from_arg(league_id_arg: str) -> list[int]:
-    """
-    Parse league IDs from command line argument.
-
-    Args:
-        league_id_arg: Single ID or comma-separated IDs
-
-    Returns:
-        List of league IDs
-
-    Raises:
-        ValueError: If league IDs are invalid
-    """
-    try:
-        league_ids = [int(id_str.strip()) for id_str in league_id_arg.split(",") if id_str.strip()]
-        if not league_ids:
-            raise ValueError("No valid league IDs found")
-        return league_ids
-    except ValueError as e:
-        raise ValueError(
-            f"Error parsing league IDs: {e}. Format should be: 123456 or 123456,789012,345678"
-        ) from e
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -152,6 +128,14 @@ Environment Variables:
     )
 
     parser.add_argument(
+        "--format-arg",
+        action="append",
+        dest="format_args",
+        metavar="KEY=VALUE",
+        help="Pass optional arguments to formatters (can be specified multiple times). Same syntax as ff-tracker.",
+    )
+
+    parser.add_argument(
         "--output-dir",
         type=Path,
         help="Directory to write all output formats. When specified, generates all formats automatically.",
@@ -171,16 +155,6 @@ Environment Variables:
     return parser
 
 
-def setup_logging(verbose: bool = False) -> None:
-    """Configure logging based on verbosity."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
-
 def mode_leaderboard(
     service: ChampionshipService,
     leagues: list,
@@ -188,6 +162,7 @@ def mode_leaderboard(
     week: int,
     output_format: str,
     year: int,
+    format_args_dict: dict[str, dict[str, str]] | None = None,
 ) -> None:
     """
     Display championship leaderboard with detailed rosters.
@@ -199,6 +174,7 @@ def mode_leaderboard(
         week: Championship week number
         output_format: Output format name
         year: Fantasy season year
+        format_args_dict: Parsed format arguments dictionary
     """
     logger.debug(f"Building championship leaderboard for Week {week}")
 
@@ -209,8 +185,11 @@ def mode_leaderboard(
     winners = service.get_division_winners(leagues, division_names)
     rosters = [service.get_roster(league, winner, week) for winner, league in zip(winners, leagues)]
 
+    # Get merged args for this specific formatter
+    merged_args = get_formatter_args(output_format, format_args_dict or {})
+
     # Format and display output using the standard formatter
-    formatter = get_formatter(output_format, year)
+    formatter = get_formatter(output_format, year, merged_args)
     output = formatter.format_output(
         divisions=[],  # No regular season data in championship mode
         challenges=[],  # No season challenges in championship mode
@@ -398,29 +377,19 @@ def mode_validate(
         )
 
 
-def get_formatter(format_name: str, year: int):
+def get_formatter(format_name: str, year: int, format_args: dict[str, str] | None = None):
     """
     Get formatter instance by name.
 
     Args:
         format_name: Name of the formatter (console, sheets, email, json, markdown)
         year: Fantasy season year
+        format_args: Optional formatter arguments
 
     Returns:
         Formatter instance
     """
-    formatters = {
-        "console": ConsoleFormatter,
-        "sheets": SheetsFormatter,
-        "email": EmailFormatter,
-        "json": JsonFormatter,
-        "markdown": MarkdownFormatter,
-    }
-    formatter_class = formatters.get(format_name)
-    if not formatter_class:
-        raise ValueError(f"Unknown format: {format_name}")
-
-    return formatter_class(year)
+    return create_formatter(format_name, year, format_args)
 
 
 def main() -> int:
@@ -428,8 +397,15 @@ def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
 
-    # Setup logging
-    setup_logging(args.verbose)
+    # Setup logging (convert boolean verbose to int for unified function)
+    setup_logging(1 if args.verbose else 0)
+
+    # Parse format arguments
+    format_args_dict = (
+        parse_format_args(args.format_args)
+        if hasattr(args, "format_args") and args.format_args
+        else {}
+    )
 
     try:
         # Validate league IDs
@@ -512,7 +488,8 @@ def main() -> int:
 
                 # Generate each format and write to file
                 for format_name, file_path in format_files.items():
-                    formatter = get_formatter(format_name, config.year)
+                    merged_args = get_formatter_args(format_name, format_args_dict)
+                    formatter = get_formatter(format_name, config.year, merged_args)
                     output = formatter.format_output(
                         divisions=[],
                         challenges=[],
@@ -534,6 +511,7 @@ def main() -> int:
                     args.week,
                     args.format,
                     config.year,
+                    format_args_dict,
                 )
         elif args.mode == "check-rosters":
             mode_check_rosters(

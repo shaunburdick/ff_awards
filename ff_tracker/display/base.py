@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Protocol
 
 from ..models import (
@@ -21,28 +23,96 @@ from ..models import (
 from ..models.championship import ChampionshipRoster
 
 
+class ReportMode(Enum):
+    """Report generation mode - determines which data sections to display."""
+
+    REGULAR = "regular"  # Regular season with challenges and standings
+    PLAYOFF = "playoff"  # Playoff mode with brackets (Weeks 15-16)
+    CHAMPIONSHIP = "championship"  # Championship week with leaderboard (Week 17)
+
+
+@dataclass
+class ReportContext:
+    """
+    Context object containing all data needed for report formatting.
+
+    This dataclass encapsulates all the parameters previously passed to
+    format_output(), reducing method signatures from 6 parameters to 1
+    and making the mode detection explicit.
+
+    Attributes:
+        mode: Report generation mode (regular/playoff/championship)
+        year: Fantasy season year
+        current_week: Current fantasy week number
+        divisions: List of division data (empty for championship mode)
+        challenges: List of season challenge results (empty for championship mode)
+        weekly_challenges: List of weekly challenge results (None for championship)
+        championship: Championship leaderboard (None for regular/playoff modes)
+        championship_rosters: Detailed rosters for championship teams (None for regular/playoff)
+    """
+
+    mode: ReportMode
+    year: int
+    current_week: int | None = None
+    divisions: Sequence[DivisionData] = field(default_factory=list)
+    challenges: Sequence[ChallengeResult] = field(default_factory=list)
+    weekly_challenges: Sequence[WeeklyChallenge] | None = None
+    championship: ChampionshipLeaderboard | None = None
+    championship_rosters: Sequence[ChampionshipRoster] | None = None
+
+    def is_regular_season(self) -> bool:
+        """Check if this is a regular season report."""
+        return self.mode == ReportMode.REGULAR
+
+    def is_playoff_mode(self) -> bool:
+        """Check if this is a playoff report."""
+        return self.mode == ReportMode.PLAYOFF
+
+    def is_championship_mode(self) -> bool:
+        """Check if this is a championship report."""
+        return self.mode == ReportMode.CHAMPIONSHIP
+
+    def has_weekly_challenges(self) -> bool:
+        """Check if weekly challenges data is available."""
+        return self.weekly_challenges is not None and len(self.weekly_challenges) > 0
+
+    def has_championship_data(self) -> bool:
+        """Check if championship data is available."""
+        return self.championship is not None
+
+
 class OutputFormatter(Protocol):
     """Protocol for output formatters."""
 
     def format_output(
         self,
-        divisions: Sequence[DivisionData],
-        challenges: Sequence[ChallengeResult],
+        divisions: Sequence[DivisionData] | None = None,
+        challenges: Sequence[ChallengeResult] | None = None,
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
         championship_rosters: Sequence[ChampionshipRoster] | None = None,
+        context: ReportContext | None = None,
     ) -> str:
         """
         Format the complete output for display.
 
+        This method supports two calling conventions for backward compatibility:
+
+        1. New style (recommended) - pass context object:
+           formatter.format_output(context=report_context)
+
+        2. Old style (deprecated) - pass individual parameters:
+           formatter.format_output(divisions, challenges, weekly_challenges, ...)
+
         Args:
-            divisions: List of division data
-            challenges: List of season challenge results
-            weekly_challenges: List of weekly challenge results (optional)
-            current_week: Current fantasy week number
-            championship: Championship leaderboard (optional, for Championship Week only)
-            championship_rosters: Detailed rosters for championship teams (optional)
+            divisions: List of division data (deprecated - use context)
+            challenges: List of season challenge results (deprecated - use context)
+            weekly_challenges: List of weekly challenge results (deprecated - use context)
+            current_week: Current fantasy week number (deprecated - use context)
+            championship: Championship leaderboard (deprecated - use context)
+            championship_rosters: Detailed rosters for championship teams (deprecated - use context)
+            context: ReportContext object containing all report data (new style)
 
         Returns:
             Formatted output string
@@ -126,17 +196,56 @@ class BaseFormatter(ABC):
         except ValueError:
             return default
 
+    def _build_context_from_params(
+        self,
+        divisions: Sequence[DivisionData] | None,
+        challenges: Sequence[ChallengeResult] | None,
+        weekly_challenges: Sequence[WeeklyChallenge] | None,
+        current_week: int | None,
+        championship: ChampionshipLeaderboard | None,
+        championship_rosters: Sequence[ChampionshipRoster] | None,
+    ) -> ReportContext:
+        """
+        Build ReportContext from individual parameters (backward compatibility).
+
+        This helper converts old-style parameter calls to the new context object.
+        """
+        # Determine mode based on provided data
+        if championship is not None:
+            mode = ReportMode.CHAMPIONSHIP
+        elif divisions and any(d.is_playoff_mode for d in divisions):
+            mode = ReportMode.PLAYOFF
+        else:
+            mode = ReportMode.REGULAR
+
+        return ReportContext(
+            mode=mode,
+            year=self.year,
+            current_week=current_week,
+            divisions=divisions or [],
+            challenges=challenges or [],
+            weekly_challenges=weekly_challenges,
+            championship=championship,
+            championship_rosters=championship_rosters,
+        )
+
     @abstractmethod
     def format_output(
         self,
-        divisions: Sequence[DivisionData],
-        challenges: Sequence[ChallengeResult],
+        divisions: Sequence[DivisionData] | None = None,
+        challenges: Sequence[ChallengeResult] | None = None,
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
         championship_rosters: Sequence[ChampionshipRoster] | None = None,
+        context: ReportContext | None = None,
     ) -> str:
-        """Format the complete output for display."""
+        """
+        Format the complete output for display.
+
+        Supports both old-style (individual parameters) and new-style (context object).
+        Subclasses should implement this method using the context object.
+        """
         pass
 
     def _get_sorted_teams_by_division(self, division: DivisionData) -> list[TeamStats]:

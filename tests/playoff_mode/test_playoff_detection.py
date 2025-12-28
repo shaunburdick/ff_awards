@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from unittest.mock import Mock
 
+import pytest
+
 from ff_tracker.config import FFTrackerConfig
 from ff_tracker.exceptions import ESPNAPIError
 from ff_tracker.services.espn_service import ESPNService
@@ -83,21 +85,15 @@ def test_get_playoff_round():
 
     # Error: Not in playoffs
     league_reg = create_mock_league(123456, "Test League", current_week=14, reg_season_count=14)
-    try:
+    with pytest.raises(ESPNAPIError, match="not in playoffs"):
         service.get_playoff_round(league_reg)
-        assert False, "Should have raised ESPNAPIError"
-    except ESPNAPIError as e:
-        assert "not in playoffs" in str(e)
-        print("  ✓ Week 14: Raises error (not in playoffs)")
+    print("  ✓ Week 14: Raises error (not in playoffs)")
 
     # Error: Unexpected playoff week
     league_bad = create_mock_league(123456, "Test League", current_week=18, reg_season_count=14)
-    try:
+    with pytest.raises(ESPNAPIError, match="Unexpected playoff week"):
         service.get_playoff_round(league_bad)
-        assert False, "Should have raised ESPNAPIError"
-    except ESPNAPIError as e:
-        assert "Unexpected playoff week" in str(e)
-        print("  ✓ Week 18: Raises error (unexpected week)")
+    print("  ✓ Week 18: Raises error (unexpected week)")
 
     print("get_playoff_round: ALL TESTS PASSED ✅\n")
 

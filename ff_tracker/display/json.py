@@ -4,6 +4,7 @@ import json
 from collections.abc import Sequence
 
 from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, Owner, WeeklyChallenge
+from ..models.championship import ChampionshipRoster
 from .base import BaseFormatter
 
 
@@ -46,7 +47,7 @@ class JsonFormatter(BaseFormatter):
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
-        championship_rosters: Sequence | None = None,
+        championship_rosters: Sequence[ChampionshipRoster] | None = None,
     ) -> str:
         """Format results as JSON string."""
         # Get format arguments

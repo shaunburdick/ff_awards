@@ -8,6 +8,8 @@ validation and error handling.
 
 from __future__ import annotations
 
+import pytest
+
 from ff_tracker.exceptions import DataValidationError, DivisionSyncError
 from ff_tracker.models import (
     ChampionshipEntry,
@@ -64,7 +66,7 @@ def test_playoff_matchup():
     print("  ✓ Valid in-progress matchup created")
 
     # Test validation - invalid seed
-    try:
+    with pytest.raises(DataValidationError, match=r"Seeds must be positive"):
         PlayoffMatchup(
             matchup_id="bad",
             round_name="Semifinal 1",
@@ -80,13 +82,10 @@ def test_playoff_matchup():
             winner_seed=0,
             division_name="Division 1",
         )
-        assert False, "Should have raised validation error"
-    except DataValidationError as e:
-        assert "Seeds must be positive" in str(e)
         print("  ✓ Invalid seed validation works")
 
     # Test validation - invalid winner
-    try:
+    with pytest.raises(DataValidationError, match=r"Winner must be one of the teams"):
         PlayoffMatchup(
             matchup_id="bad",
             round_name="Semifinal 1",
@@ -102,10 +101,197 @@ def test_playoff_matchup():
             winner_seed=1,
             division_name="Division 1",
         )
-        assert False, "Should have raised validation error"
-    except DataValidationError as e:
-        assert "Winner must be one of the teams" in str(e)
         print("  ✓ Invalid winner validation works")
+
+    # Test validation - negative score1
+    with pytest.raises(DataValidationError, match=r"Score1 cannot be negative"):
+        PlayoffMatchup(
+            matchup_id="bad",
+            round_name="Semifinal 1",
+            seed1=1,
+            team1_name="Team1",
+            owner1_name="Owner1",
+            score1=-10.0,  # Invalid
+            seed2=2,
+            team2_name="Team2",
+            owner2_name="Owner2",
+            score2=90.0,
+            winner_name="Team2",
+            winner_seed=2,
+            division_name="Division 1",
+        )
+        print("  ✓ Negative score1 validation works")
+
+    # Test validation - negative score2
+    with pytest.raises(DataValidationError, match=r"Score2 cannot be negative"):
+        PlayoffMatchup(
+            matchup_id="bad",
+            round_name="Semifinal 1",
+            seed1=1,
+            team1_name="Team1",
+            owner1_name="Owner1",
+            score1=100.0,
+            seed2=2,
+            team2_name="Team2",
+            owner2_name="Owner2",
+            score2=-5.0,  # Invalid
+            winner_name="Team1",
+            winner_seed=1,
+            division_name="Division 1",
+        )
+        print("  ✓ Negative score2 validation works")
+
+    # Test validation - invalid winner seed
+    with pytest.raises(DataValidationError, match=r"Winner seed must match one of the seeds"):
+        PlayoffMatchup(
+            matchup_id="bad",
+            round_name="Semifinal 1",
+            seed1=1,
+            team1_name="Team1",
+            owner1_name="Owner1",
+            score1=100.0,
+            seed2=2,
+            team2_name="Team2",
+            owner2_name="Owner2",
+            score2=90.0,
+            winner_name="Team1",
+            winner_seed=3,  # Invalid - doesn't match seed1 or seed2
+            division_name="Division 1",
+        )
+        print("  ✓ Invalid winner seed validation works")
+
+    # Test validation - empty matchup_id
+    with pytest.raises(DataValidationError, match=r"matchup_id cannot be empty"):
+        PlayoffMatchup(
+            matchup_id="  ",  # Invalid
+            round_name="Semifinal 1",
+            seed1=1,
+            team1_name="Team1",
+            owner1_name="Owner1",
+            score1=100.0,
+            seed2=2,
+            team2_name="Team2",
+            owner2_name="Owner2",
+            score2=90.0,
+            winner_name="Team1",
+            winner_seed=1,
+            division_name="Division 1",
+        )
+        print("  ✓ Empty matchup_id validation works")
+
+    # Test validation - empty round_name
+    with pytest.raises(DataValidationError, match=r"round_name cannot be empty"):
+        PlayoffMatchup(
+            matchup_id="bad",
+            round_name="  ",  # Invalid
+            seed1=1,
+            team1_name="Team1",
+            owner1_name="Owner1",
+            score1=100.0,
+            seed2=2,
+            team2_name="Team2",
+            owner2_name="Owner2",
+            score2=90.0,
+            winner_name="Team1",
+            winner_seed=1,
+            division_name="Division 1",
+        )
+        print("  ✓ Empty round_name validation works")
+
+    # Test validation - empty team1_name
+    with pytest.raises(DataValidationError, match=r"Team names cannot be empty"):
+        PlayoffMatchup(
+            matchup_id="bad",
+            round_name="Semifinal 1",
+            seed1=1,
+            team1_name="  ",  # Invalid
+            owner1_name="Owner1",
+            score1=100.0,
+            seed2=2,
+            team2_name="Team2",
+            owner2_name="Owner2",
+            score2=90.0,
+            winner_name=None,
+            winner_seed=None,
+            division_name="Division 1",
+        )
+        print("  ✓ Empty team1_name validation works")
+
+    # Test validation - empty team2_name
+    with pytest.raises(DataValidationError, match=r"Team names cannot be empty"):
+        PlayoffMatchup(
+            matchup_id="bad",
+            round_name="Semifinal 1",
+            seed1=1,
+            team1_name="Team1",
+            owner1_name="Owner1",
+            score1=100.0,
+            seed2=2,
+            team2_name="  ",  # Invalid
+            owner2_name="Owner2",
+            score2=90.0,
+            winner_name=None,
+            winner_seed=None,
+            division_name="Division 1",
+        )
+        print("  ✓ Empty team2_name validation works")
+
+    # Test validation - empty owner1_name
+    with pytest.raises(DataValidationError, match=r"Owner names cannot be empty"):
+        PlayoffMatchup(
+            matchup_id="bad",
+            round_name="Semifinal 1",
+            seed1=1,
+            team1_name="Team1",
+            owner1_name="  ",  # Invalid
+            score1=100.0,
+            seed2=2,
+            team2_name="Team2",
+            owner2_name="Owner2",
+            score2=90.0,
+            winner_name=None,
+            winner_seed=None,
+            division_name="Division 1",
+        )
+        print("  ✓ Empty owner1_name validation works")
+
+    # Test validation - empty owner2_name
+    with pytest.raises(DataValidationError, match=r"Owner names cannot be empty"):
+        PlayoffMatchup(
+            matchup_id="bad",
+            round_name="Semifinal 1",
+            seed1=1,
+            team1_name="Team1",
+            owner1_name="Owner1",
+            score1=100.0,
+            seed2=2,
+            team2_name="Team2",
+            owner2_name="  ",  # Invalid
+            score2=90.0,
+            winner_name=None,
+            winner_seed=None,
+            division_name="Division 1",
+        )
+        print("  ✓ Empty owner2_name validation works")
+
+    # Test validation - empty division_name
+    with pytest.raises(DataValidationError, match=r"division_name cannot be empty"):
+        PlayoffMatchup(
+            matchup_id="bad",
+            round_name="Semifinal 1",
+            seed1=1,
+            team1_name="Team1",
+            owner1_name="Owner1",
+            score1=100.0,
+            seed2=2,
+            team2_name="Team2",
+            owner2_name="Owner2",
+            score2=90.0,
+            winner_name=None,
+            winner_seed=None,
+            division_name="  ",  # Invalid
+        )
+        print("  ✓ Empty division_name validation works")
 
     print("PlayoffMatchup: ALL TESTS PASSED ✅\n")
 
@@ -160,40 +346,58 @@ def test_playoff_bracket():
     print("  ✓ Valid Finals bracket created (1 matchup)")
 
     # Test validation - wrong matchup count for Semifinals
-    try:
+    with pytest.raises(DataValidationError, match=r"Semifinals must have exactly 2 matchups"):
         PlayoffBracket(
             round="Semifinals",
             week=15,
             matchups=[matchup1],  # Should be 2
         )
-        assert False, "Should have raised validation error"
-    except DataValidationError as e:
-        assert "Semifinals must have exactly 2 matchups" in str(e)
         print("  ✓ Semifinals matchup count validation works")
 
     # Test validation - wrong matchup count for Finals
-    try:
+    with pytest.raises(DataValidationError, match=r"Finals must have exactly 1 matchup"):
         PlayoffBracket(
             round="Finals",
             week=16,
             matchups=[matchup1, matchup2],  # Should be 1
         )
-        assert False, "Should have raised validation error"
-    except DataValidationError as e:
-        assert "Finals must have exactly 1 matchup" in str(e)
         print("  ✓ Finals matchup count validation works")
 
     # Test validation - invalid round name
-    try:
+    with pytest.raises(DataValidationError, match=r"Round must be 'Semifinals' or 'Finals'"):
         PlayoffBracket(
             round="Championship",  # Invalid
             week=17,
             matchups=[matchup1],
         )
-        assert False, "Should have raised validation error"
-    except DataValidationError as e:
-        assert "Round must be 'Semifinals' or 'Finals'" in str(e)
         print("  ✓ Invalid round name validation works")
+
+    # Test validation - negative week
+    with pytest.raises(DataValidationError, match=r"Week must be positive"):
+        PlayoffBracket(
+            round="Finals",
+            week=-1,  # Invalid
+            matchups=[matchup1],
+        )
+        print("  ✓ Negative week validation works")
+
+    # Test validation - zero week
+    with pytest.raises(DataValidationError, match=r"Week must be positive"):
+        PlayoffBracket(
+            round="Finals",
+            week=0,  # Invalid
+            matchups=[matchup1],
+        )
+        print("  ✓ Zero week validation works")
+
+    # Test validation - empty matchups list
+    with pytest.raises(DataValidationError, match=r"PlayoffBracket must have at least one matchup"):
+        PlayoffBracket(
+            round="Finals",
+            week=16,
+            matchups=[],  # Invalid
+        )
+        print("  ✓ Empty matchups list validation works")
 
     print("PlayoffBracket: ALL TESTS PASSED ✅\n")
 
@@ -229,7 +433,7 @@ def test_championship_entry():
     print("  ✓ Valid runner-up entry created")
 
     # Test validation - champion flag mismatch with rank
-    try:
+    with pytest.raises(DataValidationError, match=r"Champion flag set but rank is 2"):
         ChampionshipEntry(
             rank=2,
             team_name="Bad Entry",
@@ -238,13 +442,10 @@ def test_championship_entry():
             score=150.0,
             is_champion=True,  # Invalid - rank != 1
         )
-        assert False, "Should have raised validation error"
-    except DataValidationError as e:
-        assert "Champion flag set but rank is 2" in str(e)
         print("  ✓ Champion flag validation works")
 
     # Test validation - rank 1 without champion flag
-    try:
+    with pytest.raises(DataValidationError, match=r"Rank is 1 but champion flag not set"):
         ChampionshipEntry(
             rank=1,
             team_name="Bad Entry",
@@ -253,10 +454,79 @@ def test_championship_entry():
             score=150.0,
             is_champion=False,  # Invalid - rank == 1
         )
-        assert False, "Should have raised validation error"
-    except DataValidationError as e:
-        assert "Rank is 1 but champion flag not set" in str(e)
         print("  ✓ Rank 1 champion flag validation works")
+
+    # Test validation - negative rank
+    with pytest.raises(DataValidationError, match=r"Rank must be positive"):
+        ChampionshipEntry(
+            rank=-1,  # Invalid
+            team_name="Bad Entry",
+            owner_name="Owner",
+            division_name="Division 1",
+            score=150.0,
+            is_champion=False,
+        )
+        print("  ✓ Negative rank validation works")
+
+    # Test validation - zero rank
+    with pytest.raises(DataValidationError, match=r"Rank must be positive"):
+        ChampionshipEntry(
+            rank=0,  # Invalid
+            team_name="Bad Entry",
+            owner_name="Owner",
+            division_name="Division 1",
+            score=150.0,
+            is_champion=False,
+        )
+        print("  ✓ Zero rank validation works")
+
+    # Test validation - negative score
+    with pytest.raises(DataValidationError, match=r"Score cannot be negative"):
+        ChampionshipEntry(
+            rank=2,
+            team_name="Bad Entry",
+            owner_name="Owner",
+            division_name="Division 1",
+            score=-10.0,  # Invalid
+            is_champion=False,
+        )
+        print("  ✓ Negative score validation works")
+
+    # Test validation - empty team_name
+    with pytest.raises(DataValidationError, match=r"team_name cannot be empty"):
+        ChampionshipEntry(
+            rank=2,
+            team_name="  ",  # Invalid
+            owner_name="Owner",
+            division_name="Division 1",
+            score=150.0,
+            is_champion=False,
+        )
+        print("  ✓ Empty team_name validation works")
+
+    # Test validation - empty owner_name
+    with pytest.raises(DataValidationError, match=r"owner_name cannot be empty"):
+        ChampionshipEntry(
+            rank=2,
+            team_name="Team Name",
+            owner_name="  ",  # Invalid
+            division_name="Division 1",
+            score=150.0,
+            is_champion=False,
+        )
+        print("  ✓ Empty owner_name validation works")
+
+    # Test validation - empty division_name
+    with pytest.raises(DataValidationError, match=r"division_name cannot be empty"):
+        ChampionshipEntry(
+            rank=2,
+            team_name="Team Name",
+            owner_name="Owner",
+            division_name="  ",  # Invalid
+            score=150.0,
+            is_champion=False,
+        )
+        print("  ✓ Empty division_name validation works")
 
     print("ChampionshipEntry: ALL TESTS PASSED ✅\n")
 
@@ -308,11 +578,8 @@ def test_championship_leaderboard():
         score=156.78,
         is_champion=False,
     )
-    try:
+    with pytest.raises(DataValidationError, match=r"ranked sequentially"):
         ChampionshipLeaderboard(week=17, entries=[entry1, bad_entry2])
-        assert False, "Should have raised validation error"
-    except DataValidationError as e:
-        assert "ranked sequentially" in str(e)
         print("  ✓ Sequential rank validation works")
 
     # Test validation - multiple champions
@@ -324,23 +591,56 @@ def test_championship_leaderboard():
         score=156.78,
         is_champion=True,  # Duplicate champion
     )
-    bad_entry_not_champion = ChampionshipEntry(
-        rank=2,
-        team_name="Other Team",
-        owner_name="Other",
-        division_name="Division 2",
-        score=145.0,
-        is_champion=False,
-    )
-    try:
+    # Will fail on rank validation first (ranks not sequential)
+    with pytest.raises(DataValidationError, match=r"ranked sequentially"):
         ChampionshipLeaderboard(
             week=17,
-            entries=[entry1, bad_champion2],  # Two champions
+            entries=[entry1, bad_champion2],  # Two champions with same rank
         )
-        assert False, "Should have raised validation error"
-    except DataValidationError as e:
-        assert "ranked sequentially" in str(e)  # Will fail on rank validation first
-        print("  ✓ Duplicate rank validation works")
+    print("  ✓ Duplicate rank validation works")
+
+    # Test validation - negative week
+    with pytest.raises(DataValidationError, match=r"Week must be positive"):
+        ChampionshipLeaderboard(
+            week=-1,  # Invalid
+            entries=[entry1, entry2],
+        )
+        print("  ✓ Negative week validation works")
+
+    # Test validation - zero week
+    with pytest.raises(DataValidationError, match=r"Week must be positive"):
+        ChampionshipLeaderboard(
+            week=0,  # Invalid
+            entries=[entry1, entry2],
+        )
+        print("  ✓ Zero week validation works")
+
+    # Test validation - empty entries list
+    with pytest.raises(
+        DataValidationError, match=r"ChampionshipLeaderboard must have at least one entry"
+    ):
+        ChampionshipLeaderboard(
+            week=17,
+            entries=[],  # Invalid
+        )
+        print("  ✓ Empty entries list validation works")
+
+    # Test validation - no champions (will fail in ChampionshipEntry validation)
+    with pytest.raises(DataValidationError, match=r"Rank is 1 but champion flag not set"):
+        # This will fail in ChampionshipEntry validation before ChampionshipLeaderboard validation
+        entry_no_champ = ChampionshipEntry(
+            rank=1,
+            team_name="Not Champion",
+            owner_name="Owner",
+            division_name="Division 1",
+            score=150.0,
+            is_champion=False,  # Rank 1 but not champion - will fail on ChampionshipEntry validation
+        )
+        ChampionshipLeaderboard(
+            week=17,
+            entries=[entry_no_champ],
+        )
+        print("  ✓ No champions validation works")
 
     print("ChampionshipLeaderboard: ALL TESTS PASSED ✅\n")
 
@@ -392,6 +692,7 @@ def test_division_data_extension():
         league_id=123456, name="Division 1", teams=[team], games=[], playoff_bracket=bracket
     )
     assert playoff_division.is_playoff_mode
+    assert playoff_division.playoff_bracket is not None
     assert playoff_division.playoff_bracket.round == "Finals"
     print("  ✓ Playoff mode: is_playoff_mode = True")
     print("  ✓ Playoff bracket accessible from DivisionData")
