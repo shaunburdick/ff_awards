@@ -46,6 +46,7 @@ class JsonFormatter(BaseFormatter):
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
+        championship_rosters: Sequence | None = None,
     ) -> str:
         """Format results as JSON string."""
         # Get format arguments
@@ -84,7 +85,7 @@ class JsonFormatter(BaseFormatter):
 
         # Add championship data if championship week
         if is_championship_week and championship:
-            championship_data = self._serialize_championship(championship)
+            championship_data = self._serialize_championship(championship, championship_rosters)
             data["championship"] = championship_data
 
         # Add weekly player highlights (filtered for playoffs)
@@ -210,13 +211,20 @@ class JsonFormatter(BaseFormatter):
             ],
         }
 
-    def _serialize_championship(self, championship: ChampionshipLeaderboard) -> dict[str, object]:
+    def _serialize_championship(
+        self, championship: ChampionshipLeaderboard, rosters: Sequence | None = None
+    ) -> dict[str, object]:
         """Serialize championship data to dictionary."""
         champion = championship.champion
 
-        return {
+        # Check if all games are complete
+        all_games_final = self._check_all_games_final(rosters) if rosters else False
+        status = "final" if all_games_final else "in_progress"
+
+        result: dict[str, object] = {
             "round": "Championship Week",
             "description": "Highest score wins overall championship",
+            "status": status,
             "leaderboard": [
                 {
                     "rank": entry.rank,
@@ -243,3 +251,34 @@ class JsonFormatter(BaseFormatter):
                 "score": champion.score,
             },
         }
+
+        # Add detailed rosters if provided
+        if rosters:
+            result["rosters"] = [
+                {
+                    "team_name": roster.team.team_name,
+                    "owner_name": roster.team.owner_name,
+                    "division": roster.team.division_name,
+                    "total_score": roster.total_score,
+                    "projected_score": roster.projected_score,
+                    "is_complete": roster.is_complete,
+                    "empty_slots": roster.empty_slots,
+                    "warnings": roster.warnings,
+                    "starters": [
+                        {
+                            "position": slot.position,
+                            "player_name": slot.player_name or "EMPTY",
+                            "player_team": slot.player_team,
+                            "actual_points": slot.actual_points,
+                            "projected_points": slot.projected_points,
+                            "game_status": slot.game_status,
+                            "injury_status": slot.injury_status,
+                            "is_bye": slot.is_bye,
+                        }
+                        for slot in roster.starters
+                    ],
+                }
+                for roster in rosters
+            ]
+
+        return result

@@ -9,6 +9,12 @@ from __future__ import annotations
 
 from .base import Validatable
 from .challenge import ChallengeResult
+from .championship import (
+    ChampionshipProgress,
+    ChampionshipRoster,
+    ChampionshipTeam,
+    RosterSlot,
+)
 from .division import DivisionData
 from .game import GameResult
 from .owner import Owner
@@ -29,6 +35,10 @@ __all__ = [
     "GameResult",
     "TeamStats",
     "ChallengeResult",
+    "ChampionshipProgress",
+    "ChampionshipRoster",
+    "ChampionshipTeam",
+    "RosterSlot",
     "DivisionData",
     "WeeklyGameResult",
     "WeeklyPlayerStats",

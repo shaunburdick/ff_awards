@@ -56,7 +56,7 @@ class ESPNService:
         try:
             from espn_api.football import League
 
-            logger.info(f"Connecting to league {league_id} (year {self.config.year})")
+            logger.debug(f"Connecting to league {league_id} (year {self.config.year})")
 
             if self.config.private:
                 if not self.config.espn_credentials:
@@ -73,7 +73,7 @@ class ESPNService:
             else:
                 league = League(league_id=league_id, year=self.config.year)
 
-            logger.info(f"Successfully connected to league {league_id}")
+            logger.debug(f"Successfully connected to league {league_id}")
             return league
 
         except Exception as e:
@@ -179,7 +179,7 @@ class ESPNService:
                 for temp_team in temp_teams
             ]
 
-            logger.info(f"Extracted {len(teams)} teams from {division_name}")
+            logger.debug(f"Extracted {len(teams)} teams from {division_name}")
             return teams
 
         except Exception as e:
@@ -276,7 +276,7 @@ class ESPNService:
                 # Store the requested week (for weekly data and playoff display)
                 if self.current_week is None:
                     self.current_week = requested_week
-                    logger.info(
+                    logger.debug(
                         f"Week override: {requested_week}. "
                         f"Processing season challenge games through week {max_week} (regular season cap). "
                         f"Weekly data will show week {requested_week}."
@@ -289,11 +289,11 @@ class ESPNService:
                 # This is the max_week we're actually processing, not ESPN's current_week
                 if self.current_week is None:
                     self.current_week = max_week
-                    logger.info(
+                    logger.debug(
                         f"Set current week to {max_week} (last complete week) from {division_name}"
                     )
 
-            logger.info(f"Processing weeks 1-{max_week} for {division_name}")
+            logger.debug(f"Processing weeks 1-{max_week} for {division_name}")
 
             # Process each week
             for week in range(1, max_week + 1):
@@ -304,7 +304,7 @@ class ESPNService:
                     logger.warning(f"Failed to process week {week} for {division_name}: {e}")
                     continue
 
-            logger.info(f"Extracted {len(games)} games from {division_name}")
+            logger.debug(f"Extracted {len(games)} games from {division_name}")
             return games
 
         except Exception as e:
@@ -355,7 +355,7 @@ class ESPNService:
 
                     # Both teams at 0 means game hasn't been played
                     if home_score == 0 and away_score == 0:
-                        logger.info(
+                        logger.debug(
                             f"Week {week_to_check} has unplayed games (0-0), using week {max_week_candidate - 1}"
                         )
                         return max_week_candidate - 1
@@ -367,26 +367,26 @@ class ESPNService:
                         continue
                     elif home_score == 0 or away_score == 0:
                         # One team at 0 while the other has points likely means incomplete
-                        logger.info(
+                        logger.debug(
                             f"Week {week_to_check} appears in progress (partial scores), using week {max_week_candidate - 1}"
                         )
                         return max_week_candidate - 1
 
                 # All games appear to have valid scores
-                logger.info(
+                logger.debug(
                     f"Week {week_to_check} appears complete, using week {max_week_candidate}"
                 )
                 return max_week_candidate
             else:
                 # No box scores available, week hasn't started
-                logger.info(
+                logger.debug(
                     f"No box scores for week {week_to_check}, using week {max_week_candidate - 1}"
                 )
                 return max_week_candidate - 1
 
         except Exception as e:
             # If we can't check, assume it's incomplete to be safe
-            logger.info(
+            logger.debug(
                 f"Unable to verify week {week_to_check} ({e}), using week {max_week_candidate - 1}"
             )
             return max_week_candidate - 1
@@ -559,7 +559,7 @@ class ESPNService:
                     logger.warning(f"Error processing box score for week {week}: {e}")
                     continue
 
-            logger.info(f"Extracted {len(weekly_games)} weekly game results for week {week}")
+            logger.debug(f"Extracted {len(weekly_games)} weekly game results for week {week}")
             return weekly_games
 
         except Exception as e:
@@ -626,7 +626,7 @@ class ESPNService:
                     logger.warning(f"Error processing player lineup for week {week}: {e}")
                     continue
 
-            logger.info(f"Extracted {len(weekly_players)} weekly player stats for week {week}")
+            logger.debug(f"Extracted {len(weekly_players)} weekly player stats for week {week}")
             return weekly_players
 
         except Exception as e:
@@ -1012,7 +1012,7 @@ class ESPNService:
             # Create bracket with the playoff week we're reporting on
             bracket = PlayoffBracket(round=playoff_round, week=playoff_week, matchups=matchups)
 
-            logger.info(
+            logger.debug(
                 f"Built {playoff_round} bracket for {division_name}: {len(matchups)} matchup(s)"
             )
 
@@ -1137,7 +1137,7 @@ class ESPNService:
                 is_champion=False,  # Will be set by leaderboard builder
             )
 
-            logger.info(
+            logger.debug(
                 f"Extracted championship entry for {division_name}: "
                 f"{winner_name} ({owner_name}) - Score: {champ_score}"
             )
@@ -1211,7 +1211,7 @@ class ESPNService:
             # Create leaderboard
             leaderboard = ChampionshipLeaderboard(week=championship_week, entries=ranked_entries)
 
-            logger.info(
+            logger.debug(
                 f"Built championship leaderboard: {leaderboard.champion.team_name} "
                 f"({leaderboard.champion.owner_name}) wins with {leaderboard.champion.score} points"
             )
@@ -1240,7 +1240,7 @@ class ESPNService:
         # Get league name from settings
         league_name = league.settings.name or f"League {league_id}"
 
-        logger.info(f"Loading data for {league_name}")
+        logger.debug(f"Loading data for {league_name}")
 
         # Extract teams and games
         teams = self.extract_teams(league, league_name)
@@ -1252,7 +1252,7 @@ class ESPNService:
 
         if self.current_week is not None and self.current_week > 0:
             try:
-                logger.info(f"Extracting weekly data for week {self.current_week}")
+                logger.debug(f"Extracting weekly data for week {self.current_week}")
                 weekly_games = self.extract_weekly_games(league, league_name, self.current_week)
                 weekly_players = self.extract_weekly_players(league, league_name, self.current_week)
             except Exception as e:
@@ -1269,13 +1269,13 @@ class ESPNService:
                 playoff_round = self.get_playoff_round(league, self.current_week)
                 # Only build bracket for Semifinals and Finals (not Championship Week)
                 if playoff_round in ("Semifinals", "Finals"):
-                    logger.info(f"Building playoff bracket for {playoff_round}")
+                    logger.debug(f"Building playoff bracket for {playoff_round}")
                     # Use self.current_week (last complete week) for bracket extraction
                     playoff_bracket = self.build_playoff_bracket(
                         league, league_name, self.current_week
                     )
                 else:
-                    logger.info("Championship Week detected - no bracket needed")
+                    logger.debug("Championship Week detected - no bracket needed")
             except Exception as e:
                 logger.warning(f"Could not extract playoff bracket: {e}")
                 # Continue without playoff bracket - will fall back to regular display
@@ -1337,7 +1337,7 @@ class ESPNService:
             try:
                 division_data = self.load_division_data(league_id)
                 divisions.append(division_data)
-                logger.info(f"Successfully loaded division: {division_data.name}")
+                logger.debug(f"Successfully loaded division: {division_data.name}")
             except Exception as e:
                 logger.error(f"Failed to load league {league_id}: {e}")
                 raise ESPNAPIError(f"Failed to load league {league_id}: {e}") from e

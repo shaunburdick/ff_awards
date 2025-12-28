@@ -41,6 +41,7 @@ class MarkdownFormatter(BaseFormatter):
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
+        championship_rosters: Sequence | None = None,
     ) -> str:
         """Format complete output for Markdown display."""
         # Get format arguments
@@ -101,9 +102,16 @@ class MarkdownFormatter(BaseFormatter):
 
         # PLAYOFF MODE: Championship leaderboard FIRST
         if is_championship_week and championship:
-            championship_output = self._format_championship_leaderboard(championship)
+            championship_output = self._format_championship_leaderboard(
+                championship, championship_rosters
+            )
             output_lines.append(championship_output)
             output_lines.append("")
+            # Add detailed rosters if available
+            if championship_rosters:
+                rosters_output = self._format_championship_rosters(championship_rosters)
+                output_lines.append(rosters_output)
+                output_lines.append("")
             output_lines.append("---")
             output_lines.append("")
 
@@ -214,9 +222,7 @@ class MarkdownFormatter(BaseFormatter):
 
                 # Team 1 row
                 team1_result = "✓ Winner" if matchup.winner_name == matchup.team1_name else ""
-                team1_score = (
-                    f"{matchup.score1:.2f}" if matchup.score1 is not None else "TBD"
-                )
+                team1_score = f"{matchup.score1:.2f}" if matchup.score1 is not None else "TBD"
                 output_parts.append(
                     f"| **{matchup_name}** | {matchup.team1_name} ({matchup.owner1_name}) | "
                     f"#{matchup.seed1} | {team1_score} | {team1_result} |"
@@ -224,9 +230,7 @@ class MarkdownFormatter(BaseFormatter):
 
                 # Team 2 row
                 team2_result = "✓ Winner" if matchup.winner_name == matchup.team2_name else ""
-                team2_score = (
-                    f"{matchup.score2:.2f}" if matchup.score2 is not None else "TBD"
-                )
+                team2_score = f"{matchup.score2:.2f}" if matchup.score2 is not None else "TBD"
                 output_parts.append(
                     f"|  | {matchup.team2_name} ({matchup.owner2_name}) | "
                     f"#{matchup.seed2} | {team2_score} | {team2_result} |"
@@ -236,12 +240,15 @@ class MarkdownFormatter(BaseFormatter):
 
         return "\n".join(output_parts)
 
-    def _format_championship_leaderboard(self, championship: ChampionshipLeaderboard) -> str:
+    def _format_championship_leaderboard(
+        self, championship: ChampionshipLeaderboard, rosters: Sequence | None = None
+    ) -> str:
         """
         Format championship week leaderboard in Markdown.
 
         Args:
             championship: Championship leaderboard with ranked entries
+            rosters: Detailed rosters to check game completion status
 
         Returns:
             Formatted championship leaderboard string
@@ -276,12 +283,61 @@ class MarkdownFormatter(BaseFormatter):
                 f"| {rank_display} | {team_display} | {entry.division_name} | {score_display} |"
             )
 
-        # Champion announcement
+        # Champion announcement (conditional based on game completion)
         champion = championship.champion
         output_parts.append("")
-        output_parts.append(
-            f"### 🎉 OVERALL CHAMPION: {champion.team_name} ({champion.owner_name}) - {champion.division_name} 🎉"
-        )
+
+        # Check if all games are complete
+        all_games_final = self._check_all_games_final(rosters) if rosters else False
+
+        if all_games_final:
+            output_parts.append(
+                f"### 🎉 OVERALL CHAMPION: {champion.team_name} ({champion.owner_name}) - {champion.division_name} 🎉"
+            )
+        else:
+            output_parts.append(
+                f"### 🏆 CURRENT LEADER: {champion.team_name} ({champion.owner_name}) - {champion.division_name}"
+            )
+            output_parts.append("")
+            output_parts.append(
+                "_⏳ Games still in progress - final champion will be determined when all games complete_"
+            )
+
+        return "\n".join(output_parts)
+
+    def _format_championship_rosters(self, rosters: Sequence) -> str:
+        """Format championship rosters as Markdown tables."""
+        output_parts: list[str] = []
+
+        output_parts.append("## 📋 Detailed Rosters")
+        output_parts.append("")
+
+        for roster in rosters:
+            output_parts.append(
+                f"### {roster.team.team_name} ({roster.team.owner_name}) - {roster.team.division_name}"
+            )
+            output_parts.append("")
+            output_parts.append(
+                f"**Score:** {roster.total_score:.2f} pts | **Projected:** {roster.projected_score:.2f} pts"
+            )
+            output_parts.append("")
+
+            # Starters table
+            output_parts.append("#### 🏈 Starters")
+            output_parts.append("")
+            output_parts.append("| Status | Pos | Player | Team | Points |")
+            output_parts.append("|--------|-----|--------|------|--------|")
+
+            for slot in roster.starters:
+                status_icon = "✅" if slot.game_status == "final" else "⏳"
+                player_display = slot.player_name or "EMPTY"
+                team_display = slot.player_team or ""
+
+                output_parts.append(
+                    f"| {status_icon} | {slot.position} | {player_display} | {team_display} | {slot.actual_points:.2f} |"
+                )
+
+            output_parts.append("")
 
         return "\n".join(output_parts)
 

@@ -41,6 +41,7 @@ class ConsoleFormatter(BaseFormatter):
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
+        championship_rosters: Sequence | None = None,
     ) -> str:
         """Format complete output for console display."""
         # Get format arguments
@@ -88,7 +89,9 @@ class ConsoleFormatter(BaseFormatter):
 
         # PLAYOFF MODE: Championship Week comes FIRST
         if is_championship_week and championship:
-            championship_output = self._format_championship_leaderboard(championship)
+            championship_output = self._format_championship_leaderboard(
+                championship, championship_rosters
+            )
             output_lines.append("")
             output_lines.append(championship_output)
 
@@ -228,12 +231,15 @@ class ConsoleFormatter(BaseFormatter):
 
         return "\n".join(output_parts)
 
-    def _format_championship_leaderboard(self, championship: ChampionshipLeaderboard) -> str:
+    def _format_championship_leaderboard(
+        self, championship: ChampionshipLeaderboard, rosters: Sequence | None = None
+    ) -> str:
         """
         Format championship week leaderboard.
 
         Args:
             championship: Championship leaderboard with ranked entries
+            rosters: Detailed rosters to check game completion status
 
         Returns:
             Formatted championship leaderboard string
@@ -280,12 +286,24 @@ class ConsoleFormatter(BaseFormatter):
             )
         )
 
-        # Champion announcement
+        # Champion announcement (conditional based on game completion)
         champion = championship.champion
         output_parts.append("")
-        output_parts.append(
-            f"🎉 OVERALL CHAMPION: {champion.team_name} ({champion.owner_name}) - {champion.division_name} 🎉"
-        )
+
+        # Check if all games are complete
+        all_games_final = self._check_all_games_final(rosters) if rosters else False
+
+        if all_games_final:
+            output_parts.append(
+                f"🎉 OVERALL CHAMPION: {champion.team_name} ({champion.owner_name}) - {champion.division_name} 🎉"
+            )
+        else:
+            output_parts.append(
+                f"🏆 CURRENT LEADER: {champion.team_name} ({champion.owner_name}) - {champion.division_name}"
+            )
+            output_parts.append(
+                "⏳ Games still in progress - final champion will be determined when all games complete"
+            )
 
         return "\n".join(output_parts)
 

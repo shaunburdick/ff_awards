@@ -39,6 +39,7 @@ class SheetsFormatter(BaseFormatter):
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
+        championship_rosters: Sequence | None = None,
     ) -> str:
         """Format complete output for Google Sheets TSV."""
         output_lines: list[str] = []
@@ -67,8 +68,14 @@ class SheetsFormatter(BaseFormatter):
 
         # Championship leaderboard (first, if championship week)
         if is_championship_week and championship:
-            output_lines.extend(self._format_championship_leaderboard(championship))
+            output_lines.extend(
+                self._format_championship_leaderboard(championship, championship_rosters)
+            )
             output_lines.append("")
+            # Add detailed rosters if available
+            if championship_rosters:
+                output_lines.extend(self._format_championship_rosters(championship_rosters))
+                output_lines.append("")
 
         # Playoff brackets (first, if Semifinals/Finals)
         if is_playoff_mode and not is_championship_week:
@@ -244,7 +251,9 @@ class SheetsFormatter(BaseFormatter):
 
         return lines
 
-    def _format_championship_leaderboard(self, championship: ChampionshipLeaderboard) -> list[str]:
+    def _format_championship_leaderboard(
+        self, championship: ChampionshipLeaderboard, rosters: Sequence | None = None
+    ) -> list[str]:
         """Format championship leaderboard as TSV lines."""
         lines: list[str] = []
 
@@ -270,11 +279,54 @@ class SheetsFormatter(BaseFormatter):
 
         lines.append("")
 
-        # Champion announcement
+        # Champion announcement (conditional based on game completion)
         champion = championship.champion
-        lines.append("🏆 OVERALL CHAMPION 🏆")
-        lines.append(f"{champion.team_name} ({champion.owner_name})")
-        lines.append(f"{champion.division_name} Champion - {champion.score:.2f} points")
+
+        # Check if all games are complete
+        all_games_final = self._check_all_games_final(rosters) if rosters else False
+
+        if all_games_final:
+            lines.append("🏆 OVERALL CHAMPION 🏆")
+            lines.append(f"{champion.team_name} ({champion.owner_name})")
+            lines.append(f"{champion.division_name} Champion - {champion.score:.2f} points")
+        else:
+            lines.append("🏆 CURRENT LEADER")
+            lines.append(f"{champion.team_name} ({champion.owner_name})")
+            lines.append(f"{champion.division_name} - {champion.score:.2f} points")
+            lines.append("⏳ Games still in progress")
+
+        return lines
+
+    def _format_championship_rosters(self, rosters: Sequence) -> list[str]:
+        """Format championship rosters as TSV."""
+        lines: list[str] = []
+
+        lines.append("DETAILED ROSTERS")
+        lines.append("")
+
+        for roster in rosters:
+            lines.append(
+                f"{roster.team.team_name} ({roster.team.owner_name}) - {roster.team.division_name}"
+            )
+            lines.append(
+                f"Score: {roster.total_score:.2f} pts | Projected: {roster.projected_score:.2f} pts"
+            )
+            lines.append("")
+
+            # Starters table
+            lines.append("STARTERS")
+            lines.append("Status\tPos\tPlayer\tTeam\tPoints")
+
+            for slot in roster.starters:
+                status_icon = "✅" if slot.game_status == "final" else "⏳"
+                player_display = slot.player_name or "EMPTY"
+                team_display = slot.player_team or ""
+
+                lines.append(
+                    f"{status_icon}\t{slot.position}\t{player_display}\t{team_display}\t{slot.actual_points:.2f}"
+                )
+
+            lines.append("")
 
         return lines
 

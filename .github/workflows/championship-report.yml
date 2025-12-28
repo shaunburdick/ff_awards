@@ -1,0 +1,160 @@
+name: Championship Week Report
+
+on:
+  # Manual triggering only (no cron)
+  workflow_dispatch:
+    inputs:
+      championship_week:
+        description: 'Championship week number (default: 17)'
+        required: false
+        type: number
+        default: 17
+      email_recipients:
+        description: 'Email recipients (comma-separated, leave empty to use default from secrets)'
+        required: false
+        type: string
+      email_from:
+        description: 'Email sender (leave empty to use default from secrets)'
+        required: false
+        type: string
+      skip_email:
+        description: 'Skip sending email (useful for testing report generation only)'
+        required: false
+        type: boolean
+        default: false
+      championship_note:
+        description: 'Optional note for championship report (e.g., "Congratulations to all champions!")'
+        required: false
+        type: string
+
+env:
+  PYTHONUNBUFFERED: 1
+
+jobs:
+  generate-championship-report:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Install dependencies
+      run: uv sync
+
+    - name: Create .env file from secrets
+      run: |
+        echo "LEAGUE_IDS=${{ secrets.LEAGUE_IDS }}" > .env
+        if [ -n "${{ secrets.ESPN_SWID }}" ]; then
+          echo "ESPN_SWID=${{ secrets.ESPN_SWID }}" >> .env
+        fi
+        if [ -n "${{ secrets.ESPN_S2 }}" ]; then
+          echo "ESPN_S2=${{ secrets.ESPN_S2 }}" >> .env
+        fi
+
+    - name: Generate championship week report
+      id: generate-report
+      run: |
+        # Hardcoded note for championship week (set to empty string to disable)
+        # Example: HARDCODED_NOTE="Congratulations to all division champions! 🏆"
+        HARDCODED_NOTE=""
+
+        # Determine if private leagues are needed
+        if [ -n "${{ secrets.ESPN_SWID }}" ] && [ -n "${{ secrets.ESPN_S2 }}" ]; then
+          PRIVATE_FLAG="--private"
+        else
+          PRIVATE_FLAG=""
+        fi
+
+        # Use championship week from input or default to 17
+        CHAMPIONSHIP_WEEK="${{ inputs.championship_week || 17 }}"
+        echo "Championship week: $CHAMPIONSHIP_WEEK"
+
+        # Build format args - workflow input takes precedence over hardcoded note
+        if [ -n "${{ inputs.championship_note }}" ]; then
+          FORMAT_ARGS=(--format-arg "note=${{ inputs.championship_note }}")
+        elif [ -n "$HARDCODED_NOTE" ]; then
+          FORMAT_ARGS=(--format-arg "note=$HARDCODED_NOTE")
+        else
+          FORMAT_ARGS=()
+        fi
+
+        # Capture start time
+        START_TIME=$(date +%s)
+
+        # Generate all output formats in one execution using --output-dir
+        mkdir -p ./reports
+        uv run ff-championship --env $PRIVATE_FLAG --week $CHAMPIONSHIP_WEEK --output-dir ./reports
+
+        # Calculate execution time
+        END_TIME=$(date +%s)
+        EXECUTION_TIME=$((END_TIME - START_TIME))
+
+        echo "championship_week=${CHAMPIONSHIP_WEEK}" >> $GITHUB_OUTPUT
+        echo "execution_time=${EXECUTION_TIME}" >> $GITHUB_OUTPUT
+        echo "report_generated=true" >> $GITHUB_OUTPUT
+
+    # Read HTML report content for email body
+    - name: Prepare email content
+      id: prepare-email
+      if: steps.generate-report.outputs.report_generated == 'true'
+      run: |
+        # Inject metadata into HTML report
+        GENERATED_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        EXECUTION_TIME="${{ steps.generate-report.outputs.execution_time }}"
+        RUN_ID="${{ github.run_id }}"
+        REPO="${{ github.repository }}"
+
+        # Create metadata HTML
+        METADATA_HTML="Generated: ${GENERATED_TIME} (took ${EXECUTION_TIME}s)<br>"
+        METADATA_HTML+="<a href=\"https://github.com/${REPO}/actions/runs/${RUN_ID}\" style=\"color: #3498db; text-decoration: none;\">Download Full Report Artifacts 📦</a><br>"
+
+        # Inject metadata between comment markers using sed
+        sed -i "s|<!-- GENERATED_METADATA_START --><!-- GENERATED_METADATA_END -->|<!-- GENERATED_METADATA_START -->${METADATA_HTML}<!-- GENERATED_METADATA_END -->|g" ./reports/championship.html
+
+        # Verify the file exists and was modified
+        if [ -f ./reports/championship.html ]; then
+          echo "html_ready=true" >> $GITHUB_OUTPUT
+          echo "Successfully injected metadata into HTML report"
+        else
+          echo "html_ready=false" >> $GITHUB_OUTPUT
+          echo "Error: HTML file not found" >&2
+          exit 1
+        fi
+
+    - name: Send email report
+      if: steps.generate-report.outputs.report_generated == 'true' && inputs.skip_email != true
+      uses: dawidd6/action-send-mail@v6
+      with:
+        server_address: ${{ secrets.SMTP_SERVER }}
+        server_port: ${{ secrets.SMTP_PORT || '2525' }}
+        secure: ${{ secrets.SMTP_SECURE || 'false' }}
+        username: ${{ secrets.SMTP_USERNAME }}
+        password: ${{ secrets.SMTP_PASSWORD }}
+        subject: "🏆 Championship Week Report - Week ${{ steps.generate-report.outputs.championship_week }}"
+        from: "MM Fantasy Football League <${{ inputs.email_from || secrets.EMAIL_FROM }}>"
+        to: ${{ inputs.email_from || secrets.EMAIL_FROM }}
+        bcc: ${{ inputs.email_recipients || secrets.EMAIL_RECIPIENTS }}
+        html_body: file://./reports/championship.html
+
+    - name: Upload report artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: championship-report-week-${{ steps.generate-report.outputs.championship_week }}
+        path: |
+          ./reports/championship.txt
+          ./reports/championship.tsv
+          ./reports/championship.html
+          ./reports/championship.json
+          ./reports/championship.md
+        retention-days: 90

@@ -57,6 +57,7 @@ class EmailFormatter(BaseFormatter):
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
+        championship_rosters: Sequence | None = None,
     ) -> str:
         """Format complete output for mobile-friendly HTML email."""
         # Get format arguments
@@ -218,12 +219,33 @@ class EmailFormatter(BaseFormatter):
             border-bottom: 2px solid white;
             margin-top: 0;
         }}
+        .championship-box table {{
+            background-color: white;
+            border-radius: 5px;
+            overflow: hidden;
+        }}
+        .championship-box th {{
+            background-color: #2c3e50;
+            color: white;
+        }}
+        .championship-box td {{
+            color: #2c3e50;
+            background-color: white;
+        }}
+        .championship-box tr:nth-child(even) td {{
+            background-color: #f8f9fa;
+        }}
         .champion-announcement {{
-            background-color: rgba(255,255,255,0.2);
+            background-color: rgba(255,255,255,0.95);
+            color: #2c3e50;
             padding: 15px;
             border-radius: 8px;
             margin-top: 15px;
             font-size: 16px;
+            border: 2px solid white;
+        }}
+        .champion-announcement strong {{
+            color: #d63384;
         }}
         .historical-note {{
             background-color: #fff3cd;
@@ -285,7 +307,12 @@ class EmailFormatter(BaseFormatter):
 
         # Championship leaderboard (first, if championship week)
         if is_championship_week and championship:
-            html_content += self._format_championship_leaderboard(championship)
+            html_content += self._format_championship_leaderboard(
+                championship, championship_rosters
+            )
+            # Add detailed rosters if available
+            if championship_rosters:
+                html_content += self._format_championship_rosters(championship_rosters)
 
         # Playoff brackets (first, if Semifinals/Finals)
         if is_playoff_mode and not is_championship_week:
@@ -530,7 +557,9 @@ class EmailFormatter(BaseFormatter):
 
         return html_content
 
-    def _format_championship_leaderboard(self, championship: ChampionshipLeaderboard) -> str:
+    def _format_championship_leaderboard(
+        self, championship: ChampionshipLeaderboard, rosters: Sequence | None = None
+    ) -> str:
         """Format championship leaderboard as HTML."""
         html_content = ""
 
@@ -562,16 +591,68 @@ class EmailFormatter(BaseFormatter):
 
         html_content += "</table>\n"
 
-        # Champion announcement
+        # Champion announcement (conditional based on game completion)
         champion = championship.champion
         html_content += '<div class="champion-announcement">\n'
-        html_content += "🎉 <strong>OVERALL CHAMPION</strong> 🎉<br>\n"
-        html_content += f"<strong>{self._escape_html(champion.team_name)}</strong><br>\n"
-        html_content += f"{self._escape_html(champion.owner_name)}<br>\n"
-        html_content += (
-            f"{self._escape_html(champion.division_name)} Champion - {champion.score:.2f} points\n"
-        )
+
+        # Check if all games are complete
+        all_games_final = self._check_all_games_final(rosters) if rosters else False
+
+        if all_games_final:
+            html_content += "🎉 <strong>OVERALL CHAMPION</strong> 🎉<br>\n"
+            html_content += f"<strong>{self._escape_html(champion.team_name)}</strong><br>\n"
+            html_content += f"{self._escape_html(champion.owner_name)}<br>\n"
+            html_content += f"{self._escape_html(champion.division_name)} Champion - {champion.score:.2f} points\n"
+        else:
+            html_content += "🏆 <strong>CURRENT LEADER</strong><br>\n"
+            html_content += f"<strong>{self._escape_html(champion.team_name)}</strong><br>\n"
+            html_content += f"{self._escape_html(champion.owner_name)}<br>\n"
+            html_content += (
+                f"{self._escape_html(champion.division_name)} - {champion.score:.2f} points<br>\n"
+            )
+            html_content += "<br>⏳ <em>Games still in progress</em>\n"
+
         html_content += "</div>\n"
+
+        html_content += "</div>\n"
+
+        return html_content
+
+    def _format_championship_rosters(self, rosters: Sequence) -> str:
+        """Format championship rosters as HTML tables."""
+        html_content = ""
+
+        html_content += '<div style="margin-top: 20px;">\n'
+        html_content += "<h2>📋 Detailed Rosters</h2>\n"
+
+        for roster in rosters:
+            html_content += '<div style="margin-bottom: 25px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;">\n'
+            html_content += f"<h3 style='margin-top: 0; color: #2c3e50;'>{self._escape_html(roster.team.team_name)} ({self._escape_html(roster.team.owner_name)})</h3>\n"
+            html_content += f"<p style='margin: 5px 0; color: #7f8c8d;'><strong>{self._escape_html(roster.team.division_name)}</strong></p>\n"
+            html_content += f"<p style='margin: 5px 0;'><strong>Score:</strong> {roster.total_score:.2f} pts | <strong>Projected:</strong> {roster.projected_score:.2f} pts</p>\n"
+
+            # Starters table
+            html_content += "<h4 style='margin: 15px 0 10px 0; color: #34495e;'>🏈 Starters</h4>\n"
+            html_content += '<table style="width: 100%; font-size: 12px;">\n'
+            html_content += '<tr style="background-color: #ecf0f1;"><th style="padding: 6px 4px;">Status</th><th style="padding: 6px 4px;">Pos</th><th style="padding: 6px 4px;">Player</th><th style="padding: 6px 4px;">Team</th><th style="padding: 6px 4px; text-align: right;">Points</th></tr>\n'
+
+            for slot in roster.starters:
+                status_icon = "✅" if slot.game_status == "final" else "⏳"
+                player_display = self._escape_html(slot.player_name or "EMPTY")
+                team_display = self._escape_html(slot.player_team or "")
+
+                html_content += (
+                    f"<tr>"
+                    f"<td style='padding: 4px; text-align: center;'>{status_icon}</td>"
+                    f"<td style='padding: 4px;'>{self._escape_html(slot.position)}</td>"
+                    f"<td style='padding: 4px;'>{player_display}</td>"
+                    f"<td style='padding: 4px;'>{team_display}</td>"
+                    f"<td style='padding: 4px; text-align: right;'>{slot.actual_points:.2f}</td>"
+                    f"</tr>\n"
+                )
+
+            html_content += "</table>\n"
+            html_content += "</div>\n"
 
         html_content += "</div>\n"
 

@@ -1,6 +1,6 @@
 [project]
 name = "ff-awards"
-version = "3.1.0"
+version = "3.2.0-dev"
 description = "A modern, type-safe CLI tool to analyze ESPN Fantasy Football leagues with automatic playoff bracket tracking and 5 season challenges across multiple divisions"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -24,6 +24,8 @@ Issues = "https://github.com/shaunburdick/ff_awards/issues"
 [project.scripts]
 # Main CLI entry point
 ff-tracker = "ff_tracker:main"
+# Championship Week CLI entry point (Week 17)
+ff-championship = "ff_tracker.championship:main"
 
 [build-system]
 requires = ["hatchling"]

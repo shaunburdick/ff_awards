@@ -18,6 +18,7 @@ from ..models import (
     TeamStats,
     WeeklyChallenge,
 )
+from ..models.championship import ChampionshipRoster
 
 
 class OutputFormatter(Protocol):
@@ -30,6 +31,7 @@ class OutputFormatter(Protocol):
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
+        championship_rosters: Sequence[ChampionshipRoster] | None = None,
     ) -> str:
         """
         Format the complete output for display.
@@ -40,6 +42,7 @@ class OutputFormatter(Protocol):
             weekly_challenges: List of weekly challenge results (optional)
             current_week: Current fantasy week number
             championship: Championship leaderboard (optional, for Championship Week only)
+            championship_rosters: Detailed rosters for championship teams (optional)
 
         Returns:
             Formatted output string
@@ -131,6 +134,7 @@ class BaseFormatter(ABC):
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
+        championship_rosters: Sequence[ChampionshipRoster] | None = None,
     ) -> str:
         """Format the complete output for display."""
         pass
@@ -164,3 +168,23 @@ class BaseFormatter(ABC):
         if len(text) <= max_length:
             return text
         return text[: max_length - 1] + "…"
+
+    def _check_all_games_final(self, rosters: Sequence[ChampionshipRoster] | None) -> bool:
+        """
+        Check if all games in championship rosters are complete.
+
+        Args:
+            rosters: List of championship rosters to check
+
+        Returns:
+            True if all games are final, False otherwise
+        """
+        if not rosters:
+            return False
+
+        for roster in rosters:
+            for slot in roster.starters:
+                if slot.game_status != "final":
+                    return False
+
+        return True

@@ -57,17 +57,23 @@ The existing `ff-tracker` tool was designed for weeks with ESPN matchups. Rather
 - Flags players whose games have already started
 - Provides clear warnings for each issue found
 
-### US-4: Live Score Updates
+### US-4: Live Score Updates ❌ NOT IMPLEMENTED
 **As a** league commissioner  
 **I want to** see live score updates during Championship Week  
 **So that** I can track who's winning in real-time
 
-**Acceptance Criteria**:
-- Shows current scores for all division winners
-- Updates as games progress (can be run multiple times)
-- Indicates which players have finished (completed games)
-- Shows projected final scores (if available)
-- Clearly marks current leader
+**Status**: ❌ **Removed** - ESPN API limitation
+
+**Reason**: ESPN does not provide live scoring for post-season consolation weeks (Week 17+). The API returns static scores once leagues officially end at Week 16 Finals. True live updates would require external NFL APIs which adds significant complexity.
+
+**Alternative**: Run the leaderboard mode multiple times to see updated scores as ESPN refreshes them (though updates are infrequent for consolation weeks).
+
+**Original Acceptance Criteria** (not met):
+- Shows current scores for all division winners ✅ (scores shown, but not "live")
+- Updates as games progress (can be run multiple times) ⚠️ (can run multiple times, but ESPN doesn't update frequently)
+- Indicates which players have finished (completed games) ✅ (projection-based detection)
+- Shows projected final scores (if available) ✅ (projections shown)
+- Clearly marks current leader ✅ (champion marked with 🥇)
 
 ---
 
