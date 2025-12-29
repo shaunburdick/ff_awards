@@ -1,7 +1,7 @@
 # Fantasy Football Challenge Tracker - Agent Summary
 
 ## Project Overview
-A CLI tool to track 13 weekly highlights, 5 season-long challenges, and **playoff brackets** (NEW v3.0) across multiple ESPN leagues for end-of-season awards. Originally built as a single 1000+ line script, it has been completely refactored into a modern Python package demonstrating best practices. **Now automatically displays playoff brackets and championship leaderboards when leagues enter postseason (Weeks 15-17)**.
+A CLI tool to track 13 weekly highlights, 5 season-long challenges, **playoff brackets** (v3.0), and **comprehensive season recaps** (NEW v3.3) across multiple ESPN leagues for end-of-season awards. Originally built as a single 1000+ line script, it has been completely refactored into a modern Python package demonstrating best practices. **Now automatically displays playoff brackets and championship leaderboards when leagues enter postseason (Weeks 15-17), plus generates unified end-of-season summaries combining regular season, playoffs, and championship results**.
 
 ## Current Architecture
 
@@ -10,7 +10,9 @@ A CLI tool to track 13 weekly highlights, 5 season-long challenges, and **playof
 ff_tracker/
 ├── __init__.py              # Package exports
 ├── __main__.py              # Module entry point
-├── main.py                  # CLI implementation
+├── main.py                  # CLI implementation (weekly reports)
+├── championship.py          # Championship CLI (Week 17)
+├── season_recap.py          # Season recap CLI (NEW v3.3)
 ├── config.py                # Configuration management
 ├── exceptions.py            # Custom exception hierarchy
 ├── models/
@@ -24,12 +26,15 @@ ff_tracker/
 │   ├── week.py              # WeeklyGameResult model
 │   ├── player.py            # WeeklyPlayerStats model
 │   ├── weekly_challenge.py  # WeeklyChallenge model
-│   └── playoff.py           # Playoff data models (NEW v3.0)
+│   ├── playoff.py           # Playoff data models (v3.0)
+│   └── season_summary.py    # Season recap models (NEW v3.3)
 ├── services/
 │   ├── __init__.py          # Service exports
 │   ├── espn_service.py      # ESPN API integration
 │   ├── challenge_service.py # Season challenge calculation
-│   └── weekly_challenge_service.py  # Weekly challenge calculation
+│   ├── weekly_challenge_service.py  # Weekly challenge calculation
+│   ├── championship_service.py  # Championship service (v3.0)
+│   └── season_recap_service.py  # Season recap orchestration (NEW v3.3)
 └── display/
     ├── __init__.py          # Formatter exports
     ├── base.py              # Base formatter protocol
@@ -37,7 +42,12 @@ ff_tracker/
     ├── sheets.py            # TSV for Google Sheets
     ├── email.py             # Mobile-friendly HTML
     ├── json.py              # Structured JSON output
-    └── markdown.py          # Markdown for GitHub/Slack/Discord
+    ├── markdown.py          # Markdown for GitHub/Slack/Discord
+    ├── season_recap_console.py   # Season recap console (NEW v3.3)
+    ├── season_recap_sheets.py    # Season recap sheets (NEW v3.3)
+    ├── season_recap_email.py     # Season recap email (NEW v3.3)
+    ├── season_recap_json.py      # Season recap JSON (NEW v3.3)
+    └── season_recap_markdown.py  # Season recap markdown (NEW v3.3)
 ```
 
 ### Core Functionality
@@ -238,6 +248,32 @@ uv run ff-tracker --env --output-dir ./reports \
 - **Email Reports**: Mobile-friendly HTML with comprehensive league data
 - **Artifacts**: All formats saved for 30 days in GitHub Actions
 
+### Championship Automation (`championship-report.yml`)
+- **Manual Trigger**: `workflow_dispatch` for Week 17 championship reports
+- **Multi-Output Mode**: Generates all 5 formats in single execution
+- **Workflow Inputs**: `championship_week`, `skip_email`, `championship_note`
+- **Email Reports**: Optional email delivery with championship results
+- **Artifacts**: All formats saved for 90 days in GitHub Actions
+
+### Season Recap Automation (`season-recap.yml` - NEW v3.3)
+```bash
+# Generate comprehensive end-of-season summary
+uv run ff-season-recap --env --output-dir ./reports
+
+# With custom note
+uv run ff-season-recap --env --output-dir ./reports \
+  --format-arg note="Thanks for a great season! 🏆"
+```
+
+- **Manual Trigger**: `workflow_dispatch` for end-of-season summaries
+- **Complete Coverage**: Regular season, playoffs, and championship in one report
+- **Multi-Output Mode**: Generates all 5 formats in single execution
+- **Workflow Inputs**: `season_year`, `skip_email`, `recap_note`, `force_generation`
+- **Output Files**: `season-recap.txt`, `season-recap.tsv`, `season-recap.html`, `season-recap.json`, `season-recap.md`
+- **Email Reports**: Optional mobile-friendly HTML with complete season story
+- **Artifacts**: All formats saved for 365 days (historical records)
+- **Force Mode**: `--force` flag allows partial recap generation during playoffs for testing
+
 ## Development Setup
 
 ### Prerequisites
@@ -385,6 +421,7 @@ The README.md Table of Contents should only show H2 (##) level headers for clean
 - ✅ Weekly highlights feature tracking current week's top performances (v2.1)
 - ✅ True projection tracking for accurate boom/bust analysis (v2.2)
 - ✅ **Playoff mode with automatic detection and bracket display (v3.0)** 🏆
+- ✅ **Season recap feature for comprehensive end-of-season summaries (v3.3)** 📊
 - ✅ Clean, maintainable codebase (modular, well-organized)
 - ✅ Proper typing without suppressions (100% type coverage)
 - ✅ Clear error messages for all failure modes
@@ -392,4 +429,4 @@ The README.md Table of Contents should only show H2 (##) level headers for clean
 - ✅ Preserved all original functionality while improving architecture
 - ✅ Efficient multi-output mode for automated workflows (v2.1)
 
-**Current Status**: Production-ready v3.0, fully functional with 13 weekly highlights, 5 season challenges, and automatic playoff bracket display (Weeks 15-17). Tested with real Week 15 data across all 5 output formats. Week 16/17 testing scheduled for December 17 & 24. Serves as excellent example of modern Python development practices with additive feature architecture.
+**Current Status**: Production-ready v3.3, fully functional with 13 weekly highlights, 5 season challenges, automatic playoff bracket display (Weeks 15-17), and comprehensive season recap generation. All three GitHub Actions workflows (weekly, championship, season recap) operational. Tested with real playoff data across all 5 output formats. Serves as excellent example of modern Python development practices with additive feature architecture.
