@@ -5,6 +5,91 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2025-12-29 (Season Recap Feature)
+
+### Added - Season Recap 📊
+- **New Command**: `ff-season-recap` - Generate comprehensive end-of-season summaries
+  - Combines regular season results, playoffs, and championship into one cohesive report
+  - Available in all 5 output formats (console, sheets, email, json, markdown)
+  - Multi-output mode support (`--output-dir`) for generating all formats at once
+  - Format arguments support (`--format-arg`) for customization
+
+- **Complete Season Coverage**:
+  - **Regular Season**: Division champions, final standings, and all 5 season challenge winners
+  - **Playoff Brackets**: Semifinals (Week 15) and Finals (Week 16) with all matchups and winners
+  - **Championship**: Week 17 leaderboard ranking all division winners, crowns overall champion
+
+- **New Data Models** (`ff_tracker/models/season_summary.py`):
+  - `SeasonSummary`: Top-level container for entire season
+  - `RegularSeasonSummary`: Regular season standings and challenges
+  - `PlayoffSummary`: Complete playoff bracket data
+  - `PlayoffRound`: Individual round (Semifinals or Finals) with matchups
+  - `DivisionChampion`: Week 17 championship participant data
+  - `SeasonStructure`: Season configuration (weeks, playoff detection)
+
+- **New Service Layer** (`ff_tracker/services/season_recap_service.py`):
+  - `SeasonRecapService`: Orchestrates data collection across all ESPN leagues
+  - Dynamic season structure detection from ESPN API (no hardcoded weeks)
+  - Intelligent season status detection (regular_season, semifinals, finals, championship, complete)
+  - `--force` flag support for generating partial recaps during playoffs (testing/progress tracking)
+
+- **New Display Formatters**:
+  - `SeasonRecapConsoleFormatter`: Human-readable tables with emojis and visual hierarchy
+  - `SeasonRecapSheetsFormatter`: TSV format optimized for Google Sheets import
+  - `SeasonRecapEmailFormatter`: Mobile-friendly HTML with responsive design
+  - `SeasonRecapJsonFormatter`: Structured JSON for archival and analysis
+  - `SeasonRecapMarkdownFormatter`: GitHub/Slack/Discord-compatible with optional TOC
+
+- **CLI Features**:
+  - Same league input options as `ff-tracker` (CLI args, `--env`, single/multiple leagues)
+  - `--year` support for historical season recaps
+  - `--private` flag for private league authentication
+  - `--force` flag to generate partial recaps (with clear warnings)
+  - `--format` to choose output format
+  - `--output-dir` to generate all formats at once
+  - `--format-arg` for customization (notes, colors, TOC, etc.)
+  - `-v`/`--verbose` and `--debug` for logging control
+
+- **GitHub Actions Integration**:
+  - New workflow: `season-recap.yml` for automated season recap generation
+  - Manual trigger only (`workflow_dispatch`) - run after season completes
+  - Workflow inputs: `season_year`, `email_recipients`, `email_from`, `skip_email`, `recap_note`, `force_generation`
+  - Generates all 5 output formats in single execution
+  - Optional email delivery with mobile-friendly HTML
+  - Artifacts uploaded with 365-day retention for historical records
+
+### Changed
+- **Display Order**: Season recap now shows results in reverse chronological order for better narrative flow
+  - Order: Championship → Finals → Semifinals → Regular Season
+  - Tells the story from climax backwards, showing the journey that led to the final result
+  - Applied consistently across all 5 output formats (console, sheets, email, json, markdown)
+
+### Fixed
+- **Championship Data Fetching**: Fixed season recap not showing Week 17 championship results during Finals week
+  - ESPN reports `current_week=16` during Finals, but Week 17 roster data is available via `team.roster` API
+  - Changed championship fetch logic to attempt extraction whenever playoffs have started (not just when current_week >= 17)
+  - Matches behavior of `ff-championship` script which successfully pulls Week 17 data
+  - Championship leaderboard now displays correctly in all 5 output formats during Finals week
+- **Logging Configuration**: Fixed `season_recap.py` passing logging level constants instead of verbosity integers
+  - Changed from `setup_logging(logging.DEBUG)` to `setup_logging(2)` 
+  - Aligns with `main.py` and `championship.py` implementations
+  - Clean output without DEBUG logs unless `--debug` flag used
+  - Added `urllib3` logger suppression to `cli_utils.py`
+
+### Documentation
+- **README.md**: Added comprehensive Season Recap section with usage examples
+- **MANUAL_TESTING_GUIDE.md**: Step-by-step testing procedures for all scenarios
+- **PHASE6_TESTING.md**: Complete integration test results documentation
+- **Spec 008**: Full specification, planning, and implementation documentation
+
+### Technical Details
+- **Zero Breaking Changes**: Existing `ff-tracker` functionality unchanged
+- **Shared Infrastructure**: Reuses ESPNService, models, and display factory
+- **Type Safety**: 100% type coverage with modern Python 3.9+ syntax
+- **Modular Architecture**: Clean separation of concerns (models → service → CLI → formatters)
+- **Performance**: Efficient multi-league data collection with single ESPN API session
+- **Error Handling**: Clear error messages with actionable guidance
+
 ## [3.1.0] - 2024-12-23 (Week 16 - Finals Fix)
 
 ### Fixed

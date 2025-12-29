@@ -25,6 +25,14 @@ from .playoff import (
     PlayoffBracket,
     PlayoffMatchup,
 )
+from .season_summary import (
+    DivisionChampion,
+    PlayoffRound,
+    PlayoffSummary,
+    RegularSeasonSummary,
+    SeasonStructure,
+    SeasonSummary,
+)
 from .team import TeamStats
 from .week import WeeklyGameResult
 from .weekly_challenge import WeeklyChallenge
@@ -47,4 +55,10 @@ __all__ = [
     "PlayoffBracket",
     "ChampionshipEntry",
     "ChampionshipLeaderboard",
+    "DivisionChampion",
+    "PlayoffRound",
+    "PlayoffSummary",
+    "RegularSeasonSummary",
+    "SeasonStructure",
+    "SeasonSummary",
 ]

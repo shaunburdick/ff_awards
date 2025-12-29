@@ -26,6 +26,8 @@ Issues = "https://github.com/shaunburdick/ff_awards/issues"
 ff-tracker = "ff_tracker:main"
 # Championship Week CLI entry point (Week 17)
 ff-championship = "ff_tracker.championship:main"
+# Season Recap CLI entry point (end-of-season summary)
+ff-season-recap = "ff_tracker.season_recap:main"
 
 [build-system]
 requires = ["hatchling"]

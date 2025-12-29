@@ -1010,7 +1010,12 @@ class ESPNService:
             matchups = self.extract_playoff_matchups(league, division_name, playoff_week)
 
             # Create bracket with the playoff week we're reporting on
-            bracket = PlayoffBracket(round=playoff_round, week=playoff_week, matchups=matchups)
+            bracket = PlayoffBracket(
+                round=playoff_round,
+                week=playoff_week,
+                division_name=division_name,
+                matchups=matchups,
+            )
 
             logger.debug(
                 f"Built {playoff_round} bracket for {division_name}: {len(matchups)} matchup(s)"

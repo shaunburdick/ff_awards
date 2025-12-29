@@ -8,6 +8,7 @@ A modern, type-safe command-line tool to analyze ESPN Fantasy Football leagues a
 - [Installation](#installation)
 - [Usage](#usage)
 - [Examples](#examples)
+- [Season Recap](#season-recap)
 - [Configuration](#configuration)
 - [Sample Output](#sample-output)
 - [The 5 Season Challenges](#the-5-season-challenges)
@@ -22,6 +23,12 @@ A modern, type-safe command-line tool to analyze ESPN Fantasy Football leagues a
   - **Finals (Week 16)**: Shows championship matchups with winner tracking
   - **Championship Week (Week 17)**: Ranks all division winners to crown overall champion
   - No manual configuration - automatically detects playoff status based on league week
+- **📊 Season Recap** (NEW in v3.3): Comprehensive end-of-season summaries
+  - Combines regular season, playoffs, and championship results in one report
+  - Shows division champions, final standings, and all 5 season challenges
+  - Displays complete playoff brackets (Semifinals + Finals) with winners
+  - Championship leaderboard determining the ultimate champion
+  - Available in all 5 output formats
 - **13 Weekly Highlights**: Track current week's top performances including team challenges (highest/lowest scores, biggest win, closest game, overachiever, below expectations) and player highlights (top scorers by position)
   - During playoffs: Shows 7 player highlights only (team challenges replaced by playoff brackets)
   - Championship week: Player highlights include ALL teams across all divisions
@@ -267,6 +274,101 @@ uv run ff-tracker --env --format markdown \
 # Week override with format arguments
 uv run ff-tracker 123456 --week 15 --format email \
   --format-arg note="Semifinals - Good luck everyone!"
+```
+
+## Season Recap
+
+Generate comprehensive end-of-season summaries combining regular season results, playoffs, and championship data.
+
+### Features
+
+- **Complete Season Summary**: Regular season standings, division champions, and all 5 season challenges
+- **Playoff Results**: Semifinals (Week 15) and Finals (Week 16) brackets with winners
+- **Championship Leaderboard**: Week 17 overall rankings to determine the ultimate champion
+- **Multiple Formats**: Same 5 output formats as weekly reports (console, sheets, email, json, markdown)
+- **Multi-Output Mode**: Generate all formats in one execution
+- **Force Mode**: Generate partial recaps during playoffs for testing/progress tracking
+
+### Usage
+
+```bash
+# Basic season recap (requires completed season)
+uv run ff-season-recap --env
+
+# Specific format
+uv run ff-season-recap --env --format email > season-recap.html
+uv run ff-season-recap 123456,789012 --format markdown > recap.md
+
+# Generate all formats at once
+uv run ff-season-recap --env --output-dir ./season-recap
+# Creates: season-recap.txt, season-recap.tsv, season-recap.html,
+#          season-recap.json, season-recap.md
+
+# Force mode (generate partial recap during playoffs)
+uv run ff-season-recap --env --force
+uv run ff-season-recap --env --force --format console
+
+# Historical season
+uv run ff-season-recap --env --year 2024
+
+# With format arguments
+uv run ff-season-recap --env --format email \
+  --format-arg note="Official 2025 Season Recap" \
+  --format-arg email.accent_color="#ffc107"
+```
+
+### Season Requirements
+
+The season recap requires:
+- **Regular Season Complete**: All regular season games finished (Weeks 1-14)
+- **Playoffs Complete**: Semifinals (Week 15) and Finals (Week 16) finished
+- **Championship Complete**: Championship week (Week 17) finished
+
+Use `--force` flag to generate partial recaps if season is incomplete (useful for testing or progress tracking).
+
+### Output Content
+
+**Regular Season Section:**
+- Division champions with win-loss records
+- Complete final standings (all teams, all divisions)
+- All 5 season-long challenge winners:
+  - Most Points Overall
+  - Most Points in One Game
+  - Most Points in a Loss
+  - Least Points in a Win
+  - Closest Victory
+
+**Playoff Section:**
+- Semifinals brackets (Week 15): All 4 matchups per division
+- Finals brackets (Week 16): Championship matchups per division
+- Winner identification for each matchup
+
+**Championship Section:**
+- Week 17 leaderboard ranking all division winners
+- Overall champion (highest score in Week 17)
+
+### Examples
+
+```bash
+# Console output (human-readable tables)
+uv run ff-season-recap --env --format console
+
+# Email report for distribution
+uv run ff-season-recap --env --format email > recap-2025.html
+
+# JSON for archival/analysis
+uv run ff-season-recap --env --format json > archive/season-2025.json
+
+# Markdown for GitHub wiki
+uv run ff-season-recap --env --format markdown \
+  --format-arg markdown.include_toc=true > wiki/season-2025.md
+
+# All formats for complete archival
+uv run ff-season-recap --env --output-dir ./archive/2025-season \
+  --format-arg note="Official 2025 Season Results"
+
+# During playoffs (testing/progress)
+uv run ff-season-recap --env --force --format console
 ```
 
 ## Configuration
@@ -673,11 +775,15 @@ The tool detects playoff mode when `current_week > regular_season_count` (typica
 
 Every output format (console, sheets, email, JSON, markdown) automatically displays playoff brackets and championship data when detected.
 
-## Automated Weekly Reports (GitHub Actions)
+## Automated Reports (GitHub Actions)
 
-This repository includes a GitHub Actions workflow that automatically generates and emails weekly fantasy football reports every Tuesday at 6 AM ET.
+This repository includes three GitHub Actions workflows for automated report generation:
 
-The workflow uses the `--output-dir` mode to generate all formats (console, TSV, HTML, JSON) in a single execution.
+1. **Weekly Reports** (`weekly-report.yml`) - Automatically generates and emails weekly reports every Tuesday at 6 AM ET
+2. **Championship Report** (`championship-report.yml`) - Manual trigger for Week 17 championship leaderboard
+3. **Season Recap** (`season-recap.yml`) - Manual trigger for comprehensive end-of-season summaries
+
+All workflows use the `--output-dir` mode to generate all formats (console, TSV, HTML, JSON, Markdown) in a single execution.
 
 ### Setup GitHub Actions Workflow
 
@@ -698,14 +804,24 @@ The workflow uses the `--output-dir` mode to generate all formats (console, TSV,
    - `ESPN_SWID` - Your ESPN SWID cookie for private leagues (e.g., `{12345678-1234-1234-1234-123456789ABC}`)
    - `ESPN_S2` - Your ESPN S2 cookie for private leagues (long string ending with `%3D`)
 
-3. **Enable GitHub Actions** - The workflow will automatically run every Tuesday at 9 AM ET during fantasy football season
+3. **Enable GitHub Actions** - The weekly workflow will automatically run every Tuesday at 9 AM ET during fantasy football season. The championship and season recap workflows are manual-trigger only.
 
 ### Manual Trigger
 
-You can also manually trigger the workflow:
+You can manually trigger any of the workflows:
 1. Go to your repository's "Actions" tab
-2. Select "Weekly Fantasy Football Report"
+2. Select the workflow you want to run:
+   - "Weekly Fantasy Football Report" - For current week standings
+   - "Championship Report" - For Week 17 championship leaderboard
+   - "Season Recap Report" - For comprehensive end-of-season summary
 3. Click "Run workflow"
+4. Fill in any optional inputs (email recipients, custom notes, etc.)
+5. Click "Run workflow" to start execution
+
+**Workflow-Specific Inputs:**
+- **Weekly Report**: `weekly_note` (optional note in report)
+- **Championship Report**: `championship_week`, `skip_email`, `championship_note`
+- **Season Recap**: `season_year`, `skip_email`, `recap_note`, `force_generation`
 
 ### Customizing the Schedule
 

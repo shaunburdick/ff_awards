@@ -158,4 +158,5 @@ def setup_logging(verbose: int = 0) -> None:
     # Suppress noisy third-party loggers unless in DEBUG mode
     if level > logging.DEBUG:
         logging.getLogger("requests").setLevel(logging.WARNING)
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
         logging.getLogger("espn_api").setLevel(logging.WARNING)

@@ -33,10 +33,7 @@ class ChallengeCalculator:
         """Initialize the challenge calculator."""
         pass
 
-    def calculate_all_challenges(
-        self,
-        divisions: Sequence[DivisionData]
-    ) -> list[ChallengeResult]:
+    def calculate_all_challenges(self, divisions: Sequence[DivisionData]) -> list[ChallengeResult]:
         """
         Calculate all 5 challenges across multiple divisions.
 
@@ -59,7 +56,9 @@ class ChallengeCalculator:
         if not all_teams:
             raise InsufficientDataError("No team data found across all divisions")
 
-        logger.info(f"Calculating challenges for {len(all_teams)} teams across {len(divisions)} divisions")
+        logger.info(
+            f"Calculating challenges for {len(all_teams)} teams across {len(divisions)} divisions"
+        )
 
         results: list[ChallengeResult] = []
 
@@ -68,7 +67,9 @@ class ChallengeCalculator:
 
         # Challenges 2-5 require game data
         if not all_games:
-            logger.warning("No game data available, adding placeholder results for game-based challenges")
+            logger.warning(
+                "No game data available, adding placeholder results for game-based challenges"
+            )
             results.extend(self._create_no_data_placeholders())
         else:
             results.append(self._calculate_most_points_one_game(all_teams, all_games))
@@ -93,27 +94,19 @@ class ChallengeCalculator:
             games.extend(division.games)
         return games
 
-    def _find_owner_for_team(self, team_name: str, division: str, all_teams: list[TeamStats]) -> Owner:
+    def _find_owner_for_team(
+        self, team_name: str, division: str, all_teams: list[TeamStats]
+    ) -> Owner:
         """Find the owner for a given team name and division."""
         for team in all_teams:
             if team.name == team_name and team.division == division:
                 return team.owner
         # Return a default Owner object for unknown teams
-        return Owner(
-            display_name="Unknown Owner",
-            first_name="",
-            last_name="",
-            id="unknown"
-        )
+        return Owner(display_name="Unknown Owner", first_name="", last_name="", id="unknown")
 
     def _create_na_owner(self) -> Owner:
         """Create an Owner object for N/A cases."""
-        return Owner(
-            display_name="N/A",
-            first_name="",
-            last_name="",
-            id="na"
-        )
+        return Owner(display_name="N/A", first_name="", last_name="", id="na")
 
     def _calculate_most_points_overall(self, teams: list[TeamStats]) -> ChallengeResult:
         """Calculate Challenge 1: Most Points Overall."""
@@ -129,11 +122,13 @@ class ChallengeCalculator:
             winner=highest_scorer.name,
             owner=highest_scorer.owner,
             division=highest_scorer.division,
-            value="",
-            description=f"{highest_scorer.points_for:.2f} total points"
+            value=f"{highest_scorer.points_for:.2f}",
+            description=f"{highest_scorer.points_for:.2f} total points",
         )
 
-    def _calculate_most_points_one_game(self, teams: list[TeamStats], games: list[GameResult]) -> ChallengeResult:
+    def _calculate_most_points_one_game(
+        self, teams: list[TeamStats], games: list[GameResult]
+    ) -> ChallengeResult:
         """Calculate Challenge 2: Most Points in One Game."""
         logger.debug("Calculating most points in one game")
 
@@ -147,11 +142,13 @@ class ChallengeCalculator:
             winner=highest_game.team_name,
             owner=self._find_owner_for_team(highest_game.team_name, highest_game.division, teams),
             division=highest_game.division,
-            value="",
-            description=f"{highest_game.score:.2f} points (Week {highest_game.week})"
+            value=f"{highest_game.score:.2f}",
+            description=f"{highest_game.score:.2f} points (Week {highest_game.week})",
         )
 
-    def _calculate_most_points_in_loss(self, teams: list[TeamStats], games: list[GameResult]) -> ChallengeResult:
+    def _calculate_most_points_in_loss(
+        self, teams: list[TeamStats], games: list[GameResult]
+    ) -> ChallengeResult:
         """Calculate Challenge 3: Most Points in a Loss."""
         logger.debug("Calculating most points in a loss")
 
@@ -164,7 +161,7 @@ class ChallengeCalculator:
                 owner=self._create_na_owner(),
                 division="N/A",
                 value="",
-                description="No losing games recorded yet"
+                description="No losing games recorded yet",
             )
 
         highest_loss = max(losses, key=lambda x: x.score)
@@ -174,11 +171,13 @@ class ChallengeCalculator:
             winner=highest_loss.team_name,
             owner=self._find_owner_for_team(highest_loss.team_name, highest_loss.division, teams),
             division=highest_loss.division,
-            value="",
-            description=f"{highest_loss.score:.2f} points in loss (Week {highest_loss.week})"
+            value=f"{highest_loss.score:.2f}",
+            description=f"{highest_loss.score:.2f} points in loss (Week {highest_loss.week})",
         )
 
-    def _calculate_least_points_in_win(self, teams: list[TeamStats], games: list[GameResult]) -> ChallengeResult:
+    def _calculate_least_points_in_win(
+        self, teams: list[TeamStats], games: list[GameResult]
+    ) -> ChallengeResult:
         """Calculate Challenge 4: Least Points in a Win."""
         logger.debug("Calculating least points in a win")
 
@@ -191,7 +190,7 @@ class ChallengeCalculator:
                 owner=self._create_na_owner(),
                 division="N/A",
                 value="",
-                description="No winning games recorded yet"
+                description="No winning games recorded yet",
             )
 
         lowest_win = min(wins, key=lambda x: x.score)
@@ -201,11 +200,13 @@ class ChallengeCalculator:
             winner=lowest_win.team_name,
             owner=self._find_owner_for_team(lowest_win.team_name, lowest_win.division, teams),
             division=lowest_win.division,
-            value="",
-            description=f"{lowest_win.score:.2f} points in win (Week {lowest_win.week})"
+            value=f"{lowest_win.score:.2f}",
+            description=f"{lowest_win.score:.2f} points in win (Week {lowest_win.week})",
         )
 
-    def _calculate_closest_victory(self, teams: list[TeamStats], games: list[GameResult]) -> ChallengeResult:
+    def _calculate_closest_victory(
+        self, teams: list[TeamStats], games: list[GameResult]
+    ) -> ChallengeResult:
         """Calculate Challenge 5: Closest Victory."""
         logger.debug("Calculating closest victory")
 
@@ -218,7 +219,7 @@ class ChallengeCalculator:
                 owner=self._create_na_owner(),
                 division="N/A",
                 value="",
-                description="No winning games recorded yet"
+                description="No winning games recorded yet",
             )
 
         closest_win = min(wins, key=lambda x: x.margin)
@@ -228,8 +229,8 @@ class ChallengeCalculator:
             winner=closest_win.team_name,
             owner=self._find_owner_for_team(closest_win.team_name, closest_win.division, teams),
             division=closest_win.division,
-            value="",
-            description=f"Won by {closest_win.margin:.2f} points (Week {closest_win.week})"
+            value=f"{closest_win.margin:.2f}",
+            description=f"Won by {closest_win.margin:.2f} points (Week {closest_win.week})",
         )
 
     def _create_no_data_placeholders(self) -> list[ChallengeResult]:
@@ -238,18 +239,20 @@ class ChallengeCalculator:
             ("Most Points in One Game", "Game data unavailable"),
             ("Most Points in a Loss", "Game data unavailable"),
             ("Least Points in a Win", "Game data unavailable"),
-            ("Closest Victory", "Game data unavailable")
+            ("Closest Victory", "Game data unavailable"),
         ]
 
         results: list[ChallengeResult] = []
         for challenge_name, description in placeholders:
-            results.append(ChallengeResult(
-                challenge_name=challenge_name,
-                winner="Data Unavailable",
-                owner=self._create_na_owner(),
-                division="N/A",
-                value="",
-                description=description
-            ))
+            results.append(
+                ChallengeResult(
+                    challenge_name=challenge_name,
+                    winner="Data Unavailable",
+                    owner=self._create_na_owner(),
+                    division="N/A",
+                    value="",
+                    description=description,
+                )
+            )
 
         return results

@@ -106,11 +106,13 @@ class PlayoffBracket:
     Attributes:
         round: Current playoff round name ("Semifinals" or "Finals")
         week: ESPN week number (15, 16, etc.)
+        division_name: Name of the division this bracket represents
         matchups: List of playoff matchups in this round
     """
 
     round: str
     week: int
+    division_name: str
     matchups: list[PlayoffMatchup]
 
     def __post_init__(self) -> None:

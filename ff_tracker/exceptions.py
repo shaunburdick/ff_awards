@@ -84,3 +84,21 @@ class DivisionSyncError(FFTrackerError):
     def __init__(self, message: str, division_states: dict[str, str]) -> None:
         self.division_states = division_states
         super().__init__(message)
+
+
+class SeasonIncompleteError(FFTrackerError):
+    """
+    Raised when attempting to generate season recap before season is complete.
+
+    This error occurs when trying to generate a complete season summary
+    before the championship week has finished. Can be bypassed with --force flag.
+
+    Attributes:
+        current_week: The current week number in the league
+        championship_week: The week number when championship occurs
+    """
+
+    def __init__(self, message: str, *, current_week: int, championship_week: int) -> None:
+        self.current_week = current_week
+        self.championship_week = championship_week
+        super().__init__(message)
