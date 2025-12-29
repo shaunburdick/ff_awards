@@ -176,4 +176,4 @@ jobs:
           ./reports/season-recap.html
           ./reports/season-recap.json
           ./reports/season-recap.md
-        retention-days: 365
+        retention-days: 90
