@@ -469,6 +469,7 @@ class SeasonRecapEmailFormatter:
                     <tr>
                         <th>Challenge</th>
                         <th>Winner</th>
+                        <th>Owner</th>
                         <th>Division</th>
                         <th>Value</th>
                     </tr>
@@ -481,6 +482,7 @@ class SeasonRecapEmailFormatter:
                     <tr>
                         <td>{challenge.challenge_name}</td>
                         <td>{challenge.winner}</td>
+                        <td>{challenge.owner.full_name}</td>
                         <td>{challenge.division}</td>
                         <td>{challenge.value}</td>
                     </tr>

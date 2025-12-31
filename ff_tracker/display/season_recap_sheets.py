@@ -147,10 +147,10 @@ class SeasonRecapSheetsFormatter:
 
         # Season challenges
         lines.append("SEASON-LONG CHALLENGES")
-        lines.append("Challenge\tWinner\tDivision\tValue")
+        lines.append("Challenge\tWinner\tOwner\tDivision\tValue")
         for challenge in summary.season_challenges:
             lines.append(
-                f"{challenge.challenge_name}\t{challenge.winner}\t{challenge.division}\t{challenge.value}"
+                f"{challenge.challenge_name}\t{challenge.winner}\t{challenge.owner.full_name}\t{challenge.division}\t{challenge.value}"
             )
         lines.append("")  # Blank line
 

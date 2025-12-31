@@ -286,7 +286,7 @@ class SeasonRecapConsoleFormatter:
         Returns:
             Formatted table string
         """
-        headers = ["Challenge", "Winner", "Division", "Value"]
+        headers = ["Challenge", "Winner", "Owner", "Division", "Value"]
         rows = []
 
         for challenge in challenges:
@@ -294,6 +294,7 @@ class SeasonRecapConsoleFormatter:
                 [
                     challenge.challenge_name,
                     challenge.winner,
+                    challenge.owner.full_name,
                     challenge.division,
                     challenge.value,
                 ]

@@ -155,13 +155,17 @@ class SeasonRecapService:
                 f"Championship week is {structure.championship_week}."
             )
         elif current_week == structure.championship_week:
-            # Championship week in progress or just started
+            # Championship week - check if games are actually complete
+            # ESPN reports current_week based on league configuration, but games may be finished
             status = "championship_week"
-            is_complete = False
-            message = (
-                f"Championship week in progress (week {current_week}). "
-                f"Recap may show partial or complete data depending on game completion."
-            )
+            is_complete = self._check_championship_complete(league, structure)
+            if is_complete:
+                message = f"Season complete: Championship week {structure.championship_week} games finished."
+            else:
+                message = (
+                    f"Championship week in progress (week {current_week}). "
+                    f"Recap may show partial or complete data depending on game completion."
+                )
         elif current_week > structure.championship_week:
             # Season fully complete
             status = "complete"
@@ -184,6 +188,183 @@ class SeasonRecapService:
             )
 
         return is_complete, status
+
+    def _check_championship_complete(self, league: League, structure: SeasonStructure) -> bool:
+        """
+        Check if championship week games are actually complete.
+
+        During championship week, ESPN may report current_week == championship_week
+        even after all games have finished (e.g., Wednesday after Monday Night Football).
+        This method checks if all championship week games have final scores by examining
+        team rosters and player stats for the championship week.
+
+        Args:
+            league: ESPN League object
+            structure: Season structure with championship week
+
+        Returns:
+            True if all championship games are complete, False otherwise
+        """
+        try:
+            week = structure.championship_week
+
+            # For Week 17+, use roster-based completion check
+            # ESPN's box_scores(17) returns stale Week 16 data
+            if week >= 17:
+                return self._check_roster_based_completion(league, week)
+            else:
+                return self._check_box_score_completion(league, week)
+
+        except Exception as e:
+            # If we can't determine, assume incomplete
+            logger.debug(f"Could not check championship completion: {e}")
+            return False
+
+    def _check_roster_based_completion(self, league: League, week: int) -> bool:
+        """
+        Check championship completion using team rosters (for Week 17+).
+
+        Examines starter game_status from player.stats[week] to determine
+        if all games are final.
+
+        Args:
+            league: ESPN League object
+            week: Championship week number
+
+        Returns:
+            True if all starter games are final, False otherwise
+        """
+        try:
+            total_starters = 0
+            final_starters = 0
+
+            # Check all teams' rosters
+            for team in league.teams:
+                roster_players = team.roster  # type: ignore[attr-defined]
+
+                for player in roster_players:
+                    # Check if player has Week data
+                    if not hasattr(player, "stats") or not isinstance(player.stats, dict):
+                        continue
+
+                    if week not in player.stats:
+                        continue
+
+                    # Only count starters
+                    slot_position = player.lineupSlot if hasattr(player, "lineupSlot") else "BE"
+                    is_starter = slot_position != "BE" and slot_position != "IR"
+
+                    if not is_starter:
+                        continue
+
+                    total_starters += 1
+                    week_data = player.stats[week]
+
+                    # Get projections for game status determination
+                    proj_points = week_data.get("projected_points", 0.0)
+
+                    # Determine game status using same logic as championship service
+                    game_status = self._get_game_status_from_week_data(week_data, proj_points)
+
+                    if game_status == "final":
+                        final_starters += 1
+
+            # If we have starters and at least 90% are final, consider championship complete
+            # (allowing for edge cases like players ruled out last-minute)
+            if total_starters > 0:
+                completion_rate = final_starters / total_starters
+                is_complete = completion_rate >= 0.9
+
+                logger.debug(
+                    f"Championship completion check: {final_starters}/{total_starters} "
+                    f"starters final ({completion_rate:.1%}) - {'COMPLETE' if is_complete else 'INCOMPLETE'}"
+                )
+
+                return is_complete
+
+            # No starter data found - assume incomplete
+            logger.debug("No starter data found for championship week")
+            return False
+
+        except Exception as e:
+            logger.debug(f"Error checking roster-based completion: {e}")
+            return False
+
+    def _check_box_score_completion(self, league: League, week: int) -> bool:
+        """
+        Check championship completion using box scores (for Week 16 and earlier).
+
+        Args:
+            league: ESPN League object
+            week: Championship week number
+
+        Returns:
+            True if all games have final scores, False otherwise
+        """
+        try:
+            # Get box scores for championship week
+            box_scores = league.box_scores(week)
+
+            if not box_scores:
+                # No games found - assume incomplete
+                logger.debug("No box scores found for championship week")
+                return False
+
+            # Check if all relevant games have final scores
+            games_with_scores = 0
+            total_games = 0
+
+            for box_score in box_scores:
+                # Only count games with teams (not empty matchups)
+                if hasattr(box_score, "home_team") and hasattr(box_score, "away_team"):
+                    total_games += 1
+                    # Check if game has actual scores (not 0-0)
+                    home_score = getattr(box_score, "home_score", 0)
+                    away_score = getattr(box_score, "away_score", 0)
+                    if home_score > 0 or away_score > 0:
+                        games_with_scores += 1
+
+            # If we found games and all have scores, championship is complete
+            if total_games > 0 and games_with_scores == total_games:
+                logger.debug(
+                    f"Championship complete: {games_with_scores}/{total_games} games have final scores"
+                )
+                return True
+
+            logger.debug(
+                f"Championship incomplete: {games_with_scores}/{total_games} games have scores"
+            )
+            return False
+
+        except Exception as e:
+            logger.debug(f"Error checking box score completion: {e}")
+            return False
+
+    def _get_game_status_from_week_data(self, week_data: dict, projected: float) -> str:
+        """
+        Get game status from player's week stats dictionary.
+
+        Uses projection-based detection logic consistent with ChampionshipService.
+
+        Args:
+            week_data: Dictionary containing week stats (from player.stats[week])
+            projected: Projected points for the week
+
+        Returns:
+            Game status: "final", "not_started", or "in_progress"
+        """
+        points = week_data.get("points", 0.0)
+
+        # Player ruled out/inactive (projection set to 0 before game)
+        if projected == 0.0 and points == 0.0:
+            return "final"
+
+        # Player has projection but no points = game not started
+        if points == 0.0 and projected > 0.0:
+            return "not_started"
+
+        # Player has points = game started or complete
+        return "final"
 
     def get_regular_season_summary(
         self, leagues: list[League], division_names: list[str], structure: SeasonStructure

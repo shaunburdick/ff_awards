@@ -168,7 +168,7 @@ class SeasonRecapJsonFormatter:
                 {
                     "challenge_name": challenge.challenge_name,
                     "winner": challenge.winner,
-                    "owner_name": challenge.owner.first_name + " " + challenge.owner.last_name,
+                    "owner_name": challenge.owner.full_name,
                     "division": challenge.division,
                     "value": challenge.value,
                     "description": challenge.description,

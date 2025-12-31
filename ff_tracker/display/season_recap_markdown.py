@@ -219,11 +219,11 @@ class SeasonRecapMarkdownFormatter:
         # Season challenges
         lines.append("### Season-Long Challenges")
         lines.append("")
-        lines.append("| Challenge | Winner | Division | Value |")
-        lines.append("|-----------|--------|----------|-------|")
+        lines.append("| Challenge | Winner | Owner | Division | Value |")
+        lines.append("|-----------|--------|-------|----------|-------|")
         for challenge in summary.season_challenges:
             lines.append(
-                f"| {challenge.challenge_name} | {challenge.winner} | {challenge.division} | {challenge.value} |"
+                f"| {challenge.challenge_name} | {challenge.winner} | {challenge.owner.full_name} | {challenge.division} | {challenge.value} |"
             )
         lines.append("")
 
