@@ -728,6 +728,7 @@ class TestEmailFormatterPlayoffMode:
         return PlayoffBracket(
             round="Semifinals",
             week=15,
+            division_name="League A",
             matchups=[playoff_matchup_semifinals, matchup2],
         )
 
@@ -737,6 +738,7 @@ class TestEmailFormatterPlayoffMode:
         return PlayoffBracket(
             round="Finals",
             week=16,
+            division_name="League A",
             matchups=[playoff_matchup_finals],
         )
 
@@ -1216,6 +1218,7 @@ class TestEmailFormatterPlayoffMode:
         bracket = PlayoffBracket(
             round="Semifinals",
             week=15,
+            division_name="League A",
             matchups=[matchup1, matchup2],
         )
 

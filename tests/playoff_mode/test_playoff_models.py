@@ -334,13 +334,17 @@ def test_playoff_bracket():
     )
 
     # Valid Semifinals bracket (2 matchups)
-    semifinals = PlayoffBracket(round="Semifinals", week=15, matchups=[matchup1, matchup2])
+    semifinals = PlayoffBracket(
+        round="Semifinals", week=15, division_name="Division 1", matchups=[matchup1, matchup2]
+    )
     assert semifinals.round == "Semifinals"
     assert len(semifinals.matchups) == 2
     print("  ✓ Valid Semifinals bracket created (2 matchups)")
 
     # Valid Finals bracket (1 matchup)
-    finals = PlayoffBracket(round="Finals", week=16, matchups=[matchup1])
+    finals = PlayoffBracket(
+        round="Finals", week=16, division_name="Division 1", matchups=[matchup1]
+    )
     assert finals.round == "Finals"
     assert len(finals.matchups) == 1
     print("  ✓ Valid Finals bracket created (1 matchup)")
@@ -350,6 +354,7 @@ def test_playoff_bracket():
         PlayoffBracket(
             round="Semifinals",
             week=15,
+            division_name="Division 1",
             matchups=[matchup1],  # Should be 2
         )
         print("  ✓ Semifinals matchup count validation works")
@@ -359,6 +364,7 @@ def test_playoff_bracket():
         PlayoffBracket(
             round="Finals",
             week=16,
+            division_name="Division 1",
             matchups=[matchup1, matchup2],  # Should be 1
         )
         print("  ✓ Finals matchup count validation works")
@@ -368,6 +374,7 @@ def test_playoff_bracket():
         PlayoffBracket(
             round="Championship",  # Invalid
             week=17,
+            division_name="Division 1",
             matchups=[matchup1],
         )
         print("  ✓ Invalid round name validation works")
@@ -377,6 +384,7 @@ def test_playoff_bracket():
         PlayoffBracket(
             round="Finals",
             week=-1,  # Invalid
+            division_name="Division 1",
             matchups=[matchup1],
         )
         print("  ✓ Negative week validation works")
@@ -386,6 +394,7 @@ def test_playoff_bracket():
         PlayoffBracket(
             round="Finals",
             week=0,  # Invalid
+            division_name="Division 1",
             matchups=[matchup1],
         )
         print("  ✓ Zero week validation works")
@@ -395,6 +404,7 @@ def test_playoff_bracket():
         PlayoffBracket(
             round="Finals",
             week=16,
+            division_name="Division 1",
             matchups=[],  # Invalid
         )
         print("  ✓ Empty matchups list validation works")
@@ -685,7 +695,9 @@ def test_division_data_extension():
         winner_seed=1,
         division_name="Division 1",
     )
-    bracket = PlayoffBracket(round="Finals", week=16, matchups=[matchup])
+    bracket = PlayoffBracket(
+        round="Finals", week=16, division_name="Division 1", matchups=[matchup]
+    )
 
     # Playoff mode division
     playoff_division = DivisionData(

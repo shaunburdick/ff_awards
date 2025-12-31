@@ -761,6 +761,7 @@ class TestConsoleFormatterPlayoffMode:
         return PlayoffBracket(
             round="Semifinals",
             week=15,
+            division_name="League A",
             matchups=[playoff_matchup_semifinals, matchup2],
         )
 
@@ -770,6 +771,7 @@ class TestConsoleFormatterPlayoffMode:
         return PlayoffBracket(
             round="Finals",
             week=16,
+            division_name="League A",
             matchups=[playoff_matchup_finals],
         )
 

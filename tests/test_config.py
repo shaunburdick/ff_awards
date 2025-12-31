@@ -332,8 +332,9 @@ class TestCreateConfig:
     def test_create_config_use_env_but_missing_raises_error(self) -> None:
         """Test that use_env=True without LEAGUE_IDS raises error."""
         with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(ConfigurationError, match="LEAGUE_IDS not found in environment"):
-                create_config(use_env=True, year=2024, private=False)
+            with patch("ff_tracker.config.load_environment"):  # Mock to prevent .env loading
+                with pytest.raises(ConfigurationError, match="LEAGUE_IDS not found in environment"):
+                    create_config(use_env=True, year=2024, private=False)
 
     def test_create_config_private_without_env_credentials_raises_error(self) -> None:
         """Test that private=True without credentials in env raises error."""

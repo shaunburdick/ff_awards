@@ -877,6 +877,7 @@ class TestPlayoffMode:
         bracket = PlayoffBracket(
             round="Semifinals",
             week=15,
+            division_name="League A",
             matchups=[matchup, matchup],  # Two semifinals
         )
 
@@ -944,6 +945,7 @@ class TestPlayoffMode:
         bracket = PlayoffBracket(
             round="Finals",
             week=16,
+            division_name="League A",
             matchups=[matchup],
         )
 
@@ -1029,6 +1031,7 @@ class TestPlayoffMode:
         bracket = PlayoffBracket(
             round="Semifinals",
             week=15,
+            division_name="League A",
             matchups=[matchup1, matchup2],
         )
 
