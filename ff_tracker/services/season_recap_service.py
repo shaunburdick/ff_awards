@@ -147,13 +147,17 @@ class SeasonRecapService:
                 f"Championship week is {structure.championship_week}."
             )
         elif current_week == structure.playoff_end:
-            # Finals week
+            # Finals week - but championship games (Week 17) might already be complete
+            # ESPN may keep current_week at 16 even after Week 17 games finish
             status = "finals"
-            is_complete = False
-            message = (
-                f"Season incomplete: Currently in Finals (week {current_week}). "
-                f"Championship week is {structure.championship_week}."
-            )
+            is_complete = self._check_championship_complete(league, structure)
+            if is_complete:
+                message = f"Season complete: Championship week {structure.championship_week} games finished."
+            else:
+                message = (
+                    f"Season incomplete: Currently in Finals (week {current_week}). "
+                    f"Championship week is {structure.championship_week}."
+                )
         elif current_week == structure.championship_week:
             # Championship week - check if games are actually complete
             # ESPN reports current_week based on league configuration, but games may be finished
