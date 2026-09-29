@@ -1,11 +1,13 @@
 name: Weekly Fantasy Football Report
 
 on:
-  # Scheduled runs disabled for end of season (2024-2025)
-  # Uncomment the schedule below to re-enable for next season
+  # Scheduled runs are active during the NFL season.
+  # To pause reporting for the off-season, comment out the schedule block below.
   schedule:
-    # Run every Tuesday at 10:00 UTC (6am EDT or 5am EST)
-    - cron: '0 10 * * 2'
+    # Run every Tuesday at 05:00 UTC (1am EDT or 12am EST)
+    # Off-peak slot on purpose: the old 10:00 UTC slot drifted 4-6h late under
+    # peak platform load once the NFL season ramped up (Sept 2026).
+    - cron: '0 5 * * 2'
 
   # Allow manual triggering
   workflow_dispatch:
