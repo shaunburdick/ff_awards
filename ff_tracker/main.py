@@ -130,7 +130,7 @@ Common Arguments:
 
 Email-Specific:
   email.accent_color=HEX    Hex color for highlights (default: #ffc107)
-  email.max_teams=N         Max teams in overall rankings (default: 20)
+  email.max_teams=N         Max teams in overall standings (default: 0 = all)
 
 Markdown-Specific:
   markdown.include_toc=BOOL Include table of contents (default: false)

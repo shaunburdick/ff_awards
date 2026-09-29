@@ -126,7 +126,7 @@ uv run ff-tracker 123456789,987654321 --output-dir ./reports
 --format-arg email.accent_color="#007bff"      # Formatter-specific argument
 --format-arg markdown.include_toc=true         # Enable table of contents
 --format-arg json.pretty=true                  # Pretty-print JSON
---format-arg email.max_teams=5                 # Limit top teams display
+--format-arg email.max_teams=5                 # Cap standings table (default: 0 = all teams)
 
 # Output formats
 --format console   # Human-readable tables (default)

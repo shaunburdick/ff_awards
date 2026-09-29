@@ -199,7 +199,7 @@ uv run ff-tracker 123456 --format json --format-arg json.pretty=true
 |----------|---------|-------------|
 | `note` | All | Display a message at the top of the output |
 | `email.accent_color` | email | Customize border/accent colors (hex color) |
-| `email.max_teams` | email | Limit number of teams in top overall rankings |
+| `email.max_teams` | email | Cap the overall standings table (default: `0` = all teams) |
 | `markdown.include_toc` | markdown | Generate table of contents with section links |
 | `json.pretty` | json | Enable indented JSON output (true/false) |
 

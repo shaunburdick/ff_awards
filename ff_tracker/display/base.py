@@ -253,14 +253,27 @@ class BaseFormatter(ABC):
         return sorted(division.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
 
     def _get_overall_top_teams(
-        self, divisions: Sequence[DivisionData], limit: int = 20
+        self, divisions: Sequence[DivisionData], limit: int | None = None
     ) -> list[TeamStats]:
-        """Get top teams across all divisions."""
+        """
+        Get teams ranked across all divisions, sorted by wins then points for.
+
+        Args:
+            divisions: Divisions to combine and rank.
+            limit: Maximum number of teams to return. ``None`` or a value of
+                zero or less means "no limit" and returns every team.
+
+        Returns:
+            Ranked teams, truncated to ``limit`` when one is supplied.
+        """
         all_teams: list[TeamStats] = []
         for division in divisions:
             all_teams.extend(division.teams)
 
-        return sorted(all_teams, key=lambda x: (x.wins, x.points_for), reverse=True)[:limit]
+        ranked = sorted(all_teams, key=lambda x: (x.wins, x.points_for), reverse=True)
+        if limit is None or limit <= 0:
+            return ranked
+        return ranked[:limit]
 
     def _calculate_total_stats(self, divisions: Sequence[DivisionData]) -> tuple[int, int]:
         """Calculate total number of divisions and teams."""
