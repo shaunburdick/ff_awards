@@ -98,6 +98,46 @@ def sample_division(sample_teams: list[TeamStats], sample_games: list[GameResult
     )
 
 
+LARGE_DIVISION_TEAM_COUNT = 25
+
+
+@pytest.fixture
+def large_division() -> DivisionData:
+    """
+    Create a division with more teams than the old hardcoded limit of 20.
+
+    Team names are zero-padded so the ranking order is assertable: team 24 has
+    the best record, team 00 the worst.
+    """
+    teams = [
+        TeamStats(
+            name=f"Team {index:02d}",
+            owner=Owner(
+                display_name=f"Owner {index:02d}",
+                first_name=f"Owner{index:02d}",
+                last_name="Test",
+                id=f"owner{index:02d}",
+            ),
+            wins=index,
+            losses=LARGE_DIVISION_TEAM_COUNT - index,
+            points_for=1000.0 + index,
+            points_against=1500.0 - index,
+            division="League Large",
+            in_playoff_position=index >= 21,
+        )
+        for index in range(LARGE_DIVISION_TEAM_COUNT)
+    ]
+
+    return DivisionData(
+        league_id=654321,
+        name="League Large",
+        teams=teams,
+        games=[],
+        weekly_games=[],
+        weekly_players=[],
+    )
+
+
 @pytest.fixture
 def sample_challenges(sample_owner_alice: Owner) -> list[ChallengeResult]:
     """Create sample challenge results."""
@@ -283,6 +323,79 @@ class TestFormatOutput:
         # Output should still be valid HTML
         assert "<!DOCTYPE html>" in output
         assert "Alice" in output  # Should have at least top team
+
+    def test_format_output_shows_all_teams_by_default(
+        self,
+        large_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+    ) -> None:
+        """Default max_teams shows every team, not just the top 20."""
+        formatter = EmailFormatter(year=2024)
+        output = formatter.format_output(
+            divisions=[large_division],
+            challenges=sample_challenges,
+        )
+
+        # 25 teams exist; all of them must be ranked.
+        for index in range(LARGE_DIVISION_TEAM_COUNT):
+            assert f"Team {index:02d}" in output
+        assert "Overall All Teams (Across All Divisions)" in output
+
+    def test_format_output_max_teams_zero_means_all(
+        self,
+        large_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+    ) -> None:
+        """An explicit max_teams=0 is treated as unlimited, same as the default."""
+        formatter = EmailFormatter(year=2024, format_args={"max_teams": "0"})
+        output = formatter.format_output(
+            divisions=[large_division],
+            challenges=sample_challenges,
+        )
+
+        for index in range(LARGE_DIVISION_TEAM_COUNT):
+            assert f"Team {index:02d}" in output
+
+    def test_format_output_truncated_heading_says_top(
+        self,
+        large_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+    ) -> None:
+        """A truncated list is labelled 'Top' rather than 'All'."""
+        formatter = EmailFormatter(year=2024, format_args={"max_teams": "10"})
+        output = formatter.format_output(
+            divisions=[large_division],
+            challenges=sample_challenges,
+        )
+
+        assert "Overall Top Teams (Across All Divisions)" in output
+        assert "Overall All Teams" not in output
+
+        # Scope to the overall table; the per-division table above it always
+        # lists every team regardless of max_teams.
+        overall_section = output.split("Overall Top Teams (Across All Divisions)")[1]
+        overall_section = overall_section.split("</table>")[0]
+
+        # Highest-ranked teams are the ones kept.
+        assert "Team 24" in overall_section
+        assert "Team 00" not in overall_section
+
+    def test_get_overall_top_teams_unlimited_by_default(self, large_division: DivisionData) -> None:
+        """The shared helper returns every team when no limit is supplied."""
+        formatter = EmailFormatter(year=2024)
+        teams = formatter._get_overall_top_teams([large_division])
+
+        assert len(teams) == LARGE_DIVISION_TEAM_COUNT
+
+    @pytest.mark.parametrize("limit", [None, 0, -1])
+    def test_get_overall_top_teams_non_positive_limit_is_unlimited(
+        self, large_division: DivisionData, limit: int | None
+    ) -> None:
+        """None, zero, and negative limits all mean 'return every team'."""
+        formatter = EmailFormatter(year=2024)
+        teams = formatter._get_overall_top_teams([large_division], limit=limit)
+
+        assert len(teams) == LARGE_DIVISION_TEAM_COUNT
 
     def test_format_output_default_accent_color(
         self,

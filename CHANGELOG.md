@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed - Email standings default to all teams
+- **Email overall standings now list every team by default.** The hardcoded
+  Top 20 cap in the cross-division standings table is gone; `email.max_teams`
+  remains available to reintroduce a cap (`email.max_teams=10`). A value of `0`
+  (the new default) means "no limit", as do `None` and negative values.
+- **Adaptive section heading.** The email now says "Overall All Teams" when the
+  table is complete and "Overall Top Teams" when it is truncated, so the label
+  always matches the content.
+- **`BaseFormatter._get_overall_top_teams()` accepts an unlimited limit.** The
+  `limit` parameter is now `int | None`, where `None` (or `<= 0`) returns every
+  team. Console, sheets, and markdown output still pass an explicit limit and
+  are unchanged.
+
 ## [3.3.0] - 2025-12-29 (Season Recap Feature)
 
 ### Added - Season Recap 📊

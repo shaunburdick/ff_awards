@@ -48,7 +48,9 @@ class EmailFormatter(BaseFormatter):
         return {
             "note": "Optional alert message displayed at top of email",
             "accent_color": "Hex color for highlight sections (default: #ffc107)",
-            "max_teams": "Maximum teams to show in overall rankings (default: 20)",
+            "max_teams": (
+                "Maximum teams to show in overall standings (default: 0 = all teams, e.g. 10)"
+            ),
         }
 
     def format_output(
@@ -64,7 +66,7 @@ class EmailFormatter(BaseFormatter):
         # Get format arguments
         note = self._get_arg("note")
         accent_color = self._get_arg("accent_color", "#ffc107")
-        max_teams = self._get_arg_int("max_teams", 20)
+        max_teams = self._get_arg_int("max_teams", 0)
 
         total_divisions, total_teams = self._calculate_total_stats(divisions)
 
@@ -440,15 +442,21 @@ class EmailFormatter(BaseFormatter):
             html_content += "</table>\n"
             html_content += '<p style="margin-top: 15px; font-style: italic; color: #666;"><strong>*</strong> = Currently in playoff position</p>\n'
 
-        # Overall top teams (labeled as historical if playoff mode)
+        # Overall standings across divisions (labeled as historical if playoff mode).
+        # Rank the teams first so the heading can reflect whether the list is
+        # actually truncated -- calling it "Top Teams" when every team is shown
+        # would be misleading.
+        top_teams = self._get_overall_top_teams(divisions, limit=max_teams)
+        is_truncated = len(top_teams) < total_teams
+        qualifier = "Top" if is_truncated else "All"
+
         if is_playoff_mode:
-            html_content += "<h2>Overall Top Teams (Final Regular Season - Week 14)</h2>\n"
+            html_content += f"<h2>Overall {qualifier} Teams (Final Regular Season - Week 14)</h2>\n"
         else:
-            html_content += "<h2>Overall Top Teams (Across All Divisions)</h2>\n"
+            html_content += f"<h2>Overall {qualifier} Teams (Across All Divisions)</h2>\n"
         html_content += "<table>\n"
         html_content += '<tr><th>Rank</th><th>Team</th><th>Owner</th><th>Division</th><th class="number">PF</th><th class="number">PA</th><th>Record</th></tr>\n'
 
-        top_teams = self._get_overall_top_teams(divisions, limit=max_teams)
         for i, team in enumerate(top_teams, 1):
             # Add asterisk to beginning of team name if in playoffs
             team_name = team.name

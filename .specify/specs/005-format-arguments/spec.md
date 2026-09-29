@@ -137,7 +137,7 @@ Generic system for passing optional arguments to formatters, enabling customizat
 
 ### Email Formatter
 - `accent_color`: Hex color code (default: #ffc107)
-- `max_teams`: Maximum teams in overall rankings (default: 20)
+- `max_teams`: Maximum teams in overall standings (default: `0` = show all teams)
 
 ### Markdown Formatter
 - `include_toc`: Generate table of contents (default: false)
