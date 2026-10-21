@@ -4,7 +4,7 @@
 > **Status**: Draft — revised after Gate 1
 > **Created**: 2026-10-21
 > **Last Updated**: 2026-10-21
-> **Version**: 0.2
+> **Version**: 0.3
 
 ## Overview
 
@@ -41,10 +41,10 @@ The digest sent to the provider is built from the domain models (`DivisionData`,
 
 - league name, team count, current week, and weeks remaining in the regular season (`reg_season_count - current_week`, never below zero — this reads a field the models do not yet carry; see Data Requirements);
 - standings: rank, team name, owner name, record, points for, points against, and whether the team is currently **inside or outside the top four by record** — the `in_playoff_position` boolean, worded as the JSON's `playoff_status` values, not a seed, playoff rank or prediction;
-- the week's matchups: both team names, both scores, margin, both projected scores, and each team's `true_projection_diff`. A `WeeklyGameResult` row carries only its own `starter_projected_score` and `true_projection_diff`; the opponent's true diff is read from the mirror row, pairing rows by `team_name`/`opponent_name`, and left out when no mirror row exists. There is no opponent true-diff field to read;
+- the week's matchups: both team names, both scores, margin, both projected scores, and each team's `true_projection_diff`. A `WeeklyGameResult` row carries only its own `starter_projected_score` and `true_projection_diff`; the opponent's true diff is read from the mirror row, pairing rows by `team_name`/`opponent_name`, and left out when no mirror row exists. There is no opponent true-diff field to read. The digest states explicitly when a league had no matchups this week;
 - the weekly challenges that league won, under the mode rule below.
 
-**Mode rule (one rule, no per-mode special cases elsewhere).** The digest mirrors what the formatters display, using the existing mode predicate — `any(d.is_playoff_mode for d in divisions)` plus `championship is not None` — rather than adding a third copy of it:
+**Mode rule (one rule).** The digest derives the mode locally with the same two expressions the formatters use — `any(d.is_playoff_mode for d in divisions)` and `championship is not None` — and the digest must agree with what the formatters render for the same inputs; AC-012 asserts that agreement. It is a deliberate sixth copy of those two lines, not an extraction: each of the five formatters already computes them independently, and `ReportContext._build_context_from_params` is not reachable from a service. In each mode the digest carries:
 
 - regular season: standings and the 13 weekly challenges, with their winners globally;
 - Weeks 15–16 and Week 17: bracket matchups or the championship leaderboard instead of weekly team challenges, the 7 player highlights only, standings where the formatters show them, and the 5 season-challenge leaders marked historical (final at the end of Week 14).
@@ -73,11 +73,14 @@ Response shape:
 ```
 
 - `headline`, every `paragraphs` entry and `season_note` are non-empty strings; `bullets` may be empty.
-- Each `leagues` entry is matched to a league by `strip().casefold()` name equality. When the entry count equals the league count but the names do not match, fall back to positional matching, and render headings from our own league names — never from the response. An entry that matches no league, or a league with no entry or more than one, when neither path resolves, is a contract failure: the section is not rendered partially.
-- `leagues` order follows the digest order.
+- League matching is a **total order**, applied once per response:
+  1. If every league name matches exactly one entry and every entry matches exactly one league (after `strip().casefold()` equality), map by name. Response order is irrelevant.
+  2. Otherwise, if the entry count equals the league count, map by position in digest order, and render every heading from our own league names — never from the response. A stray, renamed or duplicated entry at equal counts lands here and renders.
+  3. Otherwise — the counts differ and (1) did not resolve — the response is a contract failure: the section is not rendered, wholly or partially.
+- Response order is expected to follow the digest order: (1) does not depend on it, and (2) is defined by it.
 - Voice: a commissioner addressing the league — direct, dry, allowed to be wry, no invented statistics and no claims about players or teams absent from the digest.
 - Length expectation: roughly 60–120 words per league (150–400 words for a three-league report), 1–3 paragraphs and at most 3 bullets per league, `headline` at most 15 words, `season_note` 1–2 sentences. Length is a prompt instruction, not a validation gate: an over-long response renders as delivered and is not truncated or rejected.
-- The section is labelled in every format as AI-generated. It is never presented as fact-checked or as a league record. No requirement verifies that its claims are true; only the shape and league membership are validated.
+- The section is labelled in every format as AI-generated. It is never presented as fact-checked or as a league record. No requirement verifies that its claims are true; only the shape and league matching are validated.
 - The narrative may not be used to compute, alter or replace any deterministic value.
 
 ### FR-005 — Rendering
@@ -117,7 +120,7 @@ Any failure while obtaining or validating the narrative produces the same result
 1. a one-line notice in the output, in the section's position at the bottom, in the format's own style: `AI summary unavailable: <reason>. The report is unaffected.` In JSON the notice is the value of `ai_summary.error`. The notice stays where the section would have been — it is not hoisted into the header, because nothing about the deterministic report changed.
 2. when `GITHUB_ACTIONS` is `true`, a workflow command on stdout: `::warning::AI summary unavailable: <reason>.` — outside Actions no workflow command is emitted, so console output stays clean. This warning is the visibility backstop that a bottom-of-report notice needs.
 
-`<reason>` names what failed and never includes the API key or the response body: for HTTP errors `HTTP 410 (model glm-5.3-flash)`; for timeouts `timed out after 120s`; for transport errors `connection failed`; for truncation `finish_reason=length`; for shape problems `response did not match the summary contract`; for a stray league `unknown league "X"` / for a missing one `missing league "X"`.
+`<reason>` names what failed and never includes the API key or the response body: for HTTP errors `HTTP 410 (model glm-5.3-flash)`; for timeouts `timed out after 120s`; for transport errors `connection failed`; for truncation `finish_reason=length`; for shape problems `response did not match the summary contract`; for a league-count mismatch `league count mismatch (3 leagues, 2 sections)`.
 
 This is a deliberate, documented exception to Article III (see Constitution Deviations).
 
@@ -130,9 +133,9 @@ Configuration errors are not narrative failures and are not degraded:
 - `AI_SUMMARY_ENABLED` set to any value not in `true|1|yes|on|false|0|no|off` (case-insensitive) → `ConfigurationError`.
 - `AI_SUMMARY_TIMEOUT` not a positive integer → `ConfigurationError`.
 - Misspelled or missing provider settings therefore fail loudly once, instead of quietly degrading every scheduled run.
-- Because that failure produces no report, the weekly workflow (`.github/workflows/weekly-report.yml`) sets `AI_SUMMARY_ENABLED=true` only when the `AI_SUMMARY_API_KEY` secret is present, and leaves it unset otherwise. No workflow sets the flag unconditionally.
+- Because that failure produces no report, the weekly workflow sets `AI_SUMMARY_ENABLED=true` only when **both** `secrets.AI_SUMMARY_API_KEY` and `vars.AI_SUMMARY_BASE_URL` are non-empty, and omits it otherwise. Guarding the key alone is not enough: the base URL has no default, so a key with no base URL reaches the missing-base-URL branch above and is the same CI trap one variable over. `AI_SUMMARY_BASE_URL` is a repository **variable**, not a secret — a URL is not a credential, an operator must be able to verify it in the repository settings, and hiding it buys nothing. The guard is an `env:` expression yielding the literal `true`/`false` (e.g. `AI_SUMMARY_ENABLED: ${{ secrets.AI_SUMMARY_API_KEY != '' && vars.AI_SUMMARY_BASE_URL != '' }}`) consumed by the step that writes `.env`. It cannot be an `if:` condition: `secrets` is not available in `jobs.<job_id>.if` or `steps.<job_id>.if`, so such a condition evaluates without the secret and silently disables the feature. No workflow sets the flag unconditionally.
 
-**Tradeoff, stated plainly:** a fork or a rotated secret leaves the flag with no key, and with the flag on that means no report at all — not a report without a narrative. Without the workflow guard, a missing secret would silently stop the weekly report, which is the one outcome this feature must not cause. With the guard, a checkout that has no secret produces a normal report with the feature off, and gets no AI section until an operator adds the secret. The guard is therefore a requirement, not workflow polish.
+**Tradeoff, stated plainly:** a fork or a rotated credential leaves the flag on with no key or no base URL, and with the flag on that means no report at all — not a report without a narrative. Without the workflow guard, a missing secret would silently stop the weekly report, which is the one outcome this feature must not cause. With the guard, a checkout missing either value produces a normal report with the feature off, and gets no AI section until an operator supplies both. The guard is therefore a requirement, not workflow polish.
 
 ### FR-008 — Provenance and determinism
 
@@ -193,15 +196,19 @@ Tested offline with a fake client that records requests and returns canned respo
 - **AC-001** Feature off: zero calls recorded. Each of the five formats is compared against the feature-on output produced in the same test: JSON documents are parsed and compared after removing the `ai_summary` key; console, sheets, email and markdown are compared on everything outside the new block, by asserting the output equals its pre-section prefix followed by its post-section suffix.
 - **AC-002** Feature on with a valid fake response: the section appears in all five formats, after the existing sections and before the footer, labelled AI-generated; JSON `ai_summary` contains headline, one entry per league in digest order, and provenance.
 - **AC-003** Multi-league run: exactly one call, regardless of 1, 3 or 10 leagues, and exactly one call in `--output-dir` mode with five formats; the same narrative appears in all five files.
-- **AC-004** Each failure path in FR-006 — HTTP 4xx/5xx, transport error, timeout, `finish_reason=length`, contract mismatch, unknown or missing league — produces: the complete deterministic section set, exit code 0, one notice line in the section's position, no empty heading, no `::warning::` when `GITHUB_ACTIONS` is unset, and exactly one `::warning::` line when it is `true`.
+- **AC-004** Each failure path in FR-006 — HTTP 4xx/5xx, transport error, timeout, `finish_reason=length`, contract mismatch, league-count mismatch — produces: the complete deterministic section set, exit code 0, one notice line in the section's position, no empty heading, no `::warning::` when `GITHUB_ACTIONS` is unset, and exactly one `::warning::` line when it is `true`.
 - **AC-005** A fake error body containing the API key and the base URL never appears in stdout, stderr, the notice, the warning, or any file written to `--output-dir`.
-- **AC-006** A `-vv` run over three leagues logs no team name, owner name, league ID, API key, prompt text or provider response body.
+- **AC-006** No log line emitted by the summary service or by any other code this feature adds contains a team name, owner name, league ID, API key, prompt text or response body; a unique marker planted in the digest never appears in a `-vv` run over three leagues. Existing logging in modules this feature does not touch is out of scope for this criterion.
 - **AC-007** `finish_reason: "length"` with complete, parseable content is still treated as FR-006's truncation failure — the content is not rendered.
-- **AC-008** League matching: an entry differing only in case or surrounding whitespace matches; when entry and league counts agree but no name matches, positional matching renders headings from our own league names; an extra entry, a missing entry, a duplicated entry, or a mismatch when the counts differ is an FR-006 contract failure and none renders a partial section.
-- **AC-009** Missing key, missing base URL, bad `AI_SUMMARY_ENABLED` value, and non-numeric or zero `AI_SUMMARY_TIMEOUT` each raise `ConfigurationError` naming the variable, exit 1, record zero calls, and write no report; the weekly workflow sets `AI_SUMMARY_ENABLED` only when the key secret is present.
+- **AC-008** League matching follows FR-004's total order: (i) entries reordered, or differing only in case and surrounding whitespace, map by name; (ii) with equal counts and no full name match — including one stray entry or one duplicated entry — every section renders by position under our own league names, and no response-supplied league name appears as a heading; (iii) with differing counts and no full name match, the FR-006 contract failure is reported with the count-mismatch reason and nothing is rendered.
+- **AC-009** Missing key, missing base URL, bad `AI_SUMMARY_ENABLED` value, and non-numeric or zero `AI_SUMMARY_TIMEOUT` each raise `ConfigurationError` naming the variable, exit 1, record zero calls, and write no report.
 - **AC-010** The fake client records the model, base URL, timeout, `max_tokens: 8000` and bearer token from each configuration; changing `AI_SUMMARY_MODEL` changes the value sent and the value in provenance and the attribution line.
 - **AC-011** A paragraph containing a tab, newline, `"`, `<`, `&` and emoji renders as one sheet row and one console line, is HTML-escaped in email, and does not break TSV column counts.
-- **AC-012** Edge-case inputs — single league, a league with no matchups this week, Week 15 playoff mode, Week 17 championship mode, and a digest with no player data — each produce a valid request and a rendered section; the digest sent in Weeks 15–16 carries bracket matchups and the 7 player highlights, and in Week 17 the championship leaderboard, matching what the formatters display.
+- **AC-012** Edge-case inputs — single league, a league with no matchups this week, Week 15 playoff mode, Week 17 championship mode, and a digest with no player data — each produce a valid request and a rendered section; the digest sent in Weeks 15–16 carries bracket matchups and the 7 player highlights, and in Week 17 the championship leaderboard, matching what the formatters display; the mode the digest derives agrees with the mode each of the five formatters renders for the same inputs.
+
+### Workflow configuration check (static; inspects the YAML, not runtime behaviour)
+
+- **WC-001** `.github/workflows/weekly-report.yml` sets `AI_SUMMARY_ENABLED` through an `env:` expression that references both `secrets.AI_SUMMARY_API_KEY` and `vars.AI_SUMMARY_BASE_URL`; the step that writes `.env` appends the three `AI_SUMMARY_*` values only when that value is `true`; and no `if:` condition in the file references `AI_SUMMARY_ENABLED`.
 
 Verified manually against a live provider, once, with a real three-league week:
 
@@ -262,3 +269,4 @@ None open. The earlier question about an `AI_SUMMARY_BASE_URL` default is resolv
 |---------|------|--------|---------|
 | 0.1 | 2026-10-21 | AI Agent | Initial draft from the product owner's decisions and the week-6 spike evidence |
 | 0.2 | 2026-10-21 | AI Agent | Gate 1 revisions: digest fields matched to model reality (playoff-position boolean, mirror-row true diff, `reg_season_count` as a model addition); one mode rule replaces the playoff contradiction; no digest/body logging plus a `-vv` criterion; `prompt_version` replaced by `prompt_sha` with the prompt located in the service; league matching gains a positional fallback; workflow conditionally sets the enable flag with the tradeoff stated; unexecutable byte-identical criteria replaced; failure-mode table, edge cases 1–5, the old byte-identical AC and Open Question 2 cut (ACs renumbered); duplicated spike numbers reduced to where they drive requirements |
+| 0.3 | 2026-10-21 | AI Agent | Re-review revisions: the workflow guard covers key **and** base URL, names the `env:` expression and states that `if:` cannot express it (`vars` chosen for the URL with the reason); the workflow assertion moved out of AC-009 into a static WC-001; league matching stated as a total order with AC-008 and FR-006's reasons aligned (duplicates and strays at equal counts render; only count mismatches fail); the no-matchups digest sentence restored; the mode rule now says the digest carries a local sixth copy and must agree with the formatters; AC-006 scoped to this feature's own logging with a digest marker |

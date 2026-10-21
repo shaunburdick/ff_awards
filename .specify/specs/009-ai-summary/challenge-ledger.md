@@ -1,0 +1,41 @@
+# Challenge Ledger — 009 AI Summary
+
+> Gate 1 (spec) · `spec.md` v0.3 (this commit) · Constitution v1.0.0, no conflict.
+> Owner decisions of 2026-10-21 are precedent: fail-fast when enabled-but-unconfigured with a
+> workflow guard; league matching by name with positional fallback; failure notice at the bottom.
+> They are not reopened.
+> Verdict: HOLD at Gate 1 (three closure findings, one clause each); all re-review findings closed
+> in v0.3 — no ruling reopened.
+
+## Rulings (v2 — after the owner's decisions)
+
+| Decision | Ruling | Carried to |
+|---|---|---|
+| FR-007: missing key/base URL → `ConfigurationError`, exit 1, no report, with a workflow guard | DEFENDED — owner's decision; spec states the fork/rotated-secret tradeoff plainly (FR-007 §Tradeoff). Closed in v0.3: the guard requires key **and** base URL (`vars` for the URL, with the reason), is an `env:` expression yielding literal `true`/`false`, and FR-007 states that `if:` cannot express it because `secrets` is unavailable in `jobs.<job_id>.if`/`steps.<job_id>.if`. | — |
+| Failure notice at the bottom, in the section's position | DEFENDED — owner's decision; FR-005 and FR-006 are consistent and the `::warning::` is named as the backstop. | — |
+| League matching: name (`strip().casefold()`) with positional fallback, headings from our data | DEFENDED in policy — owner's decision. Closed in v0.3: FR-004 states the total order (all names match once → name map; else equal counts → position; else fail), so a stray or duplicated entry at equal counts renders and only a count mismatch fails; AC-008 and FR-006's reason list (`league count mismatch`) are aligned. | — |
+| `AI_SUMMARY_ENABLED` as a separate switch | DEFENDED — a stray key must not by itself send team/owner names to a third party. | — |
+| Article III deviation (report ships on narrative failure) | DEFENDED — bounded, declared, never silent; owner's decision. | — |
+| FR-002 digest vs models | CLOSED — `reg_season_count` named as a model addition; opponent true diff read from the mirror row with an explicit omission rule; playoff position worded as the `in_playoff_position` boolean. The cut of Edge Case 2 cost the no-matchups instruction; restored in v0.3 — FR-002 states explicitly when a league had no matchups this week. | — |
+| Mode rule (Weeks 15–17) | CLOSED — one rule stated, AC-012 aligned. The "existing mode predicate" claim was inaccurate; v0.3 now says the digest applies the same two-line rule locally as a deliberate sixth copy (not an extraction — `ReportContext._build_context_from_params` is unreachable from a service) and must agree with the formatters, which AC-012 asserts. | — |
+| `prompt_sha` replaces `prompt_version`; prompt is a module constant under `ff_tracker/services/` | CLOSED — hash cannot drift; prompt edits are one reviewable diff. | — |
+| Digest / request / response never logged | CLOSED — FR-009 clause plus AC-006. AC-006 now asserts only code this feature owns (summary service and any new code: no team name, owner name, league ID, key, prompt text or response body) plus a digest-marker check; existing logging in untouched modules (`espn_service.py`) is explicitly out of scope. | — |
+| AC-001 testability; AC-010 | CLOSED — AC-001 is a same-test prefix/suffix comparison with JSON parsed minus `ai_summary`; AC-010 deleted and ACs renumbered with no stale references. | — |
+| Spike numbers doing requirement work | CLOSED — word counts, "roughly 7 KB" and the reasoning-token ranges are gone; `max_tokens: 8000` keeps one line of justification as a request parameter. | — |
+| Open Question 1: base URL default | RESOLVED — no default in code; spike endpoint documented in `.env.example` and the README. | — |
+| Open Question 2: placement | DELETED — not a question; already decided in FR-005. | — |
+
+## Cuts confirmed
+
+- Failure Modes table — no loss: AC-004 enumerates the paths, and a 2xx empty body is covered by "must parse directly as JSON".
+- Edge Cases 1–5 — one loss: the no-matchups digest instruction (restored in v0.3, see FR-002).
+- AC-010 (old byte-identical criterion) — no loss: AC-001 and AC-004 cover both directions.
+- Open Question 2 — no loss.
+
+## Re-review findings — closed in v0.3
+
+1. Workflow guard was incomplete and named no mechanism → FR-007 now guards key **and** base URL through an `env:` expression and states that `if:` cannot express it; the workflow assertion moved to WC-001 (static YAML check), and AC-009 keeps only what a fake client observes.
+2. League rule was not total → FR-004 states the total order; AC-008 and FR-006's reasons aligned; a duplicate or stray entry at equal counts renders, only a count mismatch fails.
+3. AC-006 asserted a property of untouched code → scoped to the summary service and new code, with a digest marker and existing logging declared out of scope.
+
+Minor: FR-002's no-matchups sentence restored; the "existing mode predicate" wording replaced with an explicit local sixth copy plus an agreement assertion in AC-012.
