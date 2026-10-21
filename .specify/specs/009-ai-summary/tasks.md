@@ -111,7 +111,7 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 - [ ] Season challenges with `"historical": true` in playoff/championship modes; `playoffs` populated in playoff mode and `None` otherwise; `championship` populated in championship mode and `None` otherwise
 - [ ] Never read `division.league_id`, credentials or the key
 - [ ] `tests/test_ai_summary_digest.py`: regular (13 challenges, standings), playoff (bracket, 7 player highlights, team challenges absent), championship (leaderboard, empty standings), no-matchups league, no weekly data, `current_week is None` → `week` and `weeks_remaining` are `None` (with `matchups_note` driven by the matchups list), `reg_season_count is None` → `weeks_remaining is None`, mirror-row pairing present/absent, digest contains no league id and no planted marker
-- [ ] `tests/test_ai_summary_digest.py`: **golden recursive key-set assertion** — one expected key set per level, compared against the built digest, so a renamed key fails even if the type checker is satisfied
+- [ ] `tests/test_ai_summary_digest.py`: **golden recursive key-set assertion** — one expected key set per level, compared against the built digest, so a renamed key fails even if the type checker is satisfied. The golden is **authored from FR-002's field list**, not captured from the builder; a snapshot would bless a wrong key
 
 **Validation**: `pytest -q` green; digest serialises with `json.dumps`; `mypy` clean (a wrong key is a compile error).
 
@@ -135,6 +135,7 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 - [ ] Logging: INFO model/status/latency, DEBUG token counts — never key, request or response body; host via `urlsplit(base_url).hostname`; `HTTPError.filename` never read or logged
 - [ ] `tests/test_ai_client.py` with `FakeTransport`: URL/headers/UA/body asserted; default vs override base URL (unset, empty, whitespace); each failure class → its reason; a 200 with `finish_reason=length` → truncation; a 401 → `HTTP 401 (model … at opencode.ai)` with no path in the message
 - [ ] `tests/test_ai_client.py`: **`patch("urllib.request.urlopen")` test** — a `MagicMock` context manager returning canned bytes proves `_urlopen` passes `timeout=` as a keyword, calls `.read()`, and returns `bytes` (the production path no injected fake covers)
+- [ ] `tests/test_ai_client.py`: **logging test (AC-006 client half)** — `caplog` at DEBUG, a fake transport returning a body containing a unique marker, plus a second case whose `HTTPError` body carries the same marker; assert no record at any level contains the API key, the marker, or any path segment of the configured URL. Assert against `record.getMessage()` so `%s`-interpolated arguments are examined, not just `record.args`
 
 **Validation**: `pytest -q` green; no socket is opened by any test.
 
@@ -160,7 +161,9 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 - [ ] WARNING log with the reason only; DEBUG log of the composed system prompt; never the digest, request body, response body, key, team or owner names
 - [ ] `tests/test_ai_summary_service.py` — request/contract:
       valid fake response → `AISummary` with provenance; `prompt_sha` stable and changing with the prompt; instructions block present only when the prompt is set; non-JSON / fenced / missing-key / empty-`paragraphs` → `AISummaryUnavailable` with the contract reason
-- [ ] `tests/test_ai_summary_service.py` — **`test_generate_propagates_programming_errors`**: a digest builder stubbed to raise `AttributeError` makes `generate` **raise**, not return `AISummaryUnavailable` (Gate 2 done-criterion)
+- [ ] `tests/test_ai_summary_service.py` — **`test_generate_propagates_programming_errors`** (two cases, both must pass):
+      (a) a digest builder stubbed to raise `AttributeError` makes `generate` **raise** — proves the outer catch is not `except Exception`;
+      (b) `patch("ff_tracker.services.ai_summary_service.json.loads", side_effect=TypeError("bug"))` makes `generate` **raise** — proves `_parse_response` does not catch `TypeError`, which is the defect the first case alone would not detect (Gate 2 re-review M3)
 - [ ] `tests/test_ai_summary_service.py` — matching: reordered entries, case/whitespace variants (AC-008 i); stray entry, duplicated entry, all-different names at equal counts → positional headings from our names, no response-supplied name visible (AC-008 ii); differing counts → the exact count-mismatch reason and nothing rendered (AC-008 iii)
 - [ ] `tests/test_ai_summary_service.py` — normalisation: four paragraphs + 200-word paragraph + four bullets + 20-word headline + 60-word note → caps met, first paragraph and first three bullets survive, two runs byte-identical (AC-013); 200-word first paragraph → ≤120 words with `…` and the others dropped (AC-014); each drop/shorten sets `truncated` (AC-015)
 - [ ] `tests/test_ai_summary_service.py` — logging: `caplog` shows the prompt at DEBUG and no digest marker, team name or key at any level (AC-006)
@@ -219,6 +222,7 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 - [ ] `display/sheets.py`: blank row, `AI SUMMARY (AI-GENERATED)`, `HEADLINE:`, one `LEAGUE:` row per league, one row per paragraph, `- ` bullet rows, attribution row; every cell flattened (`\t`/`\r`/`\n` → space) so column counts never break; appended at the very end (sheets' `Game data:` line is mid-report, so the last section is the overall table)
 - [ ] `display/email.py`: section before `<div class="footer">` — `<h2>🤖 Commissioner's Take (AI-generated)</h2>`, AI-generated marker, `<p>` paragraphs via `_escape_html`, `<ul><li>` bullets, attribution line; notice as a single `<p>`
 - [ ] `tests/test_ai_summary_rendering.py`: AC-001 for both, AC-002, notice case, AC-011 (tab/newline/`"`/`<`/`&`/emoji: one sheet row with the right tab count, HTML-escaped in email, and the email section lands before the footer)
+- [ ] `tests/test_ai_summary_rendering.py`: **AC-012 mode agreement** — parametrise over a playoff fixture and a championship fixture; for each, build the digest from the same inputs and assert `digest["mode"]` matches the mode marker the five outputs already emit (`FINAL REGULAR SEASON STANDINGS` for playoffs, `CHAMPIONSHIP WEEK` for championship, `report_type` in JSON). The assertion is about the digest's *filtering* agreeing with what the formatters render, not about re-deriving the predicate
 
 **Byte-identical when off**: same `None` guard; email's footer block keeps its exact position and content, and sheets gains no trailing rows at all.
 
@@ -257,7 +261,7 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 
 **Goal**: a checkout without the key produces a normal report (FR-007), and the flag cannot be in an `if:`.
 
-- [ ] `.github/workflows/weekly-report.yml`: job-level `env:` gains `AI_SUMMARY_ENABLED: ${{ secrets.AI_SUMMARY_API_KEY != '' }}` and the committed `AI_SUMMARY_USER_PROMPT: |` block scalar (empty by default, with a comment that this is the reviewable record FR-008 relies on)
+- [ ] `.github/workflows/weekly-report.yml`: job-level `env:` gains `AI_SUMMARY_ENABLED: ${{ secrets.AI_SUMMARY_API_KEY != '' }}` and the committed `AI_SUMMARY_USER_PROMPT: |` block scalar (empty by default). The explanatory comment sits on a `#` line **above** `AI_SUMMARY_USER_PROMPT:`, never inside the block scalar — anything inside it is literal prompt text, would be sent to the provider, and would change `prompt_sha`
 - [ ] **No `AI_SUMMARY_MODEL`** (or base URL / timeout / cap) in the workflow — those come from repository settings or the code defaults, so the workflow cannot pin a model that drifts from `config.py` (Gate 2 cut). The user prompt stays because it is content, not a setting
 - [ ] "Create .env file from secrets" step: append `AI_SUMMARY_ENABLED=true` and `AI_SUMMARY_API_KEY=…` **only** inside `if [ "$AI_SUMMARY_ENABLED" = "true" ]; then … fi`
 - [ ] No `if:` anywhere in the file references `AI_SUMMARY_ENABLED`

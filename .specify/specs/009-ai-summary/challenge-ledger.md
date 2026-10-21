@@ -71,3 +71,22 @@ Minor: FR-002's no-matchups sentence restored; the "existing mode predicate" wor
 **Closed by spec v0.8**: the per-socket-timeout row is not carried to Gate 3 — FR-003 now says the socket read is bounded by `AI_SUMMARY_TIMEOUT` with no wall-clock deadline, and Article X matches, so the plan is the record of what the code does rather than an exception to the spec.
 
 **Task shape**: no task is unnecessary — all 14 trace to an FR or AC. Tasks 7 and 8 merge (Task 7's happy-path test cannot pass while its matching/normalisation stubs raise contract errors, which breaks the plan's green-suite-per-task invariant). Task 9 stays whole: adding a keyword parameter to the `@abstractmethod` makes every override incompatible unless all six signatures move together, and `championship.py:193/494` passes keyword arguments, so the two excluded CLIs are unaffected.
+
+### Re-review — plan v1.1, tasks v1.1, spec v0.8 (2026-10-21)
+
+| Gate 2 row | Status |
+|---|---|
+| Fail-open breadth (`_parse_response`) | **CLOSED as a rule** — only `JSONDecodeError` is converted; every other rejection is an explicit `isinstance`/`len`/`strip` check. **Test CARRIED**: `test_generate_propagates_programming_errors` stubs the digest builder, which raised `AttributeError` under the v1.0 design too, so it proves the outer catch and not that the inner one is gone. It must also raise `TypeError` from inside the parse (`json.loads` patched) and assert `generate` raises. |
+| Digest typing | **CLOSED** — `TypedDict` adopted, every key total, `null` for unknown, golden recursive key-set test in Task 5. Carry to Gate 3: the golden must be authored from FR-002, not snapshotted from the builder (a snapshot blesses a wrong key), and the v1.0 rule bullets that say "seeds … preserved" and describe one `{"round", "matchups"}` block *per division* contradict the flat `AIPlayoffRound` and must be rewritten. |
+| Transport | **CLOSED** — `_urlopen(request, timeout) -> bytes` is the default, `HTTPTransport` matches that signature, and a `patch("urllib.request.urlopen")` test drives the production path. |
+| Config ordering | **CLOSED** — the loader calls `load_environment()` itself; `main.py` calls it after `create_config` and before any ESPN call; Task 4 proves a `.env`-only setup with `create_config` unpatched. |
+| `reg_season_count` | **CLOSED** — `int \| None = None`; unknown serialises as `null` rather than quoting a fabricated 14 into the prompt. |
+| Per-socket timeout | **CLOSED by spec v0.8** — FR-003 now states the per-operation bound and that no wall-clock budget is guaranteed; Article X matches. Residual: the Configuration table still calls it a "Whole-call timeout" — recorded as a spec nit for the owner, correctly not edited from the plan. |
+| `::warning::` in `main.py` | DEFENDED — unchanged, no reason to revisit. |
+| Console/championship placement rationale | **CLOSED** — Decision 7 now says the report ends on the season-challenge table. |
+| Cut list | **APPLIED** — `--help` reduced to the egress paragraph (Task 11 + Component 10, test updated to assert the wording rather than a variable list); `AI_SUMMARY_MODEL` removed from the workflow with a static assertion that it stays out; `AGENTS.md` dropped and moved to "deliberately untouched". Keeping `AI_SUMMARY_USER_PROMPT: |` was **right**, not an unfinished cut: FR-008 makes the committed block scalar the only record an archived CI report can be reproduced from, it is content rather than a pinned setting, and it is empty by default. Caveat: anything inside the block is literal prompt text, so the explanatory comment belongs above the key. |
+| Tasks 7+8 merge | **ACCEPTED** — restores the green-suite-per-task invariant at task boundaries; the internal order (parse → match → normalise) is a task's own business, and no further split. |
+
+**CARRIED (blocking)**: AC-006's client half still has no test (Task 6 gains the logging rule, not the assertion); AC-012's mode-agreement clause is still argued structurally instead of tested.
+
+**Verdict**: HOLD — three edits (two bullets in `tasks.md`, one prose fix in plan Component 5). No re-planning required.
