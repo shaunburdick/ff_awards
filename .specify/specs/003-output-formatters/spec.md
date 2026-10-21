@@ -183,9 +183,11 @@ Provide 5 different output formats (console, sheets, email, JSON, markdown) for 
 - **Encoding**: UTF-8
 - **Structure**: Object with metadata, divisions, challenges arrays
 - **`standings.divisions[].teams[].playoff_status`**: `"in_playoff_position"`
-  or `"outside_playoff_position"`. It reports the team's current rank against
-  the playoff cutoff only; it is not a prediction and does not mean the team
-  has qualified for or been eliminated from the playoffs.
+  or `"outside_playoff_position"`, reporting only whether the team sits inside
+  the top four by record with points-for as the tiebreaker. It is not a
+  prediction and does not mean the team has qualified for or been eliminated
+  from the playoffs; the `rank` field is a separate display ordering and may
+  differ when teams have played different numbers of games.
 - **`weekly_player_highlights`**: one entry per weekly challenge, typed by
   `challenge_type` so team names and player names never share a field:
   - Team challenges (`"team"`): `team_name` is the winning team - or
@@ -266,4 +268,4 @@ How will we know this feature is successful?
 |---------|------|--------|---------|
 | 1.0 | 2025-11-14 | AI Agent | Initial specification for output formatters |
 | 1.1 | 2026-10-21 | AI Agent | Weekly highlight fields split by type; `division` is the winner's league; `points` typed |
-| 1.2 | 2026-10-21 | AI Agent | `playoff_status` values renamed to `in_playoff_position` / `outside_playoff_position`; position only, not an outcome |
+| 1.2 | 2026-10-21 | AI Agent | `playoff_status` values renamed to `in_playoff_position` / `outside_playoff_position`; position only, not an outcome; `rank` is a separate ordering |

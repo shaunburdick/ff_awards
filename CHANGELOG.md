@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+### Changed (breaking for JSON consumers)
 - **JSON `playoff_status` names the current position, not an outcome.** The
   field now publishes `in_playoff_position` or `outside_playoff_position`.
   `qualified`/`eliminated` claimed a season outcome the field never computed -
