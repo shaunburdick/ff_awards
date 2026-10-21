@@ -147,9 +147,9 @@ class JsonFormatter(BaseFormatter):
                                 "record": f"{team.wins}-{team.losses}",
                                 "points_for": team.points_for,
                                 "points_against": team.points_against,
-                                "playoff_status": "qualified"
+                                "playoff_status": "in_playoff_position"
                                 if team.in_playoff_position
-                                else "eliminated",
+                                else "outside_playoff_position",
                             }
                             for i, team in enumerate(self._get_sorted_teams_by_division(div), 1)
                         ],

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a key, a bad timeout, an oversized prompt) still fail fast with exit 1.
 - **New settings:** `AI_SUMMARY_ENABLED`, `AI_SUMMARY_API_KEY`,
   `AI_SUMMARY_BASE_URL`, `AI_SUMMARY_MODEL`, `AI_SUMMARY_TIMEOUT`,
+  `AI_SUMMARY_MAX_TOKENS`, `AI_SUMMARY_REASONING_EFFORT`,
   `AI_SUMMARY_MAX_PROMPT_CHARS`, `AI_SUMMARY_USER_PROMPT` - see `.env.example`
   and the README. The weekly workflow enables the feature only when the key
   secret is present.
@@ -37,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   default) sends `reasoning_effort` with the request; when unset or empty the key
   is omitted entirely. A non-standard extension: an endpoint that ignores it is
   not treated as a failure.
+
+### Changed (breaking for JSON consumers)
+- **JSON `playoff_status` names the current position, not an outcome.** The
+  field now publishes `in_playoff_position` or `outside_playoff_position`.
+  `qualified`/`eliminated` claimed a season outcome the field never computed -
+  a 3-3 team ranked 5th in week 6 read as "eliminated". Consumers matching on
+  the old strings must update.
 
 ### Fixed - Weekly challenge facts
 - **Closest Game This Week names the game's winner.** The challenge took the
