@@ -116,7 +116,7 @@ The digest exists only to be `json.dumps`-ed into one chat message, and nothing 
 class AIStandingsRow(TypedDict):
     rank: int; team: str; owner: str; record: str
     points_for: float; points_against: float
-    playoff_status: str          # "qualified" | "eliminated"
+    playoff_status: str          # "in_playoff_position" | "outside_playoff_position"
 
 class AIMatchupRow(TypedDict):
     team: str; score: float; projected_score: float
@@ -151,6 +151,7 @@ class AILeagueDigest(TypedDict):
     league: str; teams: int
     week: int | None; weeks_remaining: int | None
     standings: list[AIStandingsRow]
+    standings_note: str | None   # the status is a position, not a final outcome
     matchups: list[AIMatchupRow]
     matchups_note: str | None
     weekly_challenges: list[AIWeeklyChallenge]
@@ -359,8 +360,9 @@ Payload (no league IDs, no credentials, no API key — FR-002):
       "standings": [
         {"rank": 1, "team": "Butt Fumble", "owner": "Shaun",
          "record": "6-0", "points_for": 812.34, "points_against": 700.12,
-         "playoff_status": "qualified"}
+         "playoff_status": "in_playoff_position"}
       ],
+      "standings_note": "playoff_status is the current position against the top-four cutoff only; it is not a final outcome.",
       "matchups": [
         {"team": "Donut Lose", "score": 126.14, "projected_score": 120.0,
          "true_projection_diff": 6.14,
@@ -387,7 +389,7 @@ Payload (no league IDs, no credentials, no API key — FR-002):
 Rules the builder implements, each traceable to FR-002:
 
 - **Mode** (the sixth local copy): `championship is not None` → `"championship"`; else `any(d.is_playoff_mode for d in divisions)` → `"playoffs"`; else `"regular_season"`. The digest takes `championship` from the same variable the formatters receive, so agreement is structural, not asserted-and-hoped — AC-012's assertion is then about the *filtering*, not the predicate.
-- **Standings**: present in regular and playoff modes (formatters show them both), an empty list in championship mode (the formatters render no standings there). `rank` = the formatters' order (`_get_sorted_teams_by_division`: wins desc, points_for desc); `playoff_status` = `"qualified"` / `"eliminated"` from `TeamStats.in_playoff_position` (the JSON formatter's wording, not a seed).
+- **Standings**: present in regular and playoff modes (formatters show them both), an empty list in championship mode (the formatters render no standings there). `rank` = the formatters' order (`_get_sorted_teams_by_division`: wins desc, points_for desc); `playoff_status` = `"in_playoff_position"` / `"outside_playoff_position"` from `TeamStats.in_playoff_position` — the current top-four cutoff position, not a seed and not a fate. `standings_note` carries that requirement in the payload (FR-002): *"playoff_status is the current position against the top-four cutoff only; it is not a final outcome."* — present whenever `standings` is non-empty and `null` in championship mode, in the same style as `matchups_note`.
 - **Weeks remaining**: `max(0, reg_season_count - current_week)` when both are known, `null` when either is `None` (unknown regular-season length, or no detected week). Never a fabricated number.
 - **Matchups**: one row per `WeeklyGameResult` of `division.weekly_games`; opponent true diff read from the mirror row via a per-division lookup keyed `(team_name, opponent_name)`; `None` when there is no mirror row (FR-002's omission rule). Empty list plus `"matchups_note": "No matchups this week"` when a league has none — the explicit sentence FR-002 requires; `null` otherwise.
 - **Weekly challenges**: `[c for c in weekly_challenges if c.division == division.name]`, and in playoff/championship modes further filtered to `"position" in c.additional_info` (the formatters' own filter). This relies on `WeeklyChallenge.division` being the winner's league, which the merged spec-003 fix (`a78e6ba`) provides on this branch.
@@ -699,7 +701,7 @@ Guards the ACs do not name but Gate 2 required:
 
 ## Performance Considerations
 
-With the feature off, `load_ai_summary_config()` is one dict read and an `os.getenv` loop; the run budget is unchanged (Article X, as qualified in Complexity Tracking).
+With the feature off, `load_ai_summary_config()` is one dict read and an `os.getenv` loop; the run budget is unchanged (Article X, as scoped in Complexity Tracking).
 
 With it on, the run gains one provider call: 7.7–34.4 s in the spike, bounded by `AI_SUMMARY_TIMEOUT` (default 120 s). Nothing is retried and nothing is cached; one call per run regardless of league or format count, which is the only performance requirement this feature can enforce.
 
