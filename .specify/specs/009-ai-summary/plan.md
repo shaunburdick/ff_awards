@@ -1,12 +1,12 @@
 # Implementation Plan: AI Summary (Commissioner's Take)
 
 > **Spec ID**: 009
-> **Status**: Draft — for plan review (Gate 2)
+> **Status**: Draft — revised after Gate 2 (plan HOLD)
 > **Created**: 2026-10-21
 > **Last Updated**: 2026-10-21
-> **Version**: 1.0
-> **Spec**: [spec.md](./spec.md) v0.7 (authority — this plan decides implementation only)
-> **Gate rulings**: [challenge-ledger.md](./challenge-ledger.md) (settled rows are settled)
+> **Version**: 1.1
+> **Spec**: [spec.md](./spec.md) v0.8 (authority — this plan decides implementation only)
+> **Gate rulings**: [challenge-ledger.md](./challenge-ledger.md) (settled rows are settled; Gate 2 rows are precedent for Gate 3)
 
 ## Scope
 
@@ -30,7 +30,7 @@ Add one optional section to the weekly report (`ff-tracker`), in all five format
 The single HTTP call, one JSON body and one prompt are small enough that a dependency (httpx, openai SDK) buys nothing and costs a lockfile entry, a supply-chain surface and a second retry/timeout policy to reason about. `urllib` also makes the "no retries, no streaming" rule structural: there is no client library that might retry behind our back.
 
 **Constitutional Compliance**:
-- Article I: fully typed, no `Any` (digest is `dict[str, object]`, never `dict[str, Any]`)
+- Article I: fully typed, no `Any` (the digest is a `TypedDict`, parsed JSON is narrowed from `object`)
 - Article II: every new model is a frozen dataclass validated in `__post_init__`
 - Article III: fail-fast everywhere **except** the declared narrative boundary (see Complexity Tracking)
 - Article IV: services never import `ff_tracker.display`; formatters never compute
@@ -48,7 +48,7 @@ main.py
   ├─ ChallengeCalculator ......... season challenges (unchanged)
   ├─ WeeklyChallengeCalculator ... weekly challenges (unchanged)
   ├─ AISummaryService ............ AISummary | AISummaryUnavailable   ← NEW (once per run)
-  │    ├─ ai_digest.build_digest(domain models) → dict[str, object]
+  │    ├─ ai_digest.build_digest(domain models) → AIDigest (TypedDict)
   │    ├─ ai_client.AIClient.complete(AIRequest) → str      (HTTP)
   │    └─ parse → match → normalise → AISummary
   └─ FormatterClass.format_output(..., ai_summary=result)  ← 5 formats
@@ -76,7 +76,13 @@ def generate(self, ...) -> AISummaryResult:
 
 `_generate` runs digest → request → `client.complete` → parse → match → normalise. Every failure the spec degrades on is raised as a subclass of `AISummaryError` (our own taxonomy, derived from `Exception`, **not** from `FFTrackerError`); everything else — a `TypeError` from a programming mistake, an `AttributeError`, a bad model construction outside the parse boundary — propagates and fails the run, which is what Article III wants.
 
-**Why not `except Exception`**: it would make the single declared deviation unbounded, and a green suite cannot tell the difference. The narrow catch is the guardrail; converting parser noise (`json.JSONDecodeError`, `KeyError`, `TypeError`, `DataValidationError`, missing keys) into `AIContractError` happens **inside `_parse_response`**, where the noise is expected and bounded — not by widening the outer catch.
+**Why not `except Exception`**: it would make the single declared deviation unbounded, and a green suite cannot tell the difference. The narrow catch is the guardrail.
+
+**How the parse stays inside the boundary without widening it** (Gate 2): `_parse_response` converts exactly one exception class — `json.JSONDecodeError`, raised by `json.loads` on content that is not JSON (fenced, prefixed, empty). Every other rejection is a check **we write**, raising `AIContractError` directly from a failing `isinstance`/`len`/`strip` test; there is no `except TypeError`, `except ValueError`, `except KeyError`, and no `except Exception` anywhere in the parse. A structure we did not anticipate therefore crashes the run instead of masquerading as a provider fault, which is the behaviour the ledger requires.
+
+**Narrowing without `Any`**: `json.loads` returns `Any`; the result is bound to `object` immediately (`raw: object = json.loads(content)`) and every level is narrowed with `isinstance` plus small helpers typed `dict[str, object]` / `list[object]`. No `Any` appears in a signature.
+
+**Propagation is tested, not assumed**: `test_generate_propagates_programming_errors` stubs the digest builder to raise `AttributeError` and asserts `generate` raises rather than returning `AISummaryUnavailable` — the test the ledger names for this row.
 
 **Why not a decorator/context manager**: one call site, one boundary; a decorator hides the only place a reviewer needs to see.
 
@@ -97,26 +103,101 @@ AISummaryResult = Union[AISummary, AISummaryUnavailable]   # typing.Union: a run
 `config.py` gains `AISummaryConfig` (frozen, validated) and `load_ai_summary_config()`. `main.py` calls the loader inside its existing `try:` block; `FFTrackerConfig` is not modified.
 
 **Why not a field on `FFTrackerConfig`**: `create_config()` is shared by `ff-tracker`, `ff-championship` and `ff-season-recap`. Putting the loader there would make a malformed `AI_SUMMARY_*` variable fail the championship and season-recap CLIs too, which FR-001 excludes ("covers the weekly report CLI only"). Sits beside it, validated once, wired once.
-**Trade-off**: configuration validation is not reachable from `create_config()`; the compile-time story is unchanged but the plan must keep the loader next to the other loaders in `config.py` so the convention is obvious.
 
-### Decision 4: The digest is a `dict[str, object]` built by typed helpers, not a model tree
+**Load ordering (Gate 2)**: `load_environment()` runs only inside `create_config()`, so `load_ai_summary_config()` calls `load_environment()` itself at the top before reading anything. `load_dotenv` does not override variables already in the process environment, so the call is idempotent and a value set by a workflow `env:` wins over `.env` either way. `main.py` calls the loader **after** `create_config(...)` and before any ESPN call — not "first", which would have read `.env` before it existed. Configuration is therefore "loaded the same way as existing settings" (spec, Configuration section) and `.env`-only setups work; Task 4 carries the test that proves it with `create_config` unpatched.
 
-The digest exists only to be `json.dumps`-ed into one chat message. A parallel set of frozen dataclasses (`AIDigest`, `AIDigestLeague`, `AIDigestTeam`, `AIDigestMatchup`…) would be six classes whose only method is "turn me into dicts", and they would need updating in lockstep with the prompt.
+### Decision 4: The digest is a `TypedDict` document built by typed helpers
 
-`dict[str, object]` keeps Article I satisfied (`object`, never `Any`; values are `str`/`int`/`float`/`bool`/`None`/nested dicts/lists) while the builder stays ~120 lines of named helpers. The narrative *response* is modelled properly, because it has five consumers.
+The digest exists only to be `json.dumps`-ed into one chat message, and nothing reads it back — which is exactly why it must not be an untyped dict (Gate 2, DEFERRED): with `dict[str, object]`, a key typo (`"weeks_remaing"`) degrades the prompt silently and no test fails.
 
-### Decision 5: `DivisionData.reg_season_count` is defaulted, not required
-
-`reg_season_count: int = 14` with validation `1 <= value <= 18`. There are **62** `DivisionData(...)` construction sites across `ff_tracker/` and `tests/`; a required field means touching all of them for no behavioural gain. The one production builder (`ESPNService.load_division_data`, `ff_tracker/services/espn_service.py:1288`) always passes the league's real `settings.reg_season_count`; the default only serves fixtures and `SeasonRecapService` (which has no league settings in scope — see "Constraints discovered in the existing code").
-
-### Decision 6: The client takes an injectable transport, so the real client is testable without a network or a mock library
+`TypedDict` gives the enforcement with none of the cost the dataclass tree would carry — no conversion layer, no `asdict`, and a wrong key or value type is a mypy error at the builder:
 
 ```python
-class HTTPTransport(Protocol):
-    def __call__(self, request: urllib.request.Request, timeout: int) -> bytes: ...
+class AIStandingsRow(TypedDict):
+    rank: int; team: str; owner: str; record: str
+    points_for: float; points_against: float
+    playoff_status: str          # "qualified" | "eliminated"
+
+class AIMatchupRow(TypedDict):
+    team: str; score: float; projected_score: float
+    true_projection_diff: float | None
+    opponent: str; opponent_score: float; opponent_projected_score: float
+    opponent_true_projection_diff: float | None
+    margin: float
+
+class AIWeeklyChallenge(TypedDict):
+    challenge: str; winner: str; value: str
+
+class AISeasonChallenge(TypedDict):
+    challenge: str; winner: str; league: str; value: str; historical: bool
+
+class AIPlayoffMatchup(TypedDict):
+    round_name: str; team1: str; owner1: str; score1: float | None
+    team2: str; owner2: str; score2: float | None
+    winner: str | None; division: str
+
+class AIPlayoffRound(TypedDict):
+    round: str
+    matchups: list[AIPlayoffMatchup]
+
+class AIChampionshipEntry(TypedDict):
+    rank: int; team: str; owner: str; division: str
+    score: float; is_champion: bool
+
+class AIChampionship(TypedDict):
+    leaderboard: list[AIChampionshipEntry]
+
+class AILeagueDigest(TypedDict):
+    league: str; teams: int
+    week: int | None; weeks_remaining: int | None
+    standings: list[AIStandingsRow]
+    matchups: list[AIMatchupRow]
+    matchups_note: str | None
+    weekly_challenges: list[AIWeeklyChallenge]
+
+class AIDigest(TypedDict):
+    week: int | None
+    mode: str                    # "regular_season" | "playoffs" | "championship"
+    leagues: list[AILeagueDigest]
+    season_challenges: list[AISeasonChallenge]
+    playoffs: AIPlayoffRound | None
+    championship: AIChampionship | None
 ```
 
-`OpenAICompatibleClient(config, transport=urllib.request.urlopen)` (parameter defaulted). Client tests pass a fake transport that returns canned bytes or raises `HTTPError`/`URLError`/`TimeoutError`; the summary-service tests use `FakeAIClient` at the protocol level and never touch HTTP. Two seams, two levels of test, no `responses`/`httpretty` dependency and no local server.
+Every key is **total** (no `NotRequired`, which is 3.11+ and this project supports 3.9), so unknown values are `None` and serialize as `null` rather than being omitted: one shape for every mode, one set of assertions, and no optional-key machinery. `mode` stays a `str` rather than a `Literal` so the value is easy to log and compare without narrowing gymnastics; the three values are documented on the key.
+
+The `TypedDict`s live in `services/ai_digest.py` and are **payload types, not Article II models**: they describe a JSON document built once per run and immediately serialised, never held as application state, so immutability is not in question (a `TypedDict` is a shape for a mutable dict, which is why it does not belong in `models/`). Task 5 also asserts the digest's exact recursive key set against a golden, so a future key rename cannot pass silently even with the type checker green.
+
+### Decision 5: `DivisionData.reg_season_count` is `int | None = None`
+
+Gate 2 was right: a defaulted `14` is a false statement in any second production builder, and the digest quotes it into the prompt as fact.
+
+`reg_season_count: int | None = None`, validated `None or 1 <= value <= 18`. The one production builder for the weekly path (`ESPNService.load_division_data`, `ff_tracker/services/espn_service.py:1288`) always passes the league's real `settings.reg_season_count`; fixtures and `SeasonRecapService` (no league settings in scope) pass nothing and the model records "unknown" honestly. The digest then emits `"weeks_remaining": null` when either `reg_season_count` or `current_week` is unknown, and the prompt is told the value is unknown rather than fed a fabricated 8.
+
+Same number of touched sites as the defaulted version (zero — the 62 existing `DivisionData(...)` constructions keep compiling), plus one branch in the digest builder.
+
+### Decision 6: The client takes an injectable transport, defaulting to a `_urlopen` wrapper
+
+Gate 2 caught a real defect in the v1.0 seam: `urllib.request.urlopen` returns an `HTTPResponse`, not `bytes`, and its second positional parameter is `data`, not the timeout — so `transport(urlopen)` could not be the injectable boundary as written. The transport is a function of `(Request, timeout) -> bytes`, and the production implementation is a module-level wrapper:
+
+```python
+def _urlopen(request: urllib.request.Request, timeout: int) -> bytes:
+    """Default transport: one request, one read, no retries."""
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        body: bytes = response.read()
+    return body
+
+class HTTPTransport(Protocol):
+    def __call__(self, request: urllib.request.Request, timeout: int) -> bytes: ...
+
+class OpenAICompatibleClient:
+    def __init__(self, config: AISummaryConfig, transport: HTTPTransport | None = None) -> None:
+        self._transport: HTTPTransport = transport or _urlopen
+```
+
+Two test levels, both network-free:
+- **Service level**: `FakeAIClient` implements `AIClient`.
+- **Client level**: `FakeTransport` implements `HTTPTransport` for the request/error matrix, **plus** one test that patches `urllib.request.urlopen` and drives `_urlopen` itself — the default (production) path, which every injected-fake test would otherwise never execute.
 
 ### Decision 7: Where the section lands, and why the trailing "Game data" line counts as a footer
 
@@ -130,7 +211,9 @@ Per format, the section is inserted so that **no existing line moves**:
 | email | the `<div class="footer">` block | that block *is* the footer (game data + version + repo link) |
 | json | nothing — new top-level `ai_summary` key appended last | JSON has no order-sensitive footer |
 
-For console and markdown the trailing "Game data" line is the only content after standings, so treating it as the footer satisfies FR-005 ("after the existing deterministic sections and before any format footer") and gives AC-001 a non-empty post-section suffix. Sheets prints its `Game data:` line *before* the standings (right after the season challenges), so the section is appended at the very end there and AC-001's suffix is empty — "output equals its prefix" is the same assertion with a shorter suffix. In championship mode console ends on a player-highlight note line; the section still goes last.
+For console and markdown the trailing "Game data" line is the only content after standings, so treating it as the footer satisfies FR-005 ("after the existing deterministic sections and before any format footer") and gives AC-001 a non-empty post-section suffix. Sheets prints its `Game data:` line *before* the standings (right after the season challenges), so the section is appended at the very end there and AC-001's suffix is empty — "output equals its prefix" is the same assertion with a shorter suffix.
+
+**Championship mode** (Gate 2 correction): console emits weekly highlights, then season challenges, then skips standings (`console.py:126-136`), so the report ends on the season-challenge table — not on a player-highlight note line as v1.0 claimed. Append-at-end is still correct in every mode; the v1.0 reason was wrong, the placement was not.
 
 **Not changed**: the markdown table of contents is a fixed list (`markdown.py:89-102`), so the new `##` heading does not enter it. Adding it would change an existing section's content; FR-005 forbids that.
 
@@ -185,9 +268,9 @@ The spec's "at least one non-empty paragraph per league" is enforced on `AISumma
 
 ### Component 2: `DivisionData.reg_season_count` — **MODIFIED** `models/division.py`, `services/espn_service.py`
 
-- `models/division.py:46` — add `reg_season_count: int = 14` after `playoff_bracket`; validate `1 <= reg_season_count <= 18` (`DataValidationError`).
+- `models/division.py:46` — add `reg_season_count: int | None = None` after `playoff_bracket`; validate `None` or `1 <= reg_season_count <= 18` (`DataValidationError`).
 - `services/espn_service.py:1288` — pass `reg_season_count=league.settings.reg_season_count` in the `DivisionData(...)` return of `load_division_data`.
-- Optional convenience property `weeks_remaining(current_week: int | None) -> int | None` — **not** added: the digest computes `max(0, reg_season_count - current_week)` in one place, and a model property would need the `None` case anyway.
+- `None` means "unknown", not "ESPN's standard 14": the digest emits `weeks_remaining: null` rather than quoting a fabricated number into the prompt. `SeasonRecapService`'s builder (`season_recap_service.py:411`) passes nothing and stays honest.
 
 ### Component 3: Error taxonomy — **MODIFIED** `ff_tracker/exceptions.py`
 
@@ -233,7 +316,7 @@ class AISummaryConfig:
     #                variable, actual length, configured limit
 ```
 
-`load_ai_summary_config() -> AISummaryConfig` reads the seven variables, following `load_espn_credentials()` / `parse_league_ids_from_env()`:
+`load_ai_summary_config() -> AISummaryConfig` calls `load_environment()` first, then reads the seven variables, following `load_espn_credentials()` / `parse_league_ids_from_env()`:
 
 | Variable | Parse | Invalid |
 |---|---|---|
@@ -245,7 +328,7 @@ class AISummaryConfig:
 | `AI_SUMMARY_MAX_PROMPT_CHARS` | `int()`, default 8000 | `ConfigurationError` naming the variable |
 | `AI_SUMMARY_USER_PROMPT` | `.replace("\r\n", "\n").strip()`; empty → no block | length checked against the configured limit |
 
-`main.py` calls the loader inside its existing `try:`; `ConfigurationError` is an `FFTrackerError`, so `main()` prints and returns 1 with no report and no HTTP call (AC-009), without new plumbing.
+`main.py` calls the loader **after** `create_config(...)` and before any ESPN call, inside its existing `try:` block; `ConfigurationError` is an `FFTrackerError`, so `main()` prints and returns 1 with no report and no HTTP call (AC-009), without new plumbing. `load_environment()` has already run inside `create_config`, and the loader calls it again defensively (idempotent), so a `.env`-only configuration enables the feature — proved by a test that leaves `create_config` unpatched.
 
 ### Component 5: Digest builder — **NEW** `ff_tracker/services/ai_digest.py`
 
@@ -256,8 +339,10 @@ def build_digest(
     weekly_challenges: Sequence[WeeklyChallenge] | None,
     current_week: int | None,
     championship: ChampionshipLeaderboard | None,
-) -> dict[str, object]
+) -> AIDigest
 ```
+
+`AIDigest` and its nested `TypedDict`s are defined in this module (Decision 4). Every key is total; unknown values are `null`, so one shape covers all three modes.
 
 Payload (no league IDs, no credentials, no API key — FR-002):
 
@@ -283,6 +368,7 @@ Payload (no league IDs, no credentials, no API key — FR-002):
          "opponent_projected_score": 130.0, "opponent_true_projection_diff": null,
          "margin": 1.08}
       ],
+      "matchups_note": null,
       "weekly_challenges": [
         {"challenge": "Closest Game This Week", "winner": "Donut Lose",
          "value": "126.14 - 125.06 (Δ1.08)"}
@@ -301,13 +387,13 @@ Payload (no league IDs, no credentials, no API key — FR-002):
 Rules the builder implements, each traceable to FR-002:
 
 - **Mode** (the sixth local copy): `championship is not None` → `"championship"`; else `any(d.is_playoff_mode for d in divisions)` → `"playoffs"`; else `"regular_season"`. The digest takes `championship` from the same variable the formatters receive, so agreement is structural, not asserted-and-hoped — AC-012's assertion is then about the *filtering*, not the predicate.
-- **Standings**: present in regular and playoff modes (formatters show them both), absent in championship mode. `rank` = the formatters' order (`_get_sorted_teams_by_division`: wins desc, points_for desc); `playoff_status` = `"qualified"` / `"eliminated"` from `TeamStats.in_playoff_position` (the JSON formatter's wording, not a seed).
-- **Weeks remaining**: `max(0, division.reg_season_count - current_week)` when `current_week` is not `None`; both keys omitted when it is (see Constraints).
-- **Matchups**: one row per `WeeklyGameResult` of `division.weekly_games`; opponent true diff read from the mirror row via a per-division lookup keyed `(team_name, opponent_name)`; `None` when there is no mirror row (FR-002's omission rule). Empty list plus `"matchups_note": "No matchups this week"` when a league has none — the explicit sentence FR-002 requires.
+- **Standings**: present in regular and playoff modes (formatters show them both), an empty list in championship mode (the formatters render no standings there). `rank` = the formatters' order (`_get_sorted_teams_by_division`: wins desc, points_for desc); `playoff_status` = `"qualified"` / `"eliminated"` from `TeamStats.in_playoff_position` (the JSON formatter's wording, not a seed).
+- **Weeks remaining**: `max(0, reg_season_count - current_week)` when both are known, `null` when either is `None` (unknown regular-season length, or no detected week). Never a fabricated number.
+- **Matchups**: one row per `WeeklyGameResult` of `division.weekly_games`; opponent true diff read from the mirror row via a per-division lookup keyed `(team_name, opponent_name)`; `None` when there is no mirror row (FR-002's omission rule). Empty list plus `"matchups_note": "No matchups this week"` when a league has none — the explicit sentence FR-002 requires; `null` otherwise.
 - **Weekly challenges**: `[c for c in weekly_challenges if c.division == division.name]`, and in playoff/championship modes further filtered to `"position" in c.additional_info` (the formatters' own filter). This relies on `WeeklyChallenge.division` being the winner's league, which the merged spec-003 fix (`a78e6ba`) provides on this branch.
 - **Season challenges**: global, with `"historical": true` in playoff and championship modes (formatters label them final at Week 14).
-- **Playoffs**: `{"round": bracket.round, "matchups": [...]}` per division from `PlayoffBracket` (team names, owners, seeds, scores, winner, nulls preserved).
-- **Championship**: `{"leaderboard": [{"rank", "team", "owner", "division", "score", "is_champion"}]}` from `ChampionshipLeaderboard.entries`.
+- **Playoffs**: `{"round": bracket.round, "matchups": [...]}` per division from `PlayoffBracket` (team names, owners, seeds, scores, winner, nulls preserved); `null` outside playoff mode.
+- **Championship**: `{"leaderboard": [{"rank", "team", "owner", "division", "score", "is_champion"}]}` from `ChampionshipLeaderboard.entries`; `null` outside championship mode.
 
 ### Component 6: Provider client — **NEW** `ff_tracker/services/ai_client.py`
 
@@ -325,6 +411,15 @@ class AIRequest:                       # data the fake can record (AC-010)
 class AIClient(Protocol):
     def complete(self, request: AIRequest) -> str: ...   # returns message.content
 
+class HTTPTransport(Protocol):
+    def __call__(self, request: urllib.request.Request, timeout: int) -> bytes: ...
+
+def _urlopen(request: urllib.request.Request, timeout: int) -> bytes:
+    """Default transport: one request, one read, no retries."""
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        body: bytes = response.read()
+    return body
+
 class OpenAICompatibleClient:
     def __init__(self, config: AISummaryConfig, transport: HTTPTransport | None = None) -> None: ...
     def complete(self, request: AIRequest) -> str: ...
@@ -337,16 +432,16 @@ class OpenAICompatibleClient:
    `Authorization: Bearer <key>`, `Content-Type: application/json`,
    `User-Agent: ff-awards/<version>` (non-default; `Python-urllib/*` is refused by the default endpoint's front door).
 3. Body `{"model": config.model, "messages": [{"role":"system",...},{"role":"user",...}], "max_tokens": request.max_tokens}`. No `response_format`, no `temperature` — the spike validates the plain call, and inventing knobs the spec does not name is exactly the gold-plating this plan avoids.
-4. `self._transport(request_obj, self._config.timeout)` inside `try/except`:
+4. `self._transport(request_obj, self._config.timeout)` inside `try/except` (the transport is `_urlopen` unless one is injected — Decision 6):
    - `urllib.error.HTTPError` → read **and discard** `e.read()` (never logged), close, `raise AIHTTPError(status=e.code, host=host, model=...)`.
    - `urllib.error.URLError` → if `e.reason` is a `TimeoutError`/`socket.timeout` → `AITimeoutError(timeout)`; else `AITransportError(host)`.
    - `TimeoutError` (incl. `socket.timeout`, same class on 3.10+) → `AITimeoutError(timeout)`.
-5. Parse the envelope: `choices[0].message.content` (must be `str`), `choices[0].finish_reason`. `finish_reason == "length"` → `AITruncationError()` **even when the content parses** (AC-007). Anything missing or mistyped → `AIContractError(CONTRACT_REASON)`.
+5. Parse the envelope: `choices[0].message.content` (must be `str`), `choices[0].finish_reason`. `finish_reason == "length"` → `AITruncationError()` **even when the content parses** (AC-007). Anything missing or mistyped → `AIContractError(CONTRACT_REASON)` (an explicit check, not a caught `TypeError`).
 6. Return the content string; the service parses *that* as JSON.
 
 Logging (FR-009): INFO — model, status, latency ms; DEBUG — token counts from `usage` when present. Never the key, the request body or the response body. `host` comes from `urllib.parse.urlsplit(base_url).hostname` — the **only** URL fragment that may appear in a reason (FR-006/AC-005). `HTTPError.filename` holds the full URL, so it is never read, logged or formatted; the reason is built from `e.code` alone.
 
-**Known limitation** (spec vs stdlib): `urlopen(timeout=...)` is a per-socket-operation timeout, not a wall-clock budget, so a slow trickle can outlive `AI_SUMMARY_TIMEOUT`. Enforcing a true whole-call deadline needs a worker thread or `signal.alarm` (POSIX only, breaks in pytest's main thread assumptions). The plan accepts the socket timeout and keeps the notice text ("timed out after 120s") accurate for the case it covers.
+**Timeout bound** (spec v0.8): `urlopen(timeout=...)` bounds each socket operation, not the whole call, so a provider that trickles bytes can outlive `AI_SUMMARY_TIMEOUT`. That is now what FR-003 and Article X state, so this is no longer a deviation the plan must justify; the notice (`timed out after 120s`) is raised only when the socket operation itself times out, and LV-003 is the manual proof that the notice renders. No thread or `signal.alarm` wrapper is attempted: a timed-out `urlopen` cannot be cancelled, so a worker thread would hang process shutdown for the same duration it was meant to bound.
 
 ### Component 7: Summary service — **NEW** `ff_tracker/services/ai_summary_service.py`
 
@@ -368,7 +463,7 @@ class AISummaryService:
 
 - **Prompt**: the constant states the JSON contract, the caps, the no-invented-facts rule, the commissioner voice, and the 60-word guidance floor (explicitly guidance, not a validated requirement). `build_system_prompt` appends the block only for a non-empty user prompt.
 - **Request**: `AIRequest(system_prompt=build_system_prompt(config.user_prompt), user_message=json.dumps(digest, ensure_ascii=False))`.
-- **Parse** (`_parse_response`): `json.loads` → structural checks (headline `str` non-empty; `leagues` list of dicts; `league` `str`; `paragraphs` list of `str` with ≥1 having a word after strip; `bullets` list of `str`; `season_note` `str` non-empty). All parser noise (`JSONDecodeError`, `KeyError`, `TypeError`, `ValueError`, `DataValidationError`) is caught **here** and re-raised as `AIContractError(CONTRACT_REASON)`.
+- **Parse** (`_parse_response`): `json.loads` → structural checks (headline `str` non-empty; `leagues` list of dicts; `league` `str`; `paragraphs` list of `str` with ≥1 having a word after strip; `bullets` list of `str`; `season_note` `str` non-empty). Exactly one exception is converted — `json.JSONDecodeError` → `AIContractError(CONTRACT_REASON)`; every other rejection is an explicit `isinstance`/`len`/`strip` check that raises `AIContractError` itself. No `except TypeError`/`ValueError`/`KeyError`, and no `except Exception` (Decision 1). The parsed value is bound to `object` and narrowed level by level, so nothing returns `Any`.
 - **Match** (`_match_leagues`) — FR-004's total order, applied once:
   1. `by_name = {e["league"].strip().casefold(): e}`; if `len(by_name) == len(entries) == len(divisions)` and every league name is a key → map by name, emit in **digest order** (response order irrelevant).
   2. elif `len(entries) == len(divisions)` → `zip(divisions, entries)` by position; heading is `division.name`; response-supplied names are discarded.
@@ -404,7 +499,7 @@ The JSON `leagues` entries reuse our league names and the normalised paragraphs/
 ### Component 10: CLI wiring — **MODIFIED** `ff_tracker/main.py`
 
 ```python
-ai_config = load_ai_summary_config()                     # inside the existing try:
+ai_config = load_ai_summary_config()      # after create_config(), inside the existing try:
 ...
 ai_summary: AISummaryResult | None = None
 if ai_config.enabled:
@@ -417,11 +512,11 @@ if ai_config.enabled:
         print(f"::warning::{ai_summary.notice}")
 ```
 
-Placed after weekly challenges, before the `--output-dir` branch, so **one call per run** covers five formats and both output modes (AC-003). Both `format_output(...)` call sites (`main.py:301` and `main.py:315`) pass `ai_summary=ai_summary`.
+The loader runs **after** `create_config(...)` (which is what loads `.env`) and before any ESPN call — see Decision 3. The generation sits after weekly challenges and before the `--output-dir` branch, so **one call per run** covers five formats and both output modes (AC-003). Both `format_output(...)` call sites (`main.py:301` and `main.py:315`) pass `ai_summary=ai_summary`.
 
 **Why the `::warning::` lives here and not in the service**: a workflow command is process output, not a report section, and Article IV forbids the service layer from printing presentation. The service returns the result and logs at WARNING; `main.py` is the only process-level writer.
 
-`create_parser()`'s epilog gains an **AI Summary (optional)** block: the seven variables, "off by default", and the egress sentence FR-009 requires (team names, owner names and scores are sent to `AI_SUMMARY_BASE_URL`; the user prompt is sent verbatim; the key is never printed; `-vv` logs the system prompt, so do not use it in CI).
+`create_parser()`'s epilog gains an **AI Summary (optional)** paragraph, deliberately short (Gate 2 cut): that the feature is off by default, enabled only by `AI_SUMMARY_API_KEY` plus `AI_SUMMARY_ENABLED`, and the egress sentence FR-009 requires — team names, owner names and scores are sent to `AI_SUMMARY_BASE_URL`, the user prompt is sent verbatim, the key is never printed, and `-vv` logs the system prompt so it must not be used in CI. The variable list and defaults are **not** repeated here: they live in `.env.example` and the README, and a third copy is a third thing to drift.
 
 ### Component 11: Workflow — **MODIFIED** `.github/workflows/weekly-report.yml`
 
@@ -429,12 +524,12 @@ Placed after weekly challenges, before the `--output-dir` branch, so **one call 
 env:
   PYTHONUNBUFFERED: 1
   AI_SUMMARY_ENABLED: ${{ secrets.AI_SUMMARY_API_KEY != '' }}
-  AI_SUMMARY_MODEL: glm-5.3-flash
   AI_SUMMARY_USER_PROMPT: |
     <the commissioner's committed instructions; empty by default>
 ```
 
 - `secrets` is legal in `env:`, illegal in `if:` — exactly the FR-007 trap. The expression renders the literal `true`/`false`.
+- **Only `AI_SUMMARY_ENABLED` is set for settings** (Gate 2 cut): `AI_SUMMARY_MODEL`, `AI_SUMMARY_BASE_URL`, `AI_SUMMARY_TIMEOUT` and `AI_SUMMARY_MAX_PROMPT_CHARS` come from repository settings or the code defaults, so the workflow cannot pin a model that drifts from the default in `config.py`. `AI_SUMMARY_USER_PROMPT` stays because it is content, not a setting: FR-008 names the committed `env:` block scalar as the only record an archived CI report can be reproduced from.
 - In the "Create .env file from secrets" step, append **only when the flag is `true`**:
   ```bash
   if [ "$AI_SUMMARY_ENABLED" = "true" ]; then
@@ -442,16 +537,16 @@ env:
     echo "AI_SUMMARY_API_KEY=${{ secrets.AI_SUMMARY_API_KEY }}" >> .env
   fi
   ```
-  The non-secret values (`MODEL`, `USER_PROMPT`) stay in the job `env:`, where they are the reviewable record FR-008 asks for and where multiline `.env` quoting cannot break them; `load_dotenv` does not override an already-set environment variable, so `os.getenv` sees them either way.
+  The committed user prompt stays in the job `env:` where multiline `.env` quoting cannot break it; `load_dotenv` does not override an already-set environment variable, so `os.getenv` sees it either way.
 - No `if:` anywhere in the file mentions `AI_SUMMARY_ENABLED` (WC-001).
 - The `::warning::` needs no workflow change: the service's reason is printed to stdout by the step, and Actions surfaces it as an annotation.
 
 ### Component 12: Documentation — **MODIFIED**
 
 - `.env.example`: the seven variables, commented, with the real defaults (`https://opencode.ai/inference/openai/v1`, `glm-5.3-flash`, `120`, `8000`), and the egress note.
-- `README.md` → Configuration: a "AI Summary (optional)" subsection — what leaves the machine, how to enable with a key alone, why `--help` and `.env.example` carry the defaults, and that `ff-championship`/`ff-season-recap` ignore it.
+- `README.md` → Configuration: an "AI Summary (optional)" subsection — what leaves the machine, how to enable with a key alone, that `.env.example` carries the defaults, and that `ff-championship`/`ff-season-recap` ignore it.
 - `CHANGELOG.md` → `## [Unreleased]` / `### Added - AI Summary (optional)`.
-- `AGENTS.md`: one paragraph under "Core Functionality" (the repo's own summary of the tool) — no other change.
+- **No `AGENTS.md` change** (Gate 2 cut): no FR requires it, and a fourth copy of the feature description in the file every agent reads is exactly the drift this plan avoids elsewhere.
 
 ---
 
@@ -475,7 +570,7 @@ env:
 **Modified (17)**
 | File | Change | Why |
 |---|---|---|
-| `ff_tracker/models/division.py` | `reg_season_count` field + validation | FR-002 |
+| `ff_tracker/models/division.py` | `reg_season_count: int \| None` + validation | FR-002 |
 | `ff_tracker/models/__init__.py` | exports | new models |
 | `ff_tracker/services/espn_service.py` | one keyword in `load_division_data` | populate the field |
 | `ff_tracker/exceptions.py` | `AISummaryError` hierarchy | FR-006 reasons |
@@ -490,12 +585,12 @@ env:
 | `.github/workflows/weekly-report.yml` | guard + `.env` appends | FR-007/WC-001 |
 | `tests/test_model_properties.py` | `reg_season_count` cases | Task 1 |
 | `tests/test_config.py` | AC-009/AC-017 cases | Task 4 |
-| `tests/test_json_formatter.py` | `ai_summary` cases + AC-001 (JSON) | Task 9 |
-| `tests/test_main_cli.py` | call count, warning, config-error cases | Task 12 |
+| `tests/test_json_formatter.py` | `ai_summary` cases + AC-001 (JSON) | Task 8 |
+| `tests/test_main_cli.py` | call count, warning, config-error cases | Task 11 |
 
-**Also modified (4, docs)** `.env.example`, `README.md`, `CHANGELOG.md`, `AGENTS.md` (one paragraph).
+**Also modified (3, docs)** `.env.example`, `README.md`, `CHANGELOG.md`.
 
-**Deliberately untouched**: `ff_tracker/championship.py`, `ff_tracker/season_recap.py`, `display/season_recap_*.py`, `display/factory.py`, `services/season_recap_service.py`, `services/championship_service.py`, `.github/workflows/championship-report.yml`, `.github/workflows/season-recap.yml`, `.specify/specs/**` (the spec is the authority; the plan does not edit it).
+**Deliberately untouched**: `ff_tracker/championship.py`, `ff_tracker/season_recap.py`, `display/season_recap_*.py`, `display/factory.py`, `services/season_recap_service.py`, `services/championship_service.py`, `.github/workflows/championship-report.yml`, `.github/workflows/season-recap.yml`, `AGENTS.md` (Gate 2 cut — no FR requires it), `.specify/specs/**` (the spec is the authority; the plan does not edit it).
 
 ---
 
@@ -517,18 +612,18 @@ Any `AISummaryError` → `AISummaryUnavailable(reason)` → notice in the sectio
 
 ## Implementation Phases
 
-Fourteen tasks, detailed in [tasks.md](./tasks.md). Grouped so the suite is green after every one:
+Thirteen tasks, detailed in [tasks.md](./tasks.md). Grouped so the suite is green after every one:
 
 | Phase | Tasks | Outcome |
 |---|---|---|
 | 1 — Groundwork | 1–4 | model field, AI models, exception taxonomy, configuration — all unit-tested, nothing wired |
 | 2 — Payload & provider | 5–6 | digest builder, HTTP client (both testable in isolation, still unused by `main`) |
-| 3 — Narrative | 7–8 | prompt/request/fail-open boundary, then matching + normalisation |
-| 4 — Rendering | 9–11 | protocol signature + JSON, then console/markdown, then sheets/email |
-| 5 — Wiring | 12 | one call per run, `::warning::`, `--help` |
-| 6 — Ops & docs | 13–14 | workflow guard, README/`.env.example`/CHANGELOG |
+| 3 — Narrative | 7 | prompt, request, parse, league matching, normalisation, fail-open boundary — one task, because the happy path cannot pass while any of them is a stub (Gate 2) |
+| 4 — Rendering | 8–10 | protocol signature + JSON, then console/markdown, then sheets/email |
+| 5 — Wiring | 11 | one call per run, `::warning::`, `--help` egress paragraph |
+| 6 — Ops & docs | 12–13 | workflow guard, README/`.env.example`/CHANGELOG |
 
-**Signature-ordering constraint**: mypy requires an override to accept every parameter of the abstract method, so task 9 changes `display/base.py` **and all five** concrete `format_output` signatures in one commit (only JSON renders). Tasks 10–11 then add rendering to the other four without touching any signature. Splitting them the other way round would leave a red `mypy ff_tracker`.
+**Signature-ordering constraint**: mypy requires an override to accept every parameter of the abstract method, so task 8 changes `display/base.py` **and all five** concrete `format_output` signatures in one commit (only JSON renders). Tasks 9–10 then add rendering to the other four without touching any signature. Splitting them the other way round would leave a red `mypy ff_tracker`.
 
 ---
 
@@ -536,18 +631,20 @@ Fourteen tasks, detailed in [tasks.md](./tasks.md). Grouped so the suite is gree
 
 Recorded because they shape the implementation and are not visible from the spec alone:
 
-1. **`current_week` can be `None`.** `main.py:265` guards weekly challenges on `espn_service.current_week and > 0`; if detection failed, the formatters omit weekly sections too. The digest therefore omits `week`/`weeks_remaining` and reports "no matchups this week" rather than inventing a week. FR-002 does not say what happens here; this is the plan's decision.
-2. **`SeasonRecapService` builds `DivisionData` without league settings** (`ff_tracker/services/season_recap_service.py:411`). That call site can only take the default `reg_season_count`; it is a season-recap data path, never the AI digest's, so the default is correct there and the field stays honest for `ff-tracker`.
+1. **`current_week` can be `None`.** `main.py:265` guards weekly challenges on `espn_service.current_week and > 0`; if detection failed, the formatters omit weekly sections too. The digest emits `"week": null` / `"weeks_remaining": null` rather than inventing a week, and `matchups_note` follows the matchups list (empty → "No matchups this week"), not the week. FR-002 does not say what happens here; this is the plan's decision, and `null` (rather than an omitted key) keeps the `TypedDict` total.
+2. **`SeasonRecapService` builds `DivisionData` without league settings** (`ff_tracker/services/season_recap_service.py:411`). That call site passes no `reg_season_count`, and with `int | None` the model records "unknown" instead of asserting `14`; it is a season-recap data path, never the AI digest's.
 3. **`HTTPError` carries the full URL in `.filename`** (path and query included) even though `str()`/`repr()` omit it. AC-005 forbids that path from ever appearing, so the client builds reasons from `e.code`, the parsed host and the model, and never logs `e.filename`, the exception object or its traceback.
 4. **The 5 formatters each recompute the mode** from `any(d.is_playoff_mode …)` and `championship is not None`; `ReportContext` still exists in `display/base.py` but no formatter reads it (the merged typing commit removed the `context` parameter). The digest's local copy is the sixth, as the spec states — not an extraction opportunity.
 5. **`WeeklyChallenge.division` is the winner's league only because of the merged spec-003 fix** (`a78e6ba`). This branch is based on it; had it not merged, FR-002's per-league weekly challenges would be unattributable.
 6. **Baseline mypy is clean on this branch** (`Success: no issues found in 41 source files`) — the 27 pre-existing errors the Gate 2 brief refers to were fixed in `a78e6ba`. The bar is therefore zero new errors, not "the same 27".
+7. **`urlopen` returns `HTTPResponse` and its second positional argument is `data`.** The transport seam therefore cannot be `urlopen` itself; it is the `_urlopen(request, timeout) -> bytes` wrapper (Decision 6), and one test must patch `urllib.request.urlopen` to exercise that wrapper — every other client test injects a fake and would never run the production path.
+8. **`load_environment()` runs only inside `create_config()`.** A loader that reads `AI_SUMMARY_*` must call it itself or run after `create_config`; the plan does both (Decision 3), and Task 4 proves a `.env`-only setup with `create_config` unpatched.
 
 ---
 
 ## Testing Strategy
 
-No network: `FakeAIClient` implements `AIClient`; `FakeTransport` implements `HTTPTransport`; `unittest.mock.patch` for `ESPNService`/`create_config` at the CLI boundary, as `tests/test_main_cli.py` already does. Fixture data lives in `tests/ai_fakes.py` (canned responses + builders), not on disk.
+No network: `FakeAIClient` implements `AIClient`; `FakeTransport` implements `HTTPTransport`; `unittest.mock.patch` for `ESPNService`/`create_config` at the CLI boundary, as `tests/test_main_cli.py` already does. One test patches `urllib.request.urlopen` to drive the production `_urlopen` wrapper. Fixture data lives in `tests/ai_fakes.py` (canned responses + builders), not on disk.
 
 | AC | Where |
 |---|---|
@@ -569,13 +666,22 @@ No network: `FakeAIClient` implements `AIClient`; `FakeTransport` implements `HT
 | WC-001 static workflow check | `tests/test_ai_summary_config_workflow.py` (string assertions on the YAML, no YAML dependency) |
 | LV-001…004 | manual, once, against the live provider (not in the suite) |
 
+Guards the ACs do not name but Gate 2 required:
+
+| Guard | Where |
+|---|---|
+| `test_generate_propagates_programming_errors` — `AttributeError` from the digest builder escapes `generate` | `test_ai_summary_service.py` |
+| `_urlopen` (production transport) reads the response body and passes `timeout=` | `test_ai_client.py` via `patch("urllib.request.urlopen")` |
+| Digest key set compared against a golden, recursively | `test_ai_summary_digest.py` |
+| `.env`-only configuration enables the feature with `create_config` unpatched | `tests/test_config.py` |
+
 ---
 
 ## Risk Assessment
 
 ### Risk 1: The fail-open boundary is too wide (or too narrow)
 **Likelihood**: Medium · **Impact**: High
-**Mitigation**: catch exactly `AISummaryError`; convert parser noise inside `_parse_response`; a test asserts an unexpected `RuntimeError` from the client is **not** swallowed (it propagates). **Fallback**: none needed — this is the design.
+**Mitigation**: catch exactly `AISummaryError`; convert only `JSONDecodeError` in `_parse_response`; `test_generate_propagates_programming_errors` asserts a stubbed digest builder raising `AttributeError` crashes the run instead of degrading to "AI summary unavailable". **Fallback**: none needed — this is the design.
 
 ### Risk 2: Normalisation is subtly non-deterministic or contradicts the caps
 **Likelihood**: Medium · **Impact**: Medium
@@ -583,7 +689,7 @@ No network: `FakeAIClient` implements `AIClient`; `FakeTransport` implements `HT
 
 ### Risk 3: A formatter silently changes existing output
 **Likelihood**: Low · **Impact**: High
-**Mitigation**: AC-001's prefix/suffix test for all five, run before wiring (task 9–11) and after (task 12). The insertion point never moves an existing line (Decision 7).
+**Mitigation**: AC-001's prefix/suffix test for all five, run before wiring (tasks 8–10) and after (task 11). The insertion point never moves an existing line (Decision 7).
 
 ### Risk 4: The workflow guard is bypassed or the secret leaks into logs
 **Likelihood**: Low · **Impact**: High
@@ -631,9 +737,9 @@ Digest size is bounded by the data: 3–4 leagues × (≤16 standings rows + ≤
 
 **Deviation**: the 5-second typical run no longer holds with the feature enabled.
 
-**Spec reasoning**: 7.7–34.4 s per call in the spike, bounded by `AI_SUMMARY_TIMEOUT`. The 5-second budget applies to the deterministic report with the feature off.
+**Spec reasoning (v0.8)**: 7.7–34.4 s per call in the spike, bounded by `AI_SUMMARY_TIMEOUT` **on each socket read**. There is no wall-clock deadline, so a pathologically slow provider can exceed the configured value. The 5-second budget applies to the deterministic report with the feature off.
 
-**Boundary this plan implements**: off by default; zero added network I/O when off; one call per run when on; no retries, no streaming, no per-format second call. A caller that cares about schedule duration leaves the feature off, which is the default.
+**Boundary this plan implements**: off by default; zero added network I/O when off; one call per run when on; no retries, no streaming, no per-format second call; no thread or signal wrapper (a timed-out `urlopen` cannot be cancelled, so a worker thread would hang shutdown for the same duration it was meant to bound). A caller that cares about schedule duration leaves the feature off, which is the default.
 
 ### Not deviated
 Articles I (no `Any`, no suppressions), II (frozen validated models), IV (services never import display; the `::warning::` is emitted in `main.py`, not the service), V (no extra ESPN calls), VI (one protocol, five formats), VII (docstrings/names, comments only for the non-obvious), IX (no new flags; `--help` states the egress).
@@ -642,15 +748,20 @@ Articles I (no `Any`, no suppressions), II (frozen validated models), IV (servic
 
 ## Open Technical Questions
 
-None open. Decisions the spec leaves to the plan, recorded here so Gate 2 can object to them specifically:
+None open. Decisions the spec leaves to the plan, recorded here so Gate 3 can object to them specifically:
 
-1. Digest shape is an internal `dict[str, object]` (Decision 4) — not a public schema, not the JSON formatter's output.
-2. AI configuration sits beside `FFTrackerConfig` (Decision 3), so the other two CLIs never validate `AI_SUMMARY_*`.
-3. `reg_season_count` defaults to 14 (Decision 5).
-4. The trailing "Game data" lines are treated as the console/sheets/markdown footer for FR-005's placement rule (Decision 7).
-5. `current_week is None` omits week/weeks-remaining from the digest (Constraints 1).
+1. Digest shape is a `TypedDict` document in `services/ai_digest.py` (Decision 4) — not a public schema, not the JSON formatter's output, and not an Article II model.
+2. AI configuration sits beside `FFTrackerConfig` (Decision 3), so the other two CLIs never validate `AI_SUMMARY_*`; the loader calls `load_environment()` itself and `main.py` invokes it after `create_config`.
+3. `reg_season_count` is `int | None = None`; unknown means `"weeks_remaining": null` rather than a fabricated `14` (Decision 5).
+4. The trailing "Game data" line is the console/markdown footer for FR-005's placement rule; sheets appends at the end because its game-data line is mid-report (Decision 7).
+5. `current_week is None` emits `"week": null` / `"weeks_remaining": null` (Constraints 1).
 6. `provenance.truncated` is always emitted in JSON (`false` when nothing was cut); the spec allows absent-or-false.
 7. The markdown TOC does not gain an entry for the new heading (Decision 7).
+8. The transport is `_urlopen(request, timeout) -> bytes`; `urlopen` itself cannot be the seam because it returns `HTTPResponse` and takes `data` as its second argument (Decision 6).
+
+### Spec nits for the next spec edit (not edited here)
+
+- **Configuration table**: `AI_SUMMARY_TIMEOUT` is still described as "Whole-call timeout in seconds". FR-003 (v0.8) and Article X now say the bound is per socket operation with no wall-clock deadline, so the table row should say "Per-socket-read timeout in seconds". One line; belongs to the owner's next spec commit, not to this plan.
 
 ---
 
@@ -669,3 +780,4 @@ None open. Decisions the spec leaves to the plan, recorded here so Gate 2 can ob
 | Version | Date | Author | Changes |
 |---|---|---|---|
 | 1.0 | 2026-10-21 | AI Agent | Initial implementation plan: 14 tasks, 11 new files, 21 modified files, two declared deviations, seven plan-level decisions recorded for Gate 2 |
+| 1.1 | 2026-10-21 | AI Agent | Gate 2 revisions. Fail-open breadth narrowed: only `JSONDecodeError` is converted in `_parse_response`, every other rejection is an explicit check, and `test_generate_propagates_programming_errors` is a done-criterion. Digest adopted as a `TypedDict` document (total keys, `null` for unknown) with a golden recursive key-set test. Transport corrected to the `_urlopen(request, timeout) -> bytes` wrapper plus a `patch("urllib.request.urlopen")` test, because `urlopen` returns `HTTPResponse` and takes `data` second. Config load ordering stated: the loader calls `load_environment()` and runs after `create_config`, with a `.env`-only test. `reg_season_count` changed to `int \| None = None` so "unknown" is not a fabricated 14. Tasks 7 and 8 merged into one narrative task (13 total, renumbered) so the green-suite-per-task invariant holds. Cuts applied: the `--help` variable table reduces to the egress paragraph, `AI_SUMMARY_MODEL` leaves the workflow `env:`, the `AGENTS.md` paragraph is dropped. Console/championship placement rationale corrected (the report ends on the season-challenge table). Spec nit recorded: the configuration table still calls `AI_SUMMARY_TIMEOUT` a whole-call timeout |
