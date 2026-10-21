@@ -1,6 +1,6 @@
 # Challenge Ledger — 009 AI Summary
 
-> Gate 1 (spec) · `spec.md` v0.11 (this commit) · Constitution v1.0.0, no conflict.
+> Gate 1 (spec) · `spec.md` v0.12 (this commit) · Constitution v1.0.0, no conflict.
 > Owner decisions of 2026-10-21 are precedent: fail-fast when enabled-but-unconfigured with a
 > workflow guard; league matching by name with positional fallback; failure notice at the bottom.
 > They are not reopened. The v0.4 owner changes (endpoint default, enforced length, committed lore
@@ -130,5 +130,12 @@ Minor: FR-002's no-matchups sentence restored; the "existing mode predicate" wor
 **Closed by spec v0.11 — the one open text item:** FR-002's standings bullet now names the digest's own values (`in_playoff_position` / `outside_playoff_position`, current position against the top-four cutoff) and requires the `standings_note` that the status is not a final outcome, beside the existing no-matchups sentence, so the golden key-set test is again authored from FR-002. FR-009 now describes the prompt as a committed workflow `env:` block scalar, and AC-009 states its enable precondition. Remaining for the implementer: `plan.md:119/362/390` and `tasks.md:110` still list the old `qualified|eliminated` values — those files are untouched by this spec edit, and the plan/tasks value lists must follow FR-002 before Gate 3 closes.
 
 **Merge order:** PR #7 first (it renames the JSON formatter's values), then rebase this branch. If this branch lands first, FR-002's clause is false for the interval; the reviewer must re-verify that `json.py` and `ai_digest.py` word `playoff_status` identically once #7 merges.
+
+### Owner changes — spec v0.12
+
+| Owner change | Status |
+|---|---|
+| The section moves up: after the weekly highlights, before the season-long challenges, with the failure notice in the same position; JSON's top-level key unchanged | **OWNER CHANGE, spec closed** — FR-005's intro, table, FR-006's notice position and AC-002/AC-018 now say so, and the report order chain is stated. Code and plan follow: the four positioned formatters move the insertion point, and the plan/tasks text that describes a trailing section must be corrected with it. |
+| One retry, only for contract failures, plus the prompt naming the league count and names | **OWNER CHANGE, spec closed** — FR-003 scopes the retry (contract violations only; never HTTP 4xx/5xx, transport, timeout or `finish_reason == "length"`; same prompt and payload; second failure is the ordinary FR-006 outcome; worst case two attempts and roughly two socket-read timeouts) and requires the prompt to list the league count and names verbatim. FR-008 adds `provenance.attempts`; AC-019…AC-022 cover the retry and AC-018 the placement. Implementation follow-ups: the retry loop, the provenance field, the prompt clause and the placement move. |
 
 **Verdict:** HOLD — one spec/plan/tasks edit; the fourteen findings and the digest code fix are closed. No requirement, cap, criterion or settled row reopened.
