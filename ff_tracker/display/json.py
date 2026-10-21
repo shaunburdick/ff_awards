@@ -99,19 +99,7 @@ class JsonFormatter(BaseFormatter):
                 ]
 
             data["weekly_player_highlights"] = [
-                {
-                    "challenge_name": challenge.challenge_name,
-                    "challenge_type": "player"
-                    if "position" in challenge.additional_info
-                    else "team",
-                    "player_name": challenge.winner,
-                    "position": challenge.additional_info.get("position", ""),
-                    "fantasy_team": challenge.additional_info.get("team_name", ""),
-                    "division": challenge.division,
-                    "points": float(challenge.value)
-                    if challenge.value.replace(".", "", 1).isdigit()
-                    else challenge.value,
-                }
+                self._serialize_weekly_highlight(challenge)
                 for challenge in filtered_challenges
             ]
 
@@ -167,6 +155,36 @@ class JsonFormatter(BaseFormatter):
         # Python's json module with optional pretty printing
         indent = 2 if pretty else None
         return json.dumps(data, indent=indent, ensure_ascii=False)
+
+    def _serialize_weekly_highlight(self, challenge: WeeklyChallenge) -> dict[str, object]:
+        """Serialize one weekly challenge, keeping team and player fields apart."""
+        is_player = "position" in challenge.additional_info
+        entry: dict[str, object] = {
+            "challenge_name": challenge.challenge_name,
+            "challenge_type": "player" if is_player else "team",
+        }
+
+        if is_player:
+            entry["player_name"] = challenge.winner
+            entry["position"] = challenge.additional_info["position"]
+            team_name = challenge.additional_info.get("team_name")
+            if team_name:
+                entry["team_name"] = team_name
+        else:
+            entry["team_name"] = challenge.winner
+
+        entry["division"] = challenge.division
+        entry["value"] = challenge.value
+        entry["points"] = self._parse_points(challenge.value)
+        return entry
+
+    @staticmethod
+    def _parse_points(value: str) -> float | None:
+        """Return a numeric value for plain numbers, None for formatted strings."""
+        try:
+            return float(value)
+        except ValueError:
+            return None
 
     def _serialize_playoff_bracket(self, divisions: Sequence[DivisionData]) -> dict[str, object]:
         """Serialize playoff bracket data to dictionary."""

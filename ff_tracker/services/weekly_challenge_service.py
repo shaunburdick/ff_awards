@@ -185,10 +185,19 @@ class WeeklyChallengeCalculator:
         games: Sequence[WeeklyGameResult],
         week: int
     ) -> WeeklyChallenge:
-        """Find smallest margin (win or loss) this week."""
-        winner = min(games, key=lambda g: g.margin)
+        """Find smallest margin game this week, reported from the winner's side."""
+        # Both teams in a matchup share the margin, so prefer the winning row.
+        winner = min(games, key=lambda g: (g.margin, not g.won))
 
-        result_type = "won" if winner.won else "lost"
+        if winner.won:
+            description = f"{winner.team_name} won by only {winner.margin:.2f} points"
+        elif winner.score == winner.opponent_score:
+            description = (
+                f"{winner.team_name} and {winner.opponent_name} "
+                f"tied at {winner.score:.2f}"
+            )
+        else:
+            description = f"{winner.team_name} lost by only {winner.margin:.2f} points"
 
         return WeeklyChallenge(
             challenge_name="Closest Game This Week",
@@ -197,7 +206,7 @@ class WeeklyChallengeCalculator:
             owner=None,
             division=winner.division,
             value=f"{winner.score:.2f} - {winner.opponent_score:.2f} (Δ{winner.margin:.2f})",
-            description=f"{winner.team_name} {result_type} by only {winner.margin:.2f} points",
+            description=description,
             additional_info={
                 "score": winner.score,
                 "opponent": winner.opponent_name,
@@ -286,14 +295,13 @@ class WeeklyChallengeCalculator:
             week=week,
             winner=winner.name,
             owner=None,
-            division="N/A",  # Not applicable for player challenges
+            division=winner.division,
             value=f"{winner.points:.2f}",
             description=f"{winner.name} ({winner.position}) scored {winner.points:.2f} points",
             additional_info={
                 "position": winner.position,
                 "team": winner.team_name,
-                "pro_team": winner.pro_team,
-                "league_division": winner.division
+                "pro_team": winner.pro_team
             }
         )
 
@@ -321,14 +329,13 @@ class WeeklyChallengeCalculator:
                 week=week,
                 winner=winner.name,
                 owner=None,
-                division="N/A",  # Not applicable for player challenges
+                division=winner.division,
                 value=f"{winner.points:.2f}",
                 description=f"{winner.name} scored {winner.points:.2f} points",
                 additional_info={
                     "position": winner.position,
                     "team": winner.team_name,
-                    "pro_team": winner.pro_team,
-                    "league_division": winner.division
+                    "pro_team": winner.pro_team
                 }
             ))
 
