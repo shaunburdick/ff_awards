@@ -1,6 +1,6 @@
 # Challenge Ledger — 009 AI Summary
 
-> Gate 1 (spec) · `spec.md` v0.10 (this commit) · Constitution v1.0.0, no conflict.
+> Gate 1 (spec) · `spec.md` v0.11 (this commit) · Constitution v1.0.0, no conflict.
 > Owner decisions of 2026-10-21 are precedent: fail-fast when enabled-but-unconfigured with a
 > workflow guard; league matching by name with positional fallback; failure notice at the bottom.
 > They are not reopened. The v0.4 owner changes (endpoint default, enforced length, committed lore
@@ -105,3 +105,30 @@ Minor: FR-002's no-matchups sentence restored; the "existing mode predicate" wor
 | FR-007 validated `AI_SUMMARY_TIMEOUT`, `AI_SUMMARY_MAX_TOKENS` and `AI_SUMMARY_MAX_PROMPT_CHARS` unconditionally, contradicting FR-001 (off means unchanged output) — one stale `.env` value exited 1 with no report | **CLOSED by spec v0.10** — every FR-007 bullet is scoped to `AI_SUMMARY_ENABLED` true, and any other malformed `AI_SUMMARY_*` value is ignored while the feature is off; a malformed value of the flag itself stays an error, since an unreadable flag cannot be read as off. Code side (implementer): parse and validate the AI configuration behind the enable check. |
 | FR-009 said the request body carries league IDs, which FR-002, the digest builder and the README all deny | **CLOSED by spec v0.10** — the phrase is deleted; the request body now reads team names, owner names, and points for and against. No code change implied. |
 | AC-010 implied one test double observes every value | **CLOSED by spec v0.10** — the criterion names the test doubles and the layer each value belongs to: construction sees model, base URL, timeout and bearer token; the request sees `max_tokens` and `reasoning_effort`. Every assertion is unchanged; the existing two-seam tests already satisfy it. |
+
+### Re-review — remediation @ 116d460 (2026-10-21)
+
+**Closed, verified against the code and the tests:**
+
+| Gate 3 finding | Outcome |
+|---|---|
+| 1. Mid-body transport failure | CLOSED — `except (OSError, http.client.HTTPException)` after the timeout handlers, mapping to `AITransportError`; unit, service-level and end-to-end tests. `test_mid_body_failure_still_ships_the_report_and_exits_zero` patches `urllib.request.urlopen` and makes `response.read()` raise, so the real `_urlopen`, client, service and console run; it fails against the pre-fix code (exit 1, “Unexpected error”). |
+| 2. Console flattening | CLOSED — `BaseFormatter._flatten_text` (display-layer string handling) used by console and by sheets' `_ai_cell`; the rewritten AC-011 test asserts no tab, one line, one bullet line, and fails against the old `lines.extend(paragraphs)` implementation. |
+| 3. Malformed base URL | CLOSED — scheme/host check in `AISummaryConfig.__post_init__`, two tests; the loader only validates when enabled. |
+| 4. Feature-off validation | CLOSED in code — the loader reads only the flag and returns the disabled default. Test-strength note: the junk-variable test asserts timeout/budget/effort/base-URL/prompt-cap defaults but not `model`, `user_prompt` or `api_key`; the guarantee is structural (early return), not fully observed. |
+| 5. Workflow prompt test | CLOSED — emptiness assertion removed, comment-inside-block check kept. |
+| 6. AC-012 five outputs | CLOSED — four formatters parametrised plus exact JSON `report_type`, both modes. |
+| 7. Untested branches | CLOSED — trailing-paragraph drop (3×60 words) and opponent true diff (3.14) both discriminate. |
+| 8. Self-asserting test | CLOSED — deleted; no coverage lost. |
+| 9. `finish_reason` at INFO | CLOSED — removed from the log line; still used for the truncation decision. |
+| 10. FR-009 league IDs | CLOSED by spec v0.10. |
+| 11. Playoff-mode matchups | CLOSED — suppressed in playoff and championship; digest test asserts it. |
+| 12. `AIRequest.max_tokens` default | CLOSED — removed; callers pass the configured value. |
+| 13. Plan bookkeeping | CLOSED — exception hierarchy and `User-Agent` recorded. |
+| 14. README stale sentence | CLOSED — corrected. |
+
+**Closed by spec v0.11 — the one open text item:** FR-002's standings bullet now names the digest's own values (`in_playoff_position` / `outside_playoff_position`, current position against the top-four cutoff) and requires the `standings_note` that the status is not a final outcome, beside the existing no-matchups sentence, so the golden key-set test is again authored from FR-002. FR-009 now describes the prompt as a committed workflow `env:` block scalar, and AC-009 states its enable precondition. Remaining for the implementer: `plan.md:119/362/390` and `tasks.md:110` still list the old `qualified|eliminated` values — those files are untouched by this spec edit, and the plan/tasks value lists must follow FR-002 before Gate 3 closes.
+
+**Merge order:** PR #7 first (it renames the JSON formatter's values), then rebase this branch. If this branch lands first, FR-002's clause is false for the interval; the reviewer must re-verify that `json.py` and `ai_digest.py` word `playoff_status` identically once #7 merges.
+
+**Verdict:** HOLD — one spec/plan/tasks edit; the fourteen findings and the digest code fix are closed. No requirement, cap, criterion or settled row reopened.
