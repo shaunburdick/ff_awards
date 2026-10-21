@@ -125,12 +125,21 @@ class TestResponseHandling:
             b'{"choices": [{"message": {}}]}',
             b'{"choices": "nope"}',
             b'{"choices": [{"message": {"content": ""}, "finish_reason": "stop"}]}',
+            b'{"choices": [{"message": {"content": "   "}, "finish_reason": "stop"}]}',
             b'{"choices": [{"message": {"content": "x"}, "finish_reason": 7}]}',
         ],
     )
     def test_unexpected_envelope_is_a_contract_failure(self, body: bytes) -> None:
         client = OpenAICompatibleClient(_config(), FakeTransport(body))
         with pytest.raises(AIContractError, match="did not match the summary contract"):
+            client.complete(_request())
+
+    def test_length_with_empty_content_is_truncation_not_a_contract_failure(self) -> None:
+        """A reasoning model can spend the whole budget and return no content."""
+        body = b'{"choices": [{"message": {"content": ""}, "finish_reason": "length"}]}'
+        client = OpenAICompatibleClient(_config(), FakeTransport(body))
+
+        with pytest.raises(AITruncationError, match="finish_reason=length"):
             client.complete(_request())
 
     def test_usage_is_logged_at_debug(self, caplog: pytest.LogCaptureFixture) -> None:

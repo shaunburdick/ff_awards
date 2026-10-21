@@ -133,13 +133,18 @@ class OpenAICompatibleClient:
         elapsed_ms = int((time.monotonic() - started) * 1000)
         content, finish_reason = self._parse_envelope(raw)
         logger.info(
-            "AI summary provider answer: model=%s status=200 latency_ms=%d",
+            "AI summary provider answer: model=%s status=200 latency_ms=%d finish_reason=%s",
             self._config.model,
             elapsed_ms,
+            finish_reason,
         )
 
+        # finish_reason is the authority: a reasoning model can burn the whole
+        # budget and return empty content, which is truncation, not a bad shape.
         if finish_reason == "length":
             raise AITruncationError()
+        if not content.strip():
+            raise AIContractError(CONTRACT_REASON)
         return content
 
     def _completions_url(self) -> str:
@@ -217,7 +222,7 @@ class OpenAICompatibleClient:
         message_dict: dict[str, object] = message
 
         content = message_dict.get("content")
-        if not isinstance(content, str) or not content.strip():
+        if not isinstance(content, str):
             raise AIContractError(CONTRACT_REASON)
 
         finish_reason = first_choice.get("finish_reason")
