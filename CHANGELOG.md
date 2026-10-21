@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (breaking for JSON consumers)
+- **JSON `playoff_status` names the current position, not an outcome.** The
+  field now publishes `in_playoff_position` or `outside_playoff_position`.
+  `qualified`/`eliminated` claimed a season outcome the field never computed -
+  a 3-3 team ranked 5th in week 6 read as "eliminated". Consumers matching on
+  the old strings must update.
+
 ### Fixed - Weekly challenge facts
 - **Closest Game This Week names the game's winner.** The challenge took the
   first row of the closest matchup, so a team could win it by *losing* and the

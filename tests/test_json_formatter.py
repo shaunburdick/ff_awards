@@ -354,6 +354,25 @@ class TestJSONStructure:
         assert div["division_name"] == "League A"
         assert "teams" in div
 
+    def test_standings_playoff_status_names_current_position_only(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+    ) -> None:
+        """Standings report current position, never a season outcome."""
+        formatter = JsonFormatter(year=2024)
+        output = formatter.format_output(
+            divisions=[sample_division],
+            challenges=sample_challenges,
+        )
+
+        teams = json.loads(output)["standings"]["divisions"][0]["teams"]
+        status_by_team = {team["team_name"]: team["playoff_status"] for team in teams}
+        assert status_by_team == {
+            "Alice's Team": "in_playoff_position",
+            "Bob's Team": "outside_playoff_position",
+        }
+
     def test_output_season_challenges_structure(
         self,
         sample_division: DivisionData,
