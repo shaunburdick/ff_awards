@@ -4,7 +4,7 @@
 > **Status**: Draft — revised after Gate 1
 > **Created**: 2026-10-21
 > **Last Updated**: 2026-10-21
-> **Version**: 0.8
+> **Version**: 0.9
 
 ## Overview
 
@@ -54,7 +54,8 @@ The digest contains no league IDs, no ESPN credentials and no API key.
 ### FR-003 — Request
 
 - One OpenAI-compatible Chat Completions call to `<AI_SUMMARY_BASE_URL>/chat/completions` with `Authorization: Bearer <AI_SUMMARY_API_KEY>`.
-- `max_tokens` is 8000. At 3000 the spike's reasoning models returned `finish_reason: length` with empty or truncated content in all four cells; at 8000, 8/8 returned clean JSON.
+- `max_tokens` is sent from `AI_SUMMARY_MAX_TOKENS` (default 8000), never hard-coded. Budget and model belong together: on the real three-league digest of 5,158 prompt tokens, `glm-5.3-flash` at 8000 spent the whole budget on reasoning and returned `content: null` with `finish_reason: length`, which is the FR-006 truncation failure — a provider-side truncation, not a configuration error.
+- `reasoning_effort` is sent only when `AI_SUMMARY_REASONING_EFFORT` is set, carrying that value. Unset or empty omits the key entirely; it is never sent as `null` or empty. This is a non-standard OpenAI-compatible extension: an endpoint may ignore it, and ignoring it must not be treated as a failure (measured: `glm-5.3-flash` honours it — 0 reasoning tokens, 10.7 s — while `deepseek-v4.1-flash` gains nothing from it, reasoning rising to 4,912 tokens and running slower).
 - The socket read is bounded by `AI_SUMMARY_TIMEOUT` seconds. That is a per-operation bound, not a wall-clock deadline: a provider that trickles bytes can outlive it, and no total time budget is guaranteed, so a pathologically slow provider may exceed the configured value. No retries, no streaming.
 - The response must parse directly as JSON matching the contract in FR-004. Fenced, prefixed or otherwise non-JSON responses are contract failures, not parsed leniently.
 
@@ -118,7 +119,7 @@ JSON `ai_summary` object:
   "headline": "string",
   "season_note": "string",
   "leagues": [{ "league": "string", "paragraphs": ["string"], "bullets": ["string"] }],
-  "provenance": { "model": "glm-5.3-flash", "prompt_sha": "9f2c1ab4e7d0", "generated_at": "2026-10-14T05:03:11Z", "truncated": false }
+  "provenance": { "model": "deepseek-v4.1-flash", "prompt_sha": "9f2c1ab4e7d0", "generated_at": "2026-10-14T05:03:11Z", "truncated": false }
 }
 ```
 
@@ -143,6 +144,8 @@ Configuration errors are not narrative failures and are not degraded:
 - `AI_SUMMARY_ENABLED` true with `AI_SUMMARY_API_KEY` missing or empty → `ConfigurationError` naming `AI_SUMMARY_API_KEY`, exit 1, no report, no HTTP call.
 - `AI_SUMMARY_ENABLED` set to any value not in `true|1|yes|on|false|0|no|off` (case-insensitive) → `ConfigurationError`.
 - `AI_SUMMARY_TIMEOUT` not a positive integer → `ConfigurationError`.
+- `AI_SUMMARY_MAX_TOKENS` not a positive integer → `ConfigurationError` naming the variable.
+- `AI_SUMMARY_REASONING_EFFORT` set to anything outside `low|medium|high` (case-insensitive) → `ConfigurationError` naming the variable and the allowed values.
 - `AI_SUMMARY_MAX_PROMPT_CHARS` not a positive integer → `ConfigurationError` naming the variable.
 - `AI_SUMMARY_USER_PROMPT` longer than `AI_SUMMARY_MAX_PROMPT_CHARS` → `ConfigurationError` naming the variable, its actual length and the configured limit.
 - Misspelled or missing provider settings therefore fail loudly once, instead of quietly degrading every scheduled run.
@@ -184,12 +187,14 @@ Configuration errors are not narrative failures and are not degraded:
 | `AI_SUMMARY_ENABLED` | no | `false` | Opt-in switch. Off means no call, no section, no notice. |
 | `AI_SUMMARY_API_KEY` | when enabled | none | Bearer token; never printed. |
 | `AI_SUMMARY_BASE_URL` | no | `https://opencode.ai/inference/openai/v1` | OpenAI-compatible endpoint root; `/chat/completions` is appended. An empty or whitespace-only value falls back to the default rather than erroring. |
-| `AI_SUMMARY_MODEL` | no | `glm-5.3-flash` | Model id, reported verbatim in errors and provenance. |
-| `AI_SUMMARY_TIMEOUT` | no | `120` | Whole-call timeout in seconds. |
+| `AI_SUMMARY_MODEL` | no | `deepseek-v4.1-flash` | Model id, reported verbatim in errors and provenance. |
+| `AI_SUMMARY_TIMEOUT` | no | `120` | Per-socket-read timeout in seconds. There is no wall-clock deadline, so a slow provider can exceed it. |
+| `AI_SUMMARY_MAX_TOKENS` | no | `8000` | Positive integer sent as the request's `max_tokens`; a cost guard, not a platform limit. Too small a budget for the chosen model shows up as an FR-006 truncation failure. |
+| `AI_SUMMARY_REASONING_EFFORT` | no | unset | Optional `low|medium|high` (case-insensitive). When set, the request carries `reasoning_effort: <value>`; when unset or empty, the key is omitted entirely. A non-standard extension an endpoint may ignore, which is not a failure. |
 | `AI_SUMMARY_MAX_PROMPT_CHARS` | no | `8000` | Positive integer bounding `AI_SUMMARY_USER_PROMPT`; a cost guard, not a platform limit — Linux allows roughly 128 KB per variable and GitHub caps a secret at 48 KB. |
 | `AI_SUMMARY_USER_PROMPT` | no | empty | Free-form commissioner instructions appended to the system prompt (FR-010); stripped, CRLF-normalised, bounded by `AI_SUMMARY_MAX_PROMPT_CHARS`. |
 
-These are loaded the same way as existing settings (`load_environment` / `.env`); `AI_SUMMARY_USER_PROMPT` can be set as a GitHub Actions `env:` block scalar, so it is committed and reviewable without any runtime file, and `.env` accepts a quoted multi-line value. Enabling the feature needs only a key: the endpoint default matches the model default. A default endpoint we do not control can change upstream, and the failure is visible — notice plus `::warning::` — rather than silent, which is why the default is acceptable now. The default base URL and the model id belong in `.env.example` and the README's configuration section: a plan requirement, not a code comment.
+These are loaded the same way as existing settings (`load_environment` / `.env`); `AI_SUMMARY_USER_PROMPT` can be set as a GitHub Actions `env:` block scalar, so it is committed and reviewable without any runtime file, and `.env` accepts a quoted multi-line value. The model default is `deepseek-v4.1-flash` because `glm-5.3-flash` exhausts the 8000-token budget on reasoning alone for a three-league digest (8000/8000, `content: null`, no prose), while the default completes the same payload in about 2,057 reasoning tokens and 9 seconds; `glm-5.3-flash` remains a supported choice through `AI_SUMMARY_MODEL`, at the cost of a much larger `AI_SUMMARY_MAX_TOKENS` or a `reasoning_effort` the endpoint honours. Enabling the feature needs only a key: the endpoint default matches the model default. A default endpoint we do not control can change upstream, and the failure is visible — notice plus `::warning::` — rather than silent, which is why the default is acceptable now. The default base URL and the model id belong in `.env.example` and the README's configuration section: a plan requirement, not a code comment.
 
 ---
 
@@ -229,7 +234,7 @@ Tested offline with a fake client that records requests and returns canned respo
 - **AC-007** `finish_reason: "length"` with complete, parseable content is still treated as FR-006's truncation failure — the content is not rendered.
 - **AC-008** League matching follows FR-004's total order: (i) entries reordered, or differing only in case and surrounding whitespace, map by name; (ii) with equal counts and no full name match — including one stray entry or one duplicated entry — every section renders by position under our own league names, and no response-supplied league name appears as a heading; (iii) with differing counts and no full name match, the FR-006 contract failure is reported with the count-mismatch reason and nothing is rendered.
 - **AC-009** Missing key, bad `AI_SUMMARY_ENABLED` value, and non-numeric or zero `AI_SUMMARY_TIMEOUT` each raise `ConfigurationError` naming the variable, exit 1, record zero calls, and write no report.
-- **AC-010** The fake client records the model, base URL, timeout, `max_tokens: 8000` and bearer token from each configuration; changing `AI_SUMMARY_MODEL` changes the value sent and the value in provenance and the attribution line; unset, empty and whitespace-only `AI_SUMMARY_BASE_URL` all send the default `https://opencode.ai/inference/openai/v1`, and an explicit value overrides it.
+- **AC-010** The fake client records the model, base URL, timeout, `max_tokens` and bearer token from each configuration; the body carries the configured `max_tokens`, `reasoning_effort` is absent when the variable is unset and present with the configured value when it is set, and changing either variable changes the request — proving both are read from configuration rather than assumed; changing `AI_SUMMARY_MODEL` changes the value sent and the value in provenance and the attribution line; unset, empty and whitespace-only `AI_SUMMARY_BASE_URL` all send the default `https://opencode.ai/inference/openai/v1`, and an explicit value overrides it.
 - **AC-011** A paragraph containing a tab, newline, `"`, `<`, `&` and emoji renders as one sheet row and one console line, is HTML-escaped in email, and does not break TSV column counts.
 - **AC-012** Edge-case inputs — single league, a league with no matchups this week, Week 15 playoff mode, Week 17 championship mode, and a digest with no player data — each produce a valid request and a rendered section; the digest sent in Weeks 15–16 carries bracket matchups and the 7 player highlights, and in Week 17 the championship leaderboard, matching what the formatters display; the mode the digest derives agrees with the mode each of the five formatters renders for the same inputs.
 - **AC-013** An overlong fake response — four paragraphs, one of 200 words, four bullets, a 20-word headline and a 60-word `season_note` — normalises to the caps: headline ≤ 15 words, ≤ 3 paragraphs, ≤ 3 bullets, ≤ 120 words per league, `season_note` ≤ 40 words; the first paragraph and the first three bullets survive unchanged; and two runs over the same fixture produce byte-identical output with the same `provenance.truncated` value.
@@ -244,7 +249,7 @@ Tested offline with a fake client that records requests and returns canned respo
 
 Verified manually against a live provider, once, with a real three-league week:
 
-- **LV-001** Response validates against FR-004 in one call; prose references figures that appear in the deterministic report (spot-check two quoted numbers); length falls in the expected range.
+- **LV-001** With defaults — `deepseek-v4.1-flash` at 8000 tokens, no `reasoning_effort` — a three-league digest completes in one call and the response validates against FR-004; prose references figures that appear in the deterministic report (spot-check two quoted numbers); length falls in the expected range.
 - **LV-002** Setting `AI_SUMMARY_MODEL` to a model id known to be unavailable (e.g. `kimi-k2.6`) yields the FR-006 HTTP failure: report present, notice names the model and status, exit 0.
 - **LV-003** Set `AI_SUMMARY_TIMEOUT=1` to force the FR-006 timeout against the live provider; report present, notice names the timeout, exit 0.
 - **LV-004** On a week with player highlights suppressed (playoff week or no player data), the returned narrative names no individual players.
@@ -307,3 +312,4 @@ None open.
 | 0.6 | 2026-10-21 | AI Agent | The lore file is replaced by `AI_SUMMARY_USER_PROMPT`, an optional free-form env-var string appended as a `### COMMISSIONER'S INSTRUCTIONS` block; `AI_SUMMARY_LORE_FILE`, the packaged default, the wheel-inclusion requirement, the missing-path error and the neutral-template rule are removed and nothing is read from disk. Cap is 8000 characters with the variable, length and limit in the error; strip/CRLF rules and the empty-value no-op are stated; precedence, the trusted-input note and the non-verification statement sit in FR-010. FR-008 records that the user prompt is not archived and recommends a committed `env:` block scalar; FR-009 covers user-prompt egress and variable visibility; AC-016/AC-017 are restated for the variable; the exclusion now covers the system prompt template only |
 | 0.7 | 2026-10-21 | AI Agent | Logging is tiered: the key, the request body and the response body are never logged at any level, while the system prompt may be logged at DEBUG only, with the public-repo/Actions-log hazard and the committed `env:` block scalar as the CI record stated in FR-009; FR-008 and AC-006 match. `AI_SUMMARY_MAX_PROMPT_CHARS` (default 8000, positive integer) makes the user-prompt limit configurable, with the error naming the configured limit; FR-007 lists it; AC-017 uses a non-default limit so the test proves the value is read |
 | 0.8 | 2026-10-21 | AI Agent | FR-003's timeout sentence corrected. `urllib.request.urlopen(timeout=...)` bounds each socket operation, not the whole call, so "the call is abandoned at `AI_SUMMARY_TIMEOUT`" was a guarantee the code cannot meet; the bullet now names the per-operation bound and the absence of a wall-clock deadline. The plan stands: a worker thread cannot cancel an in-flight `urlopen`, so a timed-out future still blocks shutdown, and stdlib offers no wall-clock deadline — the `signal.alarm` argument was contested, but the conclusion does not depend on it. Article X's "bounded by" claim is corrected the same way. FR-006's timeout notice and `timed out after Ns` reason are unchanged, and LV-003 remains the manual proof that the notice renders |
+| 0.9 | 2026-10-21 | AI Agent | Measurement-driven: on the real three-league digest of 5,158 prompt tokens (up 84% from the spike's 2,806), `glm-5.3-flash` at 8000 spent the entire budget on reasoning and returned `content: null` with `finish_reason: length`, so the default model becomes `deepseek-v4.1-flash` (about 2,057 reasoning tokens, 9 s on the same payload); `glm-5.3-flash` stays supported through `AI_SUMMARY_MODEL` with the trade-off stated. `AI_SUMMARY_MAX_TOKENS` (default 8000) replaces the hard-coded budget in FR-003, and `AI_SUMMARY_REASONING_EFFORT` (`low|medium|high`, unset by default) adds `reasoning_effort` only when set, with the key omitted entirely otherwise and the non-standard-extension caveat stated. FR-007 lists both, AC-010 proves both are read from configuration, LV-001 runs with defaults, and the `AI_SUMMARY_TIMEOUT` row now says per-socket-read instead of whole-call |

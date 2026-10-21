@@ -1,6 +1,6 @@
 # Challenge Ledger — 009 AI Summary
 
-> Gate 1 (spec) · `spec.md` v0.7 (this commit) · Constitution v1.0.0, no conflict.
+> Gate 1 (spec) · `spec.md` v0.9 (this commit) · Constitution v1.0.0, no conflict.
 > Owner decisions of 2026-10-21 are precedent: fail-fast when enabled-but-unconfigured with a
 > workflow guard; league matching by name with positional fallback; failure notice at the bottom.
 > They are not reopened. The v0.4 owner changes (endpoint default, enforced length, committed lore
@@ -81,7 +81,10 @@ Minor: FR-002's no-matchups sentence restored; the "existing mode predicate" wor
 | Transport | **CLOSED** — `_urlopen(request, timeout) -> bytes` is the default, `HTTPTransport` matches that signature, and a `patch("urllib.request.urlopen")` test drives the production path. |
 | Config ordering | **CLOSED** — the loader calls `load_environment()` itself; `main.py` calls it after `create_config` and before any ESPN call; Task 4 proves a `.env`-only setup with `create_config` unpatched. |
 | `reg_season_count` | **CLOSED** — `int \| None = None`; unknown serialises as `null` rather than quoting a fabricated 14 into the prompt. |
-| Per-socket timeout | **CLOSED by spec v0.8** — FR-003 now states the per-operation bound and that no wall-clock budget is guaranteed; Article X matches. Residual: the Configuration table still calls it a "Whole-call timeout" — recorded as a spec nit for the owner, correctly not edited from the plan. |
+| Per-socket timeout | **CLOSED by spec v0.8, description nit closed in v0.9** — FR-003 states the per-operation bound and that no wall-clock budget is guaranteed; Article X matches; the Configuration table now reads "Per-socket-read timeout in seconds" instead of "Whole-call timeout". |
+| `AI_SUMMARY_MAX_TOKENS` (spec v0.9) | MEASUREMENT-DRIVEN — the hard-coded 8000 truncated `glm-5.3-flash` on the real 5,158-token digest (8000/8000 reasoning, `content: null`). FR-003 sends the configured value, FR-007 rejects a non-positive or non-integer one, AC-010 proves it is read rather than assumed. | — |
+| `AI_SUMMARY_REASONING_EFFORT` (spec v0.9) | MEASUREMENT-DRIVEN — optional `low\|medium\|high`, sent as `reasoning_effort` only when set and omitted entirely when unset; FR-007 rejects other values naming the allowed set; the spec states it is a non-standard extension an endpoint may ignore, and that ignoring it is not a failure. | — |
+| Default model → `deepseek-v4.1-flash` (spec v0.9) | MEASUREMENT-DRIVEN — the previous default exhausted its budget on reasoning for the grown digest (8000/8000, `content: null`, 50 s); the new default completes the same payload in about 2,057 reasoning tokens and 9 s. `glm-5.3-flash` stays supported via `AI_SUMMARY_MODEL`, with the larger-budget or honoured-`reasoning_effort` trade-off stated. | — |
 | `::warning::` in `main.py` | DEFENDED — unchanged, no reason to revisit. |
 | Console/championship placement rationale | **CLOSED** — Decision 7 now says the report ends on the season-challenge table. |
 | Cut list | **APPLIED** — `--help` reduced to the egress paragraph (Task 11 + Component 10, test updated to assert the wording rather than a variable list); `AI_SUMMARY_MODEL` removed from the workflow with a static assertion that it stays out; `AGENTS.md` dropped and moved to "deliberately untouched". Keeping `AI_SUMMARY_USER_PROMPT: |` was **right**, not an unfinished cut: FR-008 makes the committed block scalar the only record an archived CI report can be reproduced from, it is content rather than a pinned setting, and it is empty by default. Caveat: anything inside the block is literal prompt text, so the explanatory comment belongs above the key. |
