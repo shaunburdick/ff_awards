@@ -1,6 +1,6 @@
 # Challenge Ledger — 009 AI Summary
 
-> Gate 1 (spec) · `spec.md` v0.12 (this commit) · Constitution v1.0.0, no conflict.
+> Gate 1 (spec) · `spec.md` v0.13 (this commit) · Constitution v1.0.0, no conflict.
 > Owner decisions of 2026-10-21 are precedent: fail-fast when enabled-but-unconfigured with a
 > workflow guard; league matching by name with positional fallback; failure notice at the bottom.
 > They are not reopened. The v0.4 owner changes (endpoint default, enforced length, committed lore
@@ -139,3 +139,22 @@ Minor: FR-002's no-matchups sentence restored; the "existing mode predicate" wor
 | One retry, only for contract failures, plus the prompt naming the league count and names | **OWNER CHANGE, spec closed** — FR-003 scopes the retry (contract violations only; never HTTP 4xx/5xx, transport, timeout or `finish_reason == "length"`; same prompt and payload; second failure is the ordinary FR-006 outcome; worst case two attempts and roughly two socket-read timeouts) and requires the prompt to list the league count and names verbatim. FR-008 adds `provenance.attempts`; AC-019…AC-022 cover the retry and AC-018 the placement. Implementation follow-ups: the retry loop, the provenance field, the prompt clause and the placement move. |
 
 **Verdict:** HOLD — one spec/plan/tasks edit; the fourteen findings and the digest code fix are closed. No requirement, cap, criterion or settled row reopened.
+
+### Delta — spec v0.12 implementation @ 8fcc942 (2026-10-21)
+
+| Delta item | Outcome |
+|---|---|
+| Placement moved to between the weekly highlights and the season challenges (console, markdown, email, sheets); JSON unchanged; notice in the same slot | **CLOSED** in code and spec. The placement tests fail on the old trailing position (`weekly < season < ai`); the notice test fails on the old slot; the email test now asserts challenges before footer. Code inspected in regular, playoff and championship: the insertion sits outside the weekly guard and before the season block in all four formats, and no deterministic section is suppressed. AC-001's difflib check is a mid-document insert. |
+| One retry, contract failures only, identical request, `provenance.attempts` | **CLOSED.** Only `AIContractError` is caught; the second attempt reuses the same `AIRequest`; a second failure re-raises into the ordinary FR-006 boundary (no third call); HTTP/transport/timeout/truncation make exactly one call and the tests fail if they are retried; `attempts` is 1 or 2 in the model, the loop and the serializer. Digest built once, request built once; only the client's per-call INFO line and one DEBUG retry line repeat. |
+| Prompt anchor: league count and names from the digest; `prompt_sha` over the composed prompt | **CLOSED** — the scope follows the digest, the hash is stable for identical inputs and changes with the league set. The FR-009 side closes with spec v0.13: the DEBUG bullet now names the league scope and permits league names only in that line. The logging test's WARNING-level assertion that no league name appears outside DEBUG is an implementer follow-up, not a spec item. |
+| A failed generation records no `attempts` | **DEFENDED** — the failure contract is a single error string; a contract-failure notice implies two attempts (the first always retries), and a mixed contract-then-HTTP failure names the final failure. No change. |
+
+**Closed by spec v0.13 — the one spec sentence:** FR-009's DEBUG bullet now names the league scope (count and names) and permits league names only in that line, so it no longer forbids what the code does; the WARNING-level assertion that no league name appears outside DEBUG remains an implementer follow-up, as do the doc rewording items below (README:422, CHANGELOG:11, plan.md:13) and the low-severity AC-018 and `prompt_sha` notes.
+
+**Open — docs:** README:422, CHANGELOG:11 and plan.md:13 still say the section is the report's last / rendered last. Reword to “between the weekly highlights and the season challenges”.
+
+**Low — AC-018 coverage:** placement is tested in regular season only. Add one playoff and one championship case per format (their markers differ) and a `weekly=None` case, so a block moved inside the weekly guard would fail.
+
+**Low — `prompt_sha` material includes the user prompt twice** (the composed prompt already contains the block, then the user prompt follows the separator). Deterministic and harmless; `prompt_sha(composed_prompt)` would remove the redundancy and the stale Decision 8 rationale.
+
+**Verdict:** HOLD — the delta's code is correct; one spec sentence and three doc lines must follow it.
