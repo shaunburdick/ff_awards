@@ -7,13 +7,18 @@ output directory mode, format arguments, and error handling.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from ai_fakes import make_division, make_narrative
 
+from ff_tracker.config import AISummaryConfig, FFTrackerConfig
+from ff_tracker.exceptions import ConfigurationError
 from ff_tracker.main import build_formatter, create_parser
+from ff_tracker.models import AISummaryUnavailable
 
 
 class TestArgumentParsing:
@@ -463,3 +468,123 @@ class TestArgumentValidation:
 
                     # Should have called parse_league_ids_from_arg
                     mock_parse.assert_called_once_with("123456,789012")
+
+
+class TestAISummaryWiring:
+    """FR-001, AC-003, AC-004: one call per run and the Actions warning."""
+
+    def _ai_config(self, enabled: bool = True) -> AISummaryConfig:
+        return AISummaryConfig(enabled=enabled, api_key="sk-test" if enabled else "")
+
+    def _run(
+        self,
+        *,
+        enabled: bool = True,
+        ai_summary: object = None,
+        league_count: int = 1,
+        output_dir: Path | None = None,
+        github_actions: str | None = None,
+        config_error: Exception | None = None,
+    ) -> tuple[int, MagicMock, MagicMock]:
+        from ff_tracker.main import main
+
+        divisions = [
+            make_division(f"League {index}", league_id=100 + index, reg_season_count=14)
+            for index in range(league_count)
+        ]
+        argv = ["ff-tracker", "123456"]
+        if output_dir is not None:
+            argv += ["--output-dir", str(output_dir)]
+        else:
+            argv += ["--format", "json"]
+
+        config = FFTrackerConfig(league_ids=[123456], year=2026, private=False)
+        env = {"GITHUB_ACTIONS": github_actions or ""}
+
+        with (
+            patch.object(sys, "argv", argv),
+            patch("ff_tracker.config.create_config", return_value=config),
+            patch("ff_tracker.main.ESPNService") as espn_class,
+            patch("ff_tracker.main.ChallengeCalculator"),
+            patch("ff_tracker.main.WeeklyChallengeCalculator"),
+            patch("ff_tracker.main.create_formatter") as formatter_factory,
+            patch("ff_tracker.main.AISummaryService") as service_class,
+            patch(
+                "ff_tracker.main.load_ai_summary_config",
+                return_value=self._ai_config(enabled),
+            ) if config_error is None else patch(
+                "ff_tracker.main.load_ai_summary_config", side_effect=config_error
+            ),
+            patch.dict(os.environ, env, clear=False),
+        ):
+            espn = espn_class.return_value
+            espn.load_all_divisions.return_value = divisions
+            espn.current_week = 6
+            service_class.return_value.generate.return_value = ai_summary
+            formatter = MagicMock()
+            formatter.format_output.return_value = "REPORT"
+            formatter_factory.return_value = formatter
+            result = main()
+
+        return result, service_class, formatter
+
+    def test_one_call_for_any_league_count(self) -> None:
+        for count in (1, 3, 10):
+            result, service, _ = self._run(ai_summary=make_narrative(), league_count=count)
+            assert result == 0
+            assert service.return_value.generate.call_count == 1
+
+    def test_output_dir_mode_calls_once_and_renders_five_formats(
+        self, tmp_path: Path
+    ) -> None:
+        result, service, formatter = self._run(
+            ai_summary=make_narrative(), output_dir=tmp_path
+        )
+
+        assert result == 0
+        assert service.return_value.generate.call_count == 1
+        assert formatter.format_output.call_count == 5
+        passed = [call.kwargs["ai_summary"] for call in formatter.format_output.call_args_list]
+        assert all(summary is passed[0] for summary in passed)
+
+    def test_feature_off_makes_no_call(self) -> None:
+        result, service, formatter = self._run(enabled=False)
+
+        assert result == 0
+        assert service.return_value.generate.call_count == 0
+        assert formatter.format_output.call_args.kwargs["ai_summary"] is None
+
+    def test_warning_only_inside_actions(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        unavailable = AISummaryUnavailable(reason="timed out after 120s")
+
+        result, _, _ = self._run(ai_summary=unavailable, github_actions=None)
+        assert result == 0
+        assert "::warning::" not in capsys.readouterr().out
+
+        result, _, _ = self._run(ai_summary=unavailable, github_actions="true")
+        out = capsys.readouterr().out
+        assert result == 0
+        assert out.count("::warning::AI summary unavailable: timed out after 120s.") == 1
+
+    def test_configuration_error_stops_the_run(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        result, service, formatter = self._run(
+            config_error=ConfigurationError("AI_SUMMARY_API_KEY is required")
+        )
+
+        assert result == 1
+        assert service.return_value.generate.call_count == 0
+        assert formatter.format_output.call_count == 0
+        assert "AI_SUMMARY_API_KEY" in capsys.readouterr().err
+
+    def test_help_states_the_egress(self) -> None:
+        help_text = create_parser().format_help()
+
+        assert "AI Summary (optional)" in help_text
+        assert "AI_SUMMARY_API_KEY" in help_text
+        assert "AI_SUMMARY_BASE_URL" in help_text
+        assert "never printed" in help_text
+        assert "do not use it in CI" in help_text

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -25,10 +26,19 @@ from .cli_utils import (
     parse_league_ids_from_arg,
     setup_logging,
 )
+from .config import load_ai_summary_config
 from .display import BaseFormatter, create_formatter
 from .exceptions import FFTrackerError
-from .models import WeeklyChallenge, WeeklyGameResult, WeeklyPlayerStats
+from .models import (
+    AISummaryResult,
+    AISummaryUnavailable,
+    WeeklyChallenge,
+    WeeklyGameResult,
+    WeeklyPlayerStats,
+)
 from .services import ChallengeCalculator, ESPNService, WeeklyChallengeCalculator
+from .services.ai_client import OpenAICompatibleClient
+from .services.ai_summary_service import AISummaryService
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -68,6 +78,16 @@ Private League Setup:
   Create a .env file with:
     ESPN_S2=your_espn_s2_cookie
     SWID=your_swid_cookie
+
+AI Summary (optional):
+  Off by default. Enabled only when AI_SUMMARY_API_KEY is set and
+  AI_SUMMARY_ENABLED is true; a key alone does not switch it on.
+  The narrative is AI-generated text, labelled as such, and never alters a
+  deterministic value. Team names, owner names and scores are sent to the
+  provider at AI_SUMMARY_BASE_URL, and AI_SUMMARY_USER_PROMPT is sent
+  verbatim, so never put credentials in it. The API key is never printed.
+  -vv logs the system prompt locally, so do not use it in CI.
+  Variables and defaults: see .env.example and the README.
         """,
     )
 
@@ -231,6 +251,10 @@ def main() -> int:
                 week=args.week,
             )
 
+        # AI narrative settings sit beside the report config; loaded after
+        # create_config() so .env is already in the environment.
+        ai_config = load_ai_summary_config()
+
         # Initialize services
         espn_service = ESPNService(config)
         challenge_calculator = ChallengeCalculator()
@@ -280,6 +304,24 @@ def main() -> int:
                     logging.warning(f"Could not calculate weekly challenges: {e}")
                     # Continue without weekly challenges - not fatal
 
+        # AI narrative: generated once, before rendering, so every format in
+        # both output modes embeds the same text from one provider call.
+        ai_summary: AISummaryResult | None = None
+        if ai_config.enabled:
+            ai_summary = AISummaryService(
+                ai_config, OpenAICompatibleClient(ai_config)
+            ).generate(
+                divisions,
+                challenges,
+                weekly_challenges if weekly_challenges else None,
+                espn_service.current_week,
+                championship,
+            )
+            if isinstance(ai_summary, AISummaryUnavailable) and os.environ.get(
+                "GITHUB_ACTIONS"
+            ) == "true":
+                print(f"::warning::{ai_summary.notice}")
+
         # Handle output based on mode
         if args.output_dir:
             # Multi-output mode: generate all formats to files
@@ -304,6 +346,7 @@ def main() -> int:
                     weekly_challenges if weekly_challenges else None,
                     espn_service.current_week,
                     championship,
+                    ai_summary=ai_summary,
                 )
                 file_path.write_text(output, encoding="utf-8")
                 print(f"Generated {format_name} output: {file_path}")
@@ -318,6 +361,7 @@ def main() -> int:
                 weekly_challenges if weekly_challenges else None,
                 espn_service.current_week,
                 championship,
+                ai_summary=ai_summary,
             )
             print(output)
             return 0
