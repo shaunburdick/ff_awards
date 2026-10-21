@@ -167,7 +167,7 @@ class JsonFormatter(BaseFormatter):
         if is_player:
             entry["player_name"] = challenge.winner
             entry["position"] = challenge.additional_info["position"]
-            team_name = challenge.additional_info.get("team_name")
+            team_name = challenge.additional_info.get("team")
             if team_name:
                 entry["team_name"] = team_name
         else:
@@ -180,7 +180,9 @@ class JsonFormatter(BaseFormatter):
 
     @staticmethod
     def _parse_points(value: str) -> float | None:
-        """Return a numeric value for plain numbers, None for formatted strings."""
+        """Return a score as a number; deltas and formatted strings yield None."""
+        if value.startswith(("+", "-")):
+            return None
         try:
             return float(value)
         except ValueError:

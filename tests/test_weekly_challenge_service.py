@@ -486,9 +486,34 @@ class TestTeamChallenges:
         calculator = WeeklyChallengeCalculator()
         result = calculator._calculate_closest_game(games, week=6)
 
-        assert result.winner == "Tie One"
+        assert result.winner == "Tie: Tie One and Tie Two"
         assert result.additional_info["won"] is False
         assert "Tie One and Tie Two tied at 120.00" in result.description
+
+    def test_closest_game_lone_loss_reports_a_loss(self) -> None:
+        """A losing row with no winning counterpart still describes the loss."""
+        games = [
+            WeeklyGameResult(
+                team_name="Lone Loser",
+                score=99.50,
+                projected_score=100.00,
+                opponent_name="Absent Winner",
+                opponent_score=100.00,
+                opponent_projected_score=100.00,
+                won=False,
+                week=6,
+                margin=0.50,
+                projection_diff=-0.50,
+                division="League",
+            )
+        ]
+
+        calculator = WeeklyChallengeCalculator()
+        result = calculator._calculate_closest_game(games, week=6)
+
+        assert result.winner == "Lone Loser"
+        assert result.description == "Lone Loser lost by only 0.50 points"
+        assert result.additional_info["won"] is False
 
     def test_closest_game_shows_win_or_loss(self) -> None:
         """Test that closest game description shows won/lost."""

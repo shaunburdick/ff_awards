@@ -191,18 +191,21 @@ class WeeklyChallengeCalculator:
 
         if winner.won:
             description = f"{winner.team_name} won by only {winner.margin:.2f} points"
+            reported_winner = winner.team_name
         elif winner.score == winner.opponent_score:
             description = (
                 f"{winner.team_name} and {winner.opponent_name} "
                 f"tied at {winner.score:.2f}"
             )
+            reported_winner = f"Tie: {winner.team_name} and {winner.opponent_name}"
         else:
             description = f"{winner.team_name} lost by only {winner.margin:.2f} points"
+            reported_winner = winner.team_name
 
         return WeeklyChallenge(
             challenge_name="Closest Game This Week",
             week=week,
-            winner=winner.team_name,
+            winner=reported_winner,
             owner=None,
             division=winner.division,
             value=f"{winner.score:.2f} - {winner.opponent_score:.2f} (Δ{winner.margin:.2f})",

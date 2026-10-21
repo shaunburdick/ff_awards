@@ -625,8 +625,38 @@ class TestWeeklyHighlightFields:
                 description="Trevor Lawrence scored 27.34 points",
                 additional_info={
                     "position": "QB",
-                    "team_name": "Caserta Chumps",
+                    "team": "Caserta Chumps",
                     "pro_team": "JAX",
+                },
+            ),
+            WeeklyChallenge(
+                challenge_name="Overachiever",
+                week=6,
+                winner="Butt Fumble",
+                owner=None,
+                division="MM Driveway Surfers",
+                value="+9.82",
+                description="Butt Fumble scored 9.82 above starter projections",
+                additional_info={
+                    "score": 147.78,
+                    "starter_projection": 137.96,
+                    "true_diff": 9.82,
+                    "opponent": "Caserta Chumps",
+                },
+            ),
+            WeeklyChallenge(
+                challenge_name="Below Expectations",
+                week=6,
+                winner="Drew's Daring Team",
+                owner=None,
+                division="The Hood 2026",
+                value="-51.71",
+                description="Drew's Daring Team scored -51.71 below starter projections",
+                additional_info={
+                    "score": 90.44,
+                    "starter_projection": 142.15,
+                    "true_diff": -51.71,
+                    "opponent": "Someone Else",
                 },
             ),
         ]
@@ -670,7 +700,7 @@ class TestWeeklyHighlightFields:
         sample_challenges: list[ChallengeResult],
         shaped_challenges: list[WeeklyChallenge],
     ) -> None:
-        """A player challenge publishes the player, position, and its league."""
+        """A player challenge publishes the player, position, team, and league."""
         player_entry = self._entries(
             sample_division, sample_challenges, shaped_challenges
         )[1]
@@ -678,16 +708,16 @@ class TestWeeklyHighlightFields:
         assert player_entry["challenge_type"] == "player"
         assert player_entry["player_name"] == "Christian McCaffrey"
         assert player_entry["position"] == "RB"
+        assert player_entry["team_name"] == "Butt Fumble"
         assert player_entry["division"] == "MM Driveway Surfers"
-        assert "team_name" not in player_entry  # additional_info has no team_name
 
-    def test_player_challenge_team_name_when_provided(
+    def test_player_challenge_team_name_comes_from_team_key(
         self,
         sample_division: DivisionData,
         sample_challenges: list[ChallengeResult],
         shaped_challenges: list[WeeklyChallenge],
     ) -> None:
-        """team_name appears when the service supplies it."""
+        """team_name comes from additional_info["team"]."""
         qb_entry = self._entries(
             sample_division, sample_challenges, shaped_challenges
         )[2]
@@ -708,3 +738,22 @@ class TestWeeklyHighlightFields:
         assert entries[0]["points"] is None  # "126.14 - 125.06 (Δ1.08)"
         assert entries[1]["points"] == 30.70
         assert entries[2]["points"] == 27.34
+
+    def test_signed_deltas_are_not_points(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        shaped_challenges: list[WeeklyChallenge],
+    ) -> None:
+        """Projection deltas keep their sign in value but never become points."""
+        entries = self._entries(sample_division, sample_challenges, shaped_challenges)
+
+        overachiever, below = entries[3], entries[4]
+        assert overachiever["value"] == "+9.82"
+        assert overachiever["points"] is None
+        assert below["value"] == "-51.71"
+        assert below["points"] is None
+        assert not any(
+            isinstance(entry["points"], float) and entry["points"] < 0
+            for entry in entries
+        )
