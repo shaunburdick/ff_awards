@@ -1,6 +1,6 @@
 # Challenge Ledger — 009 AI Summary
 
-> Gate 1 (spec) · `spec.md` v0.13 (this commit) · Constitution v1.0.0, no conflict.
+> Gate 1 (spec) · `spec.md` v0.14 (this commit) · Constitution v1.0.0, no conflict.
 > Owner decisions of 2026-10-21 are precedent: fail-fast when enabled-but-unconfigured with a
 > workflow guard; league matching by name with positional fallback; failure notice at the bottom.
 > They are not reopened. The v0.4 owner changes (endpoint default, enforced length, committed lore
@@ -158,3 +158,11 @@ Minor: FR-002's no-matchups sentence restored; the "existing mode predicate" wor
 **Low — `prompt_sha` material includes the user prompt twice** (the composed prompt already contains the block, then the user prompt follows the separator). Deterministic and harmless; `prompt_sha(composed_prompt)` would remove the redundancy and the stale Decision 8 rationale.
 
 **Verdict:** HOLD — the delta's code is correct; one spec sentence and three doc lines must follow it.
+
+---
+
+## v0.14 — prompt source moves to repository variables (spec v0.14)
+
+| Change | Status |
+|---|---|
+| CI prompt source: the committed `AI_SUMMARY_USER_PROMPT: \|` block scalar is replaced by repository variables — `AI_SUMMARY_BASE_URL`, `AI_SUMMARY_MODEL`, `AI_SUMMARY_TIMEOUT`, `AI_SUMMARY_MAX_TOKENS`, `AI_SUMMARY_REASONING_EFFORT`, `AI_SUMMARY_MAX_PROMPT_CHARS` and `AI_SUMMARY_USER_PROMPT` — with the prompt taken from `vars.AI_SUMMARY_USER_PROMPT \|\| secrets.AI_SUMMARY_USER_PROMPT`. Nothing prompt-related is in git. | **OWNER CHANGE, spec closed** — FR-009's egress bullet and the CI-record sentence say variable-or-secret and note that variables are not masked in logs while secrets are; FR-008's caveat now says an archived report shows that the same instructions produced it but cannot reproduce them, and retention is the operator's; FR-007 records that a blank optional value means "use the default" while a malformed non-blank one is still an error; the Configuration note is corrected. Implementation follow-ups: the workflow forwarding and the `.env` write for these variables, and the doc lines that still describe a committed prompt. |
