@@ -673,7 +673,7 @@ class SeasonRecapService:
                 structure=structure,
                 regular_season=regular_season,
                 season_challenges=tuple(season_challenges),
-                playoffs=playoff_summary,  # type: ignore[arg-type]
+                playoffs=playoff_summary,
                 championship=championship,
             )
 

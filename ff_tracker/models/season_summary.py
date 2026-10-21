@@ -245,7 +245,8 @@ class SeasonSummary:
     structure: SeasonStructure
     regular_season: RegularSeasonSummary
     season_challenges: tuple[ChallengeResult, ...]
-    playoffs: PlayoffSummary
+    # None for a partial recap built with --force before the playoffs start.
+    playoffs: PlayoffSummary | None
     championship: ChampionshipLeaderboard | None
 
     def __post_init__(self) -> None:
