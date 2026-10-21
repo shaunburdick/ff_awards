@@ -47,3 +47,27 @@
 3. AC-006 asserted a property of untouched code → scoped to the summary service and new code, with a digest marker and existing logging declared out of scope.
 
 Minor: FR-002's no-matchups sentence restored; the "existing mode predicate" wording replaced with an explicit local sixth copy plus an agreement assertion in AC-012.
+
+---
+
+## Gate 2 — plan and tasks (plan v1.0, tasks v1.0)
+
+> Rulings of 2026-10-21. DEFERRED and CONCEDED rows are precedent for Gate 3.
+> Verdict: HOLD — six material findings, all cheap; nothing here reopens a Gate 1 ruling.
+
+| Decision | Ruling | Carries to |
+|---|---|---|
+| Fail-open boundary catches only `AISummaryError` (Decision 1) | DEFENDED in shape (one boundary, one call site, `Exception` not `FFTrackerError` so a cosmetic failure cannot render `Error:` exit 1); CONCEDED in breadth — `_parse_response` catching `TypeError`/`ValueError` makes the effective boundary wider than the declared one and mislabels a coding error as a provider fault. | The propagation test (`test_generate_propagates_programming_errors`) must exist before Task 7 is done; Gate 3 rejects a parse helper whose only failure mode is `AIContractError`. |
+| Digest is `dict[str, object]` (Decision 4) | DEFERRED — nothing reads the digest back, so a key typo degrades the prompt silently rather than raising `KeyError`; the 5-class objection is fair against dataclasses but `TypedDict` was never considered (~25 lines, no conversion layer, key typos become mypy errors). Verification: adopt TypedDict, or Task 5's test must compare the digest's exact recursive key set. | Task 5 and Gate 3: a builder helper whose keys no test asserts is a cut. |
+| Two test seams: `FakeAIClient` + injectable `HTTPTransport` (Decision 6) | DEFENDED as policy (network-free, no dependency, no fixture server); detail CONCEDED — `urlopen` returns `HTTPResponse`, so it cannot satisfy `-> bytes`, and `urlopen(request, timeout)` passes the timeout as `data`. Verification: `_urlopen(request, timeout) -> bytes` wrapper plus one `unittest.mock.patch("urllib.request.urlopen")` test. | Gate 3: the default (production) transport path must have a test; every task test injects a fake and would not catch it. |
+| AI configuration beside `FFTrackerConfig` (Decision 3) | DEFENDED — `create_config()` serves three CLIs and FR-001 scopes the feature to `ff-tracker`; a malformed `AI_SUMMARY_*` must not break the other two. Ordering CONCEDED: `load_environment()` runs only inside `create_config()`, so the loader must run after it or call it itself; Task 12's "first" contradicts the Configuration section's "loaded the same way as existing settings". | Gate 3: a test that a `.env`-only configuration enables the feature, with `create_config` unpatched. |
+| `DivisionData.reg_season_count: int = 14` (Decision 5) | DEFERRED — correct for the 62 fixture sites, but a silently-defaulted 14 is a false statement in any second production builder and the digest quotes it into the prompt as fact. Verification: consider `int \| None = None` with the digest omitting `weeks_remaining` (same number of touched sites, one extra branch). | Gate 3: any new production `DivisionData(...)` builder. |
+| `::warning::` printed by `main.py` (Component 10) | DEFENDED — a workflow command is process output; services must not print and formatters have no process-level channel; `main.py` already owns `print()` for both report paths. | — |
+| Per-socket timeout vs FR-003's "call abandoned at `AI_SUMMARY_TIMEOUT`" | DEFERRED to the owner — the plan is right that stdlib offers no wall-clock deadline, and right to reject a thread wrapper (a timed-out future does not cancel its worker and shutdown hangs the process); its claim that `signal.alarm` breaks under pytest is inaccurate but the conclusion stands. FR-003's sentence is what must change, not the plan. Verification: LV-003 proves the notice path; no unit test can prove wall-clock. | Spec wording (owner); Gate 3 must not read the current FR-003 sentence as met. |
+| Console/championship insertion rationale (Decision 7) | CONCEDED (minor) — console emits season challenges after weekly highlights (`console.py:126-136`), so championship mode ends on the challenge table, not a player-highlight note line. Append-at-end is still the correct behaviour; the stated reason is not. | — |
+
+**Cut list of this gate**: the seven-variable `--help` table (FR-009 needs the egress sentence, not a third copy of the config table); `AI_SUMMARY_MODEL` in the workflow `env:` (duplicates the code default and lets the two diverge); the `AGENTS.md` paragraph (no FR, fourth copy of the same description, in the file every agent reads).
+
+**Closed by spec v0.8**: the per-socket-timeout row is not carried to Gate 3 — FR-003 now says the socket read is bounded by `AI_SUMMARY_TIMEOUT` with no wall-clock deadline, and Article X matches, so the plan is the record of what the code does rather than an exception to the spec.
+
+**Task shape**: no task is unnecessary — all 14 trace to an FR or AC. Tasks 7 and 8 merge (Task 7's happy-path test cannot pass while its matching/normalisation stubs raise contract errors, which breaks the plan's green-suite-per-task invariant). Task 9 stays whole: adding a keyword parameter to the `@abstractmethod` makes every override incompatible unless all six signatures move together, and `championship.py:193/494` passes keyword arguments, so the two excluded CLIs are unaffected.

@@ -4,7 +4,7 @@
 > **Status**: Draft — revised after Gate 1
 > **Created**: 2026-10-21
 > **Last Updated**: 2026-10-21
-> **Version**: 0.7
+> **Version**: 0.8
 
 ## Overview
 
@@ -55,7 +55,7 @@ The digest contains no league IDs, no ESPN credentials and no API key.
 
 - One OpenAI-compatible Chat Completions call to `<AI_SUMMARY_BASE_URL>/chat/completions` with `Authorization: Bearer <AI_SUMMARY_API_KEY>`.
 - `max_tokens` is 8000. At 3000 the spike's reasoning models returned `finish_reason: length` with empty or truncated content in all four cells; at 8000, 8/8 returned clean JSON.
-- The call is abandoned at `AI_SUMMARY_TIMEOUT` seconds. No retries, no streaming.
+- The socket read is bounded by `AI_SUMMARY_TIMEOUT` seconds. That is a per-operation bound, not a wall-clock deadline: a provider that trickles bytes can outlive it, and no total time budget is guaranteed, so a pathologically slow provider may exceed the configured value. No retries, no streaming.
 - The response must parse directly as JSON matching the contract in FR-004. Fenced, prefixed or otherwise non-JSON responses are contract failures, not parsed leniently.
 
 ### FR-004 — Narrative contract
@@ -262,7 +262,7 @@ Verified manually against a live provider, once, with a real three-league week:
 
 **Article III (Fail-Fast Error Handling).** This feature violates the "no partial data tolerance" clause on purpose: an AI narrative failure degrades the report instead of failing it. Reasoning: the narrative is cosmetic, the report carries the league's weekly facts, and the report runs on a weekly schedule where a failed proxy, model retirement or HTTP 410 would otherwise deny the league its report entirely. The exception is bounded — it applies only to obtaining, matching and normalising the narrative; ESPN data failures, configuration errors (including an oversized `AI_SUMMARY_USER_PROMPT`) and every other failure path still fail fast, and the omission is never silent (notice plus Actions warning). Length normalisation never fails the run: the contract already requires at least one non-empty paragraph per league, and normalisation only drops or shortens content, so the report always ships. This exemption must be recorded in the plan's Complexity Tracking.
 
-**Article X (Performance).** The 5-second typical run applies to the deterministic report with the feature off. With the feature on, the run additionally waits for provider latency (7.7–34.4 s per call in the spike), bounded by `AI_SUMMARY_TIMEOUT`. Callers that care about schedule duration leave the feature off.
+**Article X (Performance).** The 5-second typical run applies to the deterministic report with the feature off. With the feature on, the run additionally waits for provider latency (7.7–34.4 s per call in the spike), bounded by `AI_SUMMARY_TIMEOUT` on each socket read. There is no wall-clock deadline, so a pathologically slow provider can exceed it. Callers that care about schedule duration leave the feature off.
 
 ---
 
@@ -306,3 +306,4 @@ None open.
 | 0.5 | 2026-10-21 | AI Agent | Normalisation replaced with structure-first rules that need no sentence detection (initials such as `J.J. Smith` broke the abbreviation list): drop bullets, drop paragraphs, drop trailing paragraphs to fit 120 words, truncate only a first paragraph that alone exceeds it, then headline and `season_note` at word boundaries; the `season_note` two-sentence rule and the abbreviation/URL/number/emoji clauses are gone. The contract now requires at least one non-empty paragraph per league, so `"paragraphs": []` fails and the "normalises to nothing" failure clause is deleted. Failure reasons name the endpoint host only; AC-005, AC-010 (base-URL fallback) and AC-013 (survivors plus determinism) strengthened; the old AC-014 deleted and AC-015…AC-017 renumbered; AC-017 gains the packaged-default path; FR-008 states the two traceability limits; the floor is stated as prompt guidance that is deliberately not validated; a narrow user-authored-system-prompt exclusion returns; the lore template opens with a header saying it is committed and sent to the provider |
 | 0.6 | 2026-10-21 | AI Agent | The lore file is replaced by `AI_SUMMARY_USER_PROMPT`, an optional free-form env-var string appended as a `### COMMISSIONER'S INSTRUCTIONS` block; `AI_SUMMARY_LORE_FILE`, the packaged default, the wheel-inclusion requirement, the missing-path error and the neutral-template rule are removed and nothing is read from disk. Cap is 8000 characters with the variable, length and limit in the error; strip/CRLF rules and the empty-value no-op are stated; precedence, the trusted-input note and the non-verification statement sit in FR-010. FR-008 records that the user prompt is not archived and recommends a committed `env:` block scalar; FR-009 covers user-prompt egress and variable visibility; AC-016/AC-017 are restated for the variable; the exclusion now covers the system prompt template only |
 | 0.7 | 2026-10-21 | AI Agent | Logging is tiered: the key, the request body and the response body are never logged at any level, while the system prompt may be logged at DEBUG only, with the public-repo/Actions-log hazard and the committed `env:` block scalar as the CI record stated in FR-009; FR-008 and AC-006 match. `AI_SUMMARY_MAX_PROMPT_CHARS` (default 8000, positive integer) makes the user-prompt limit configurable, with the error naming the configured limit; FR-007 lists it; AC-017 uses a non-default limit so the test proves the value is read |
+| 0.8 | 2026-10-21 | AI Agent | FR-003's timeout sentence corrected. `urllib.request.urlopen(timeout=...)` bounds each socket operation, not the whole call, so "the call is abandoned at `AI_SUMMARY_TIMEOUT`" was a guarantee the code cannot meet; the bullet now names the per-operation bound and the absence of a wall-clock deadline. The plan stands: a worker thread cannot cancel an in-flight `urlopen`, so a timed-out future still blocks shutdown, and stdlib offers no wall-clock deadline — the `signal.alarm` argument was contested, but the conclusion does not depend on it. Article X's "bounded by" claim is corrected the same way. FR-006's timeout notice and `timed out after Ns` reason are unchanged, and LV-003 remains the manual proof that the notice renders |
