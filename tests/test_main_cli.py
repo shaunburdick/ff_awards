@@ -13,7 +13,13 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from ai_fakes import make_division, make_narrative
+from ai_fakes import (
+    make_division,
+    make_narrative,
+    make_regular_divisions,
+    make_regular_weekly_challenges,
+    make_season_challenge,
+)
 
 from ff_tracker.config import AISummaryConfig, FFTrackerConfig
 from ff_tracker.exceptions import ConfigurationError
@@ -588,3 +594,55 @@ class TestAISummaryWiring:
         assert "AI_SUMMARY_BASE_URL" in help_text
         assert "never printed" in help_text
         assert "do not use it in CI" in help_text
+
+
+class TestMidBodyFailureShipstheReport:
+    """A provider closing mid-body must not reach main's unexpected-error branch."""
+
+    def _run_with_failing_read(self) -> int:
+        from ff_tracker.main import main
+
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+        response.read.side_effect = ConnectionResetError("peer reset the connection")
+
+        config = FFTrackerConfig(league_ids=[123456], year=2026, private=False)
+        with (
+            patch.object(sys, "argv", ["ff-tracker", "123456"]),
+            patch("ff_tracker.config.create_config", return_value=config),
+            patch("ff_tracker.main.ESPNService") as espn_class,
+            patch("ff_tracker.main.ChallengeCalculator") as challenge_calculator,
+            patch("ff_tracker.main.WeeklyChallengeCalculator") as weekly_calculator,
+            patch(
+                "ff_tracker.main.load_ai_summary_config",
+                return_value=AISummaryConfig(enabled=True, api_key="sk-test"),
+            ),
+            patch("urllib.request.urlopen", return_value=response),
+            patch.dict(os.environ, {"GITHUB_ACTIONS": ""}, clear=False),
+        ):
+            espn = espn_class.return_value
+            espn.load_all_divisions.return_value = make_regular_divisions()
+            espn.current_week = 6
+            challenge_calculator.return_value.calculate_all_challenges.return_value = [
+                make_season_challenge()
+            ]
+            weekly_calculator.return_value.calculate_all_weekly_challenges.return_value = (
+                make_regular_weekly_challenges()
+            )
+            return main()
+
+    def test_mid_body_failure_still_ships_the_report_and_exits_zero(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        result = self._run_with_failing_read()
+        out = capsys.readouterr()
+
+        assert result == 0
+        assert "Unexpected error" not in out.err
+        assert (
+            "AI summary unavailable: connection failed (opencode.ai). "
+            "The report is unaffected."
+        ) in out.out
+        # The deterministic report is still there.
+        assert "Fantasy Football Multi-Division Challenge Tracker" in out.out

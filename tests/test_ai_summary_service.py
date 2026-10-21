@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import re
 
 import pytest
-from ai_fakes import LEAGUE_A, LEAGUE_B, FakeAIClient, make_regular_divisions
+from ai_fakes import LEAGUE_A, LEAGUE_B, FakeAIClient, FakeTransport, make_regular_divisions
 
 from ff_tracker.config import DEFAULT_AI_MAX_TOKENS, DEFAULT_AI_MODEL, AISummaryConfig
 from ff_tracker.exceptions import (
-    AIContractError,
     AIHTTPError,
     AISummaryError,
     AITruncationError,
@@ -227,11 +227,6 @@ class TestContractFailures:
         assert isinstance(result, AISummaryUnavailable)
         assert result.reason == "response did not match the summary contract"
 
-    def test_missing_positional_arguments_are_contract_errors(self) -> None:
-        assert AIContractError("response did not match the summary contract").reason.startswith(
-            "response did not match"
-        )
-
 
 class TestFailureDegradation:
     """FR-006: provider failures become the notice, never an exception."""
@@ -256,6 +251,35 @@ class TestFailureDegradation:
 
         assert isinstance(result, AISummaryUnavailable)
         assert result.reason == "league count mismatch (2 leagues, 1 sections)"
+
+
+class TestMidBodyFailure:
+    """The transport mapping must reach the notice, not main's error branch."""
+
+    def test_mid_body_failure_degrades_to_a_notice(self) -> None:
+        from ff_tracker.services.ai_client import OpenAICompatibleClient
+
+        config = _config()
+        client = OpenAICompatibleClient(
+            config, FakeTransport(error=ConnectionResetError("peer reset"))
+        )
+        result = _generate(AISummaryService(config, client))
+
+        assert isinstance(result, AISummaryUnavailable)
+        assert result.reason == "connection failed (opencode.ai)"
+        assert result.notice.endswith("The report is unaffected.")
+
+    def test_incomplete_read_degrades_to_a_notice(self) -> None:
+        from ff_tracker.services.ai_client import OpenAICompatibleClient
+
+        config = _config()
+        client = OpenAICompatibleClient(
+            config, FakeTransport(error=http.client.IncompleteRead(b"partial"))
+        )
+        result = _generate(AISummaryService(config, client))
+
+        assert isinstance(result, AISummaryUnavailable)
+        assert result.reason == "connection failed (opencode.ai)"
 
 
 class TestProgrammerErrorsPropagate:
@@ -400,6 +424,26 @@ class TestNormalisation:
         first = result.leagues[0]
         assert first.paragraphs[0] == "First paragraph survives."
         assert first.bullets == ["One", "Two", "Three"]
+
+    def test_trailing_paragraphs_are_dropped_to_fit_the_word_cap(self) -> None:
+        """Three 60-word paragraphs fit in two; the third is dropped whole."""
+        sixty = " ".join(["word"] * 60)
+        response = _response(
+            leagues=[
+                _league_section(
+                    LEAGUE_A, paragraphs=[sixty, sixty, sixty]
+                ),
+                _league_section(LEAGUE_B),
+            ]
+        )
+        service, _ = _service(response)
+        result = _generate(service)
+
+        assert isinstance(result, AISummary)
+        paragraphs = result.leagues[0].paragraphs
+        assert len(paragraphs) == 2
+        assert sum(len(paragraph.split()) for paragraph in paragraphs) <= LEAGUE_WORD_CAP
+        assert result.provenance.truncated is True
 
     def test_lone_overlong_first_paragraph_is_cut_at_a_word_boundary(self) -> None:
         long_paragraph = " ".join(["word"] * 200)

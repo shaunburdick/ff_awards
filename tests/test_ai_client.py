@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import logging
@@ -54,7 +55,11 @@ def _config(
 
 
 def _request(user_message: str = '{"week": 6}') -> AIRequest:
-    return AIRequest(system_prompt="You are a commissioner.", user_message=user_message)
+    return AIRequest(
+        system_prompt="You are a commissioner.",
+        user_message=user_message,
+        max_tokens=DEFAULT_AI_MAX_TOKENS,
+    )
 
 
 class TestRequestShape:
@@ -107,7 +112,10 @@ class TestRequestShape:
     def test_reasoning_effort_is_sent_when_configured(self, effort: str) -> None:
         transport = FakeTransport(envelope(NARRATIVE))
         request = AIRequest(
-            system_prompt="sys", user_message="user", reasoning_effort=effort
+            system_prompt="sys",
+            user_message="user",
+            max_tokens=DEFAULT_AI_MAX_TOKENS,
+            reasoning_effort=effort,
         )
         OpenAICompatibleClient(_config(), transport).complete(request)
 
@@ -117,7 +125,12 @@ class TestRequestShape:
     def test_reasoning_effort_is_never_sent_as_null(self) -> None:
         transport = FakeTransport(envelope(NARRATIVE))
         OpenAICompatibleClient(_config(), transport).complete(
-            AIRequest(system_prompt="sys", user_message="user", reasoning_effort=None)
+            AIRequest(
+                system_prompt="sys",
+                user_message="user",
+                max_tokens=DEFAULT_AI_MAX_TOKENS,
+                reasoning_effort=None,
+            )
         )
 
         body = json.loads(transport.calls[0][0].data.decode("utf-8"))
@@ -128,7 +141,10 @@ class TestRequestShape:
         """An endpoint that ignores the key still returns usable content."""
         transport = FakeTransport(envelope(NARRATIVE))
         request = AIRequest(
-            system_prompt="sys", user_message="user", reasoning_effort="high"
+            system_prompt="sys",
+            user_message="user",
+            max_tokens=DEFAULT_AI_MAX_TOKENS,
+            reasoning_effort="high",
         )
         content = OpenAICompatibleClient(_config(), transport).complete(request)
 
@@ -243,6 +259,21 @@ class TestFailureTaxonomy:
     def test_plain_timeout(self) -> None:
         client = OpenAICompatibleClient(_config(timeout=120), FakeTransport(error=TimeoutError("slow")))
         with pytest.raises(AITimeoutError, match="timed out after 120s"):
+            client.complete(_request())
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            ConnectionResetError("peer reset the connection"),
+            http.client.IncompleteRead(b"partial body"),
+        ],
+        ids=["connection-reset", "incomplete-read"],
+    )
+    def test_mid_body_failure_maps_to_a_transport_error(self, error: Exception) -> None:
+        """A provider or proxy closing mid-body is ordinary, not a crash."""
+        client = OpenAICompatibleClient(_config(), FakeTransport(error=error))
+
+        with pytest.raises(AITransportError, match=r"connection failed \(opencode\.ai\)"):
             client.complete(_request())
 
     def test_custom_base_url_host_appears_but_not_its_path(self) -> None:

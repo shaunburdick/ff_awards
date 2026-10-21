@@ -240,10 +240,19 @@ class TestHostileProse:
         )
 
     def test_console_paragraph_is_one_line(self) -> None:
+        """AC-011: a tab or newline inside a field must not add a line."""
         on = _render("console", make_regular_divisions(), ai_summary=self._summary())
         section = on.split("COMMISSIONER'S TAKE")[1]
-        assert 'Tab\there "quoted"' in section
-        assert "newline\nsecond line" in section
+
+        assert "\t" not in section
+        paragraph_lines = [line for line in section.splitlines() if "Tab" in line]
+        assert len(paragraph_lines) == 1
+        assert "newline second line" in paragraph_lines[0]
+        assert 'Tab here "quoted"' in paragraph_lines[0]
+
+        bullet_lines = [line for line in section.splitlines() if line.startswith("  • ")]
+        assert len(bullet_lines) == 1
+        assert "\t" not in bullet_lines[0]
 
     def test_markdown_keeps_the_text_verbatim(self) -> None:
         on = _render("markdown", make_regular_divisions(), ai_summary=self._summary())
@@ -276,29 +285,44 @@ class TestHostileProse:
 
 
 class TestModeAgreement:
-    """AC-012: the digest's mode agrees with the marker each format emits."""
+    """AC-012: the digest's mode agrees with the marker each format renders."""
+
+    # What each formatter prints for each mode, taken from the formatter itself.
+    MODE_MARKERS: dict[str, dict[str, str]] = {
+        "console": {
+            "playoffs": "FINAL REGULAR SEASON STANDINGS",
+            "championship": "CHAMPIONSHIP WEEK",
+        },
+        "sheets": {
+            "playoffs": "FINAL REGULAR SEASON STANDINGS (Week 14)",
+            "championship": "CHAMPIONSHIP WEEK - FINAL LEADERBOARD",
+        },
+        "email": {
+            "playoffs": "Final Regular Season Standings",
+            "championship": "Championship Week - Final Leaderboard",
+        },
+        "markdown": {
+            "playoffs": "## FINAL REGULAR SEASON STANDINGS",
+            "championship": "# 🏆 CHAMPIONSHIP WEEK 🏆",
+        },
+    }
 
     @pytest.mark.parametrize(
-        ("divisions_factory", "board_factory", "week", "expected_mode", "console_marker"),
+        ("divisions_factory", "board_factory", "week", "expected_mode"),
         [
-            (make_playoff_divisions, None, 15, "playoffs", "FINAL REGULAR SEASON STANDINGS"),
-            (
-                make_championship_divisions,
-                make_championship,
-                17,
-                "championship",
-                "CHAMPIONSHIP WEEK",
-            ),
+            (make_playoff_divisions, None, 15, "playoffs"),
+            (make_championship_divisions, make_championship, 17, "championship"),
         ],
         ids=["playoffs", "championship"],
     )
+    @pytest.mark.parametrize("format_name", sorted(MODE_MARKERS))
     def test_digest_mode_matches_the_rendered_mode(
         self,
         divisions_factory: Callable[[], list[DivisionData]],
         board_factory: Callable[[], ChampionshipLeaderboard] | None,
         week: int,
         expected_mode: str,
-        console_marker: str,
+        format_name: str,
     ) -> None:
         divisions = divisions_factory()
         board = board_factory() if board_factory is not None else None
@@ -312,27 +336,47 @@ class TestModeAgreement:
         )
         assert digest["mode"] == expected_mode
 
-        console = _render(
-            "console",
+        rendered = _render(
+            format_name,
             divisions,
             ai_summary=make_narrative(),
             current_week=week,
             championship=board,
         )
-        assert console_marker in console
+        assert self.MODE_MARKERS[format_name][expected_mode] in rendered
 
-        as_json = _render(
-            "json",
-            divisions,
-            ai_summary=make_narrative(),
-            current_week=week,
-            championship=board,
+    @pytest.mark.parametrize(
+        ("divisions_factory", "board_factory", "week", "expected_report_type"),
+        [
+            (make_playoff_divisions, None, 15, "playoff_semifinals"),
+            (make_championship_divisions, make_championship, 17, "championship_week"),
+        ],
+        ids=["playoffs", "championship"],
+    )
+    def test_json_report_type_matches_the_digest_mode(
+        self,
+        divisions_factory: Callable[[], list[DivisionData]],
+        board_factory: Callable[[], ChampionshipLeaderboard] | None,
+        week: int,
+        expected_report_type: str,
+    ) -> None:
+        divisions = divisions_factory()
+        board = board_factory() if board_factory is not None else None
+
+        digest = build_digest(divisions, [], make_regular_weekly_challenges(), week, board)
+        document = json.loads(
+            _render(
+                "json",
+                divisions,
+                ai_summary=make_narrative(),
+                current_week=week,
+                championship=board,
+            )
         )
-        report_type = json.loads(as_json)["report_type"]
-        if expected_mode == "championship":
-            assert report_type == "championship_week"
-        else:
-            assert report_type.startswith("playoff")
+        assert document["report_type"] == expected_report_type
+        assert digest["mode"] == (
+            "championship" if expected_report_type == "championship_week" else "playoffs"
+        )
 
     def test_regular_season_mode(self) -> None:
         divisions = make_regular_divisions()

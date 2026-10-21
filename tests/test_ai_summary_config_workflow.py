@@ -77,9 +77,9 @@ class TestWorkflowPrompt:
 
         index = key_index + 1
         while index < len(lines) and (not lines[index].strip() or lines[index].startswith("    ")):
-            stripped = lines[index].strip()
-            assert not stripped.startswith("#"), "comments inside a block scalar become prompt text"
-            assert stripped == "", "the default prompt must be empty"
+            assert not lines[index].strip().startswith("#"), (
+                "comments inside a block scalar become prompt text"
+            )
             index += 1
 
     def test_model_is_not_pinned_in_the_workflow(self) -> None:

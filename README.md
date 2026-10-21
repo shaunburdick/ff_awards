@@ -450,15 +450,19 @@ much larger `AI_SUMMARY_MAX_TOKENS` or a `reasoning_effort` the endpoint honours
 
 **What leaves the machine:** team names, owner names, points for, points against,
 scores and league names are sent to `AI_SUMMARY_BASE_URL`, together with
-`AI_SUMMARY_USER_PROMPT`. Never put credentials in the prompt. A repository
-*variable* is visible in repository settings, so anything the league would not
-publish belongs in a secret.
+`AI_SUMMARY_USER_PROMPT`. Never put credentials in the prompt. The weekly
+workflow keeps the prompt as a committed `AI_SUMMARY_USER_PROMPT` block scalar, so
+it is reviewable in the repository; anything the league would not publish belongs
+in a secret rather than the workflow or a repository variable — repository
+variables are visible in settings.
 
 **Failure behaviour:** an HTTP error, a timeout, a truncated or malformed
 response produces the normal report, a one-line notice where the section would
 have been, exit code 0, and a `::warning::` in GitHub Actions. A *configuration*
-error (enabled without a key, a malformed timeout, an oversized prompt) fails
-the run instead, before any report is written. The weekly workflow sets
+error **while the feature is enabled** (a missing key, a malformed timeout or
+budget, a bad base URL, an oversized prompt) fails the run instead, before any
+report is written; the same variables are ignored while the feature is off, so a
+stale value cannot deny a report. The weekly workflow sets
 `AI_SUMMARY_ENABLED` only when the key secret exists, so a checkout without the
 key simply gets a report with the feature off.
 

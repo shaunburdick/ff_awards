@@ -11,6 +11,7 @@ from ai_fakes import (
     make_championship,
     make_championship_divisions,
     make_division,
+    make_matchup_pair,
     make_player_challenge,
     make_playoff_divisions,
     make_regular_divisions,
@@ -146,6 +147,22 @@ class TestRegularSeasonDigest:
         # The opponent's true diff comes from the mirror row.
         assert first["opponent_true_projection_diff"] is None
 
+    def test_opponent_true_diff_is_read_from_the_mirror_row(self) -> None:
+        divisions = [
+            make_division(
+                LEAGUE_A,
+                teams=[make_team("Butt Fumble"), make_team("Donut Lose")],
+                weekly_games=make_matchup_pair(
+                    "Butt Fumble", 126.14, "Donut Lose", 125.06, true_diff2=3.14
+                ),
+                reg_season_count=14,
+            )
+        ]
+        first = _digest(divisions)["leagues"][0]["matchups"][0]
+
+        assert first["true_projection_diff"] is None
+        assert first["opponent_true_projection_diff"] == 3.14
+
     def test_weekly_challenges_are_attributed_to_the_winning_league(self) -> None:
         digest = _digest(make_regular_divisions())
         league_a = digest["leagues"][0]["weekly_challenges"]
@@ -234,6 +251,24 @@ class TestPlayoffDigest:
     def test_standings_remain_visible_in_playoffs(self) -> None:
         league = _digest(make_playoff_divisions(), current_week=15)["leagues"][0]
         assert len(league["standings"]) == 2
+
+    def test_matchups_are_suppressed_in_playoffs(self) -> None:
+        """FR-002: the bracket is the playoff mode's matchup section."""
+        divisions = make_playoff_divisions()
+        divisions[0] = make_division(
+            LEAGUE_A,
+            teams=divisions[0].teams,
+            weekly_games=make_matchup_pair(
+                "Butt Fumble", 132.40, "Donut Lose", 101.10
+            ),
+            playoff_bracket=divisions[0].playoff_bracket,
+            reg_season_count=14,
+        )
+        league = _digest(divisions, current_week=15)["leagues"][0]
+
+        assert league["matchups"] == []
+        assert league["matchups_note"] is None
+        assert _digest(divisions, current_week=15)["playoffs"] is not None
 
     def test_season_challenges_are_historical(self) -> None:
         digest = _digest(make_playoff_divisions(), current_week=15)

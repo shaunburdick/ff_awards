@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
@@ -229,6 +230,13 @@ class AISummaryConfig:
         if not self.base_url.strip():
             raise ConfigurationError("AI_SUMMARY_BASE_URL cannot be empty")
 
+        parts = urlsplit(self.base_url)
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            raise ConfigurationError(
+                "AI_SUMMARY_BASE_URL must be an http(s) URL with a host, "
+                f"got: '{self.base_url}'"
+            )
+
         if not self.model.strip():
             raise ConfigurationError("AI_SUMMARY_MODEL cannot be empty")
 
@@ -301,16 +309,26 @@ def load_ai_summary_config() -> AISummaryConfig:
 
     Returns:
         Validated settings; ``enabled`` is false unless explicitly switched on.
+        While the feature is off only ``AI_SUMMARY_ENABLED`` is read, so no
+        other AI variable can deny a report by being malformed.
 
     Raises:
-        ConfigurationError: If the feature is enabled without a key, or a
-            numeric/boolean setting is malformed, or the user prompt is over
-            its configured size limit.
+        ConfigurationError: If ``AI_SUMMARY_ENABLED`` is unreadable, or the
+            feature is enabled and a setting is malformed: a missing key, a bad
+            base URL, a non-positive budget or timeout, an unknown reasoning
+            effort, or an oversized user prompt.
     """
     load_environment()
 
     enabled_raw = os.getenv("AI_SUMMARY_ENABLED", "")
-    enabled = _parse_ai_bool(enabled_raw) if enabled_raw.strip() else False
+    if not enabled_raw.strip():
+        # Nothing else is read: with the feature off, no AI variable can deny a
+        # report by being malformed. Only the flag itself is validated.
+        return AISummaryConfig()
+    if not _parse_ai_bool(enabled_raw):
+        return AISummaryConfig()
+
+    enabled = True
 
     timeout = _parse_positive_int(
         "AI_SUMMARY_TIMEOUT", os.getenv("AI_SUMMARY_TIMEOUT", ""), DEFAULT_AI_TIMEOUT

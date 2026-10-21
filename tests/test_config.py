@@ -372,6 +372,8 @@ class TestAISummaryConfig:
         "AI_SUMMARY_BASE_URL",
         "AI_SUMMARY_MODEL",
         "AI_SUMMARY_TIMEOUT",
+        "AI_SUMMARY_MAX_TOKENS",
+        "AI_SUMMARY_REASONING_EFFORT",
         "AI_SUMMARY_MAX_PROMPT_CHARS",
         "AI_SUMMARY_USER_PROMPT",
     )
@@ -382,6 +384,12 @@ class TestAISummaryConfig:
         for name in self._VARS:
             monkeypatch.delenv(name, raising=False)
         monkeypatch.setattr("ff_tracker.config.load_environment", lambda: None)
+
+    @pytest.fixture
+    def enabled_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Turn the feature on, so the other variables are actually read."""
+        monkeypatch.setenv("AI_SUMMARY_ENABLED", "true")
+        monkeypatch.setenv("AI_SUMMARY_API_KEY", "sk-test")
 
     def test_defaults_when_nothing_is_set(self) -> None:
         config = load_ai_summary_config()
@@ -434,9 +442,50 @@ class TestAISummaryConfig:
         monkeypatch.setenv("AI_SUMMARY_API_KEY", "sk-test")
         assert load_ai_summary_config().enabled is False
 
+    def test_other_variables_are_ignored_when_the_feature_is_off(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """FR-007: a stale AI variable cannot deny a report while the feature is off."""
+        monkeypatch.setenv("AI_SUMMARY_TIMEOUT", "abc")
+        monkeypatch.setenv("AI_SUMMARY_MAX_TOKENS", "nonsense")
+        monkeypatch.setenv("AI_SUMMARY_REASONING_EFFORT", "extreme")
+        monkeypatch.setenv("AI_SUMMARY_BASE_URL", "not a url")
+        monkeypatch.setenv("AI_SUMMARY_MAX_PROMPT_CHARS", "0")
+
+        config = load_ai_summary_config()
+
+        assert config.enabled is False
+        assert config.timeout == DEFAULT_AI_TIMEOUT
+        assert config.max_tokens == DEFAULT_AI_MAX_TOKENS
+        assert config.reasoning_effort is None
+        assert config.base_url == DEFAULT_AI_BASE_URL
+
+    def test_malformed_flag_is_still_an_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An unreadable flag cannot be read as off."""
+        monkeypatch.setenv("AI_SUMMARY_ENABLED", "maybe")
+        with pytest.raises(ConfigurationError, match="AI_SUMMARY_ENABLED must be one of"):
+            load_ai_summary_config()
+
+    def test_bad_base_url_raises_naming_the_variable(
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A URL urlopen cannot parse must fail as configuration, not as ValueError."""
+        monkeypatch.setenv("AI_SUMMARY_BASE_URL", "opencode.ai/inference/openai/v1")
+        with pytest.raises(ConfigurationError, match="AI_SUMMARY_BASE_URL must be an http"):
+            load_ai_summary_config()
+
+    def test_base_url_without_a_host_raises(
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_BASE_URL", "https:///v1")
+        with pytest.raises(ConfigurationError, match="AI_SUMMARY_BASE_URL must be an http"):
+            load_ai_summary_config()
+
     @pytest.mark.parametrize("value", ["0", "-5", "abc", "1.5"])
     def test_bad_timeout_raises_naming_the_variable(
-        self, monkeypatch: pytest.MonkeyPatch, value: str
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch, value: str
     ) -> None:
         monkeypatch.setenv("AI_SUMMARY_TIMEOUT", value)
         with pytest.raises(ConfigurationError, match="AI_SUMMARY_TIMEOUT must be a positive integer"):
@@ -444,7 +493,7 @@ class TestAISummaryConfig:
 
     @pytest.mark.parametrize("value", ["0", "-1", "lots"])
     def test_bad_prompt_limit_raises_naming_the_variable(
-        self, monkeypatch: pytest.MonkeyPatch, value: str
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch, value: str
     ) -> None:
         monkeypatch.setenv("AI_SUMMARY_MAX_PROMPT_CHARS", value)
         with pytest.raises(
@@ -453,7 +502,7 @@ class TestAISummaryConfig:
             load_ai_summary_config()
 
     def test_oversized_prompt_names_length_and_configured_limit(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("AI_SUMMARY_MAX_PROMPT_CHARS", "100")
         monkeypatch.setenv("AI_SUMMARY_USER_PROMPT", "x" * 101)
@@ -464,31 +513,31 @@ class TestAISummaryConfig:
         assert "101" in message
         assert "100" in message
 
-    def test_prompt_at_the_limit_is_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_prompt_at_the_limit_is_accepted(self, enabled_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AI_SUMMARY_MAX_PROMPT_CHARS", "100")
         monkeypatch.setenv("AI_SUMMARY_USER_PROMPT", "x" * 100)
         assert len(load_ai_summary_config().user_prompt) == 100
 
     @pytest.mark.parametrize("value", ["", "   ", "\n\t "])
-    def test_empty_prompt_is_a_no_op(self, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    def test_empty_prompt_is_a_no_op(self, enabled_env: None, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
         monkeypatch.setenv("AI_SUMMARY_USER_PROMPT", value)
         assert load_ai_summary_config().user_prompt == ""
 
     def test_prompt_is_stripped_and_crlf_normalised(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("AI_SUMMARY_USER_PROMPT", "  Be dry.\r\nNo emoji.  ")
         assert load_ai_summary_config().user_prompt == "Be dry.\nNo emoji."
 
     @pytest.mark.parametrize("value", ["", "   "])
     def test_blank_base_url_falls_back_to_the_default(
-        self, monkeypatch: pytest.MonkeyPatch, value: str
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch, value: str
     ) -> None:
         monkeypatch.setenv("AI_SUMMARY_BASE_URL", value)
         assert load_ai_summary_config().base_url == DEFAULT_AI_BASE_URL
 
     def test_explicit_base_url_overrides_and_loses_trailing_slash(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("AI_SUMMARY_BASE_URL", "https://proxy.example/v1/")
         assert load_ai_summary_config().base_url == "https://proxy.example/v1"
@@ -546,6 +595,12 @@ class TestAISummaryBudgetAndEffort:
             monkeypatch.delenv(name, raising=False)
         monkeypatch.setattr("ff_tracker.config.load_environment", lambda: None)
 
+    @pytest.fixture
+    def enabled_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Turn the feature on, so the other variables are actually read."""
+        monkeypatch.setenv("AI_SUMMARY_ENABLED", "true")
+        monkeypatch.setenv("AI_SUMMARY_API_KEY", "sk-test")
+
     def test_model_default_is_deepseek(self) -> None:
         assert load_ai_summary_config().model == "deepseek-v4.1-flash"
         assert DEFAULT_AI_MODEL == "deepseek-v4.1-flash"
@@ -553,13 +608,13 @@ class TestAISummaryBudgetAndEffort:
     def test_max_tokens_defaults_to_eight_thousand(self) -> None:
         assert load_ai_summary_config().max_tokens == DEFAULT_AI_MAX_TOKENS == 8000
 
-    def test_max_tokens_is_read_from_the_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_max_tokens_is_read_from_the_environment(self, enabled_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AI_SUMMARY_MAX_TOKENS", "1234")
         assert load_ai_summary_config().max_tokens == 1234
 
     @pytest.mark.parametrize("value", ["0", "-1", "abc", "1.5"])
     def test_bad_max_tokens_raises_naming_the_variable(
-        self, monkeypatch: pytest.MonkeyPatch, value: str
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch, value: str
     ) -> None:
         monkeypatch.setenv("AI_SUMMARY_MAX_TOKENS", value)
         with pytest.raises(
@@ -572,7 +627,7 @@ class TestAISummaryBudgetAndEffort:
 
     @pytest.mark.parametrize("value", ["", "   "])
     def test_blank_reasoning_effort_means_unset(
-        self, monkeypatch: pytest.MonkeyPatch, value: str
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch, value: str
     ) -> None:
         monkeypatch.setenv("AI_SUMMARY_REASONING_EFFORT", value)
         assert load_ai_summary_config().reasoning_effort is None
@@ -582,13 +637,13 @@ class TestAISummaryBudgetAndEffort:
         [("low", "low"), ("LOW", "low"), ("Medium", "medium"), (" high ", "high")],
     )
     def test_reasoning_effort_is_normalised_to_lowercase(
-        self, monkeypatch: pytest.MonkeyPatch, value: str, expected: str
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch, value: str, expected: str
     ) -> None:
         monkeypatch.setenv("AI_SUMMARY_REASONING_EFFORT", value)
         assert load_ai_summary_config().reasoning_effort == expected
 
     def test_bad_reasoning_effort_lists_the_allowed_values(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("AI_SUMMARY_REASONING_EFFORT", "extreme")
         with pytest.raises(ConfigurationError) as excinfo:

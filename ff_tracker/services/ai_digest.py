@@ -192,7 +192,12 @@ def _league_digest(
     player_only = mode in (MODE_PLAYOFFS, MODE_CHAMPIONSHIP)
 
     standings = [] if in_championship else _standings_rows(division)
-    matchups, matchups_note = _matchup_rows(division) if not in_championship else ([], None)
+    # The bracket (playoffs) and the leaderboard (championship) are those modes'
+    # matchup sections; the formatters show no weekly team material there.
+    if mode == MODE_REGULAR:
+        matchups, matchups_note = _matchup_rows(division)
+    else:
+        matchups, matchups_note = [], None
 
     return AILeagueDigest(
         league=division.name,

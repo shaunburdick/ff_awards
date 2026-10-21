@@ -8,6 +8,7 @@ without failing the report.
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import socket
@@ -19,7 +20,7 @@ from dataclasses import dataclass
 from importlib.metadata import version
 from typing import Protocol
 
-from ..config import AI_REASONING_EFFORTS, DEFAULT_AI_MAX_TOKENS, AISummaryConfig
+from ..config import AI_REASONING_EFFORTS, AISummaryConfig
 from ..exceptions import (
     AIContractError,
     AIHTTPError,
@@ -43,7 +44,8 @@ class AIRequest:
 
     system_prompt: str
     user_message: str
-    max_tokens: int = DEFAULT_AI_MAX_TOKENS
+    # No default: the configured budget is the only source of this value.
+    max_tokens: int
     # None means "omit the key": never sent as null or an empty string.
     reasoning_effort: str | None = None
 
@@ -142,10 +144,9 @@ class OpenAICompatibleClient:
         elapsed_ms = int((time.monotonic() - started) * 1000)
         content, finish_reason = self._parse_envelope(raw)
         logger.info(
-            "AI summary provider answer: model=%s status=200 latency_ms=%d finish_reason=%s",
+            "AI summary provider answer: model=%s status=200 latency_ms=%d",
             self._config.model,
             elapsed_ms,
-            finish_reason,
         )
 
         # finish_reason is the authority: a reasoning model can burn the whole
@@ -198,6 +199,10 @@ class OpenAICompatibleClient:
         except (TimeoutError, socket.timeout):
             logger.warning("AI summary provider timed out after %ss", self._config.timeout)
             raise AITimeoutError(self._config.timeout) from None
+        except (OSError, http.client.HTTPException):
+            # A provider or proxy closing mid-body raises ConnectionResetError or
+            # IncompleteRead; both are ordinary transport failures, not crashes.
+            raise AITransportError(self._host) from None
 
     @staticmethod
     def _discard(error: urllib.error.HTTPError) -> None:

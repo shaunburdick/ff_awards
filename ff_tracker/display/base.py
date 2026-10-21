@@ -295,6 +295,10 @@ class BaseFormatter(ABC):
         """Calculate total number of games processed."""
         return sum(len(division.games) for division in divisions)
 
+    def _flatten_text(self, text: str) -> str:
+        """Flatten tabs and newlines into single spaces so one field stays one line."""
+        return " ".join(text.replace("\t", " ").replace("\r", " ").replace("\n", " ").split())
+
     def _truncate_text(self, text: str, max_length: int) -> str:
         """Truncate text to maximum length, preserving readability."""
         if len(text) <= max_length:
