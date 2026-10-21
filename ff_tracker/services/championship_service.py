@@ -210,7 +210,7 @@ class ChampionshipService:
             # Find the ESPN Team object
             espn_team = None
             for t in league.teams:
-                if t.team_id == team.team_id:  # type: ignore[attr-defined]
+                if t.team_id == team.team_id:
                     espn_team = t
                     break
 
@@ -221,7 +221,7 @@ class ChampionshipService:
                 )
 
             # Get the team's roster
-            roster_players = espn_team.roster  # type: ignore[attr-defined]
+            roster_players = espn_team.roster
 
             # Convert to RosterSlot objects
             starters = []

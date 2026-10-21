@@ -311,8 +311,8 @@ class SeasonSummary:
     year: int
     regular_season: RegularSeasonSummary
     season_challenges: list[ChallengeResult]
-    playoffs: PlayoffSummary
-    championship: ChampionshipSummary
+    playoffs: PlayoffSummary | None  # None when a --force recap has no playoff section
+    championship: ChampionshipLeaderboard | None
     generated_at: str  # ISO timestamp
 ```
 
@@ -960,3 +960,4 @@ All design questions have been answered and decisions documented below.
 |---------|------|--------|---------|
 | 0.1 | 2024-12-29 | Spec-Driven Architect | Initial draft |
 | 1.0 | 2024-12-29 | Spec-Driven Architect | Resolved all open questions with user input; spec approved for implementation |
+| 1.1 | 2026-10-21 | Spec-Driven Architect | SeasonSummary data model block matched to the implemented model: playoffs and championship are optional |

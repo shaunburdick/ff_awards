@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ..models import PlayoffRound
 from ..models.season_summary import SeasonSummary
 
 
@@ -179,18 +180,14 @@ class SeasonRecapJsonFormatter:
         # Final standings by division
         standings = []
         for division_data in summary.regular_season.final_standings:
-            division_standings = {
-                "division_name": division_data.name,
-                "teams": [],
-            }
-
             # Sort teams by wins (desc), then points_for (desc)
             sorted_teams = sorted(
                 division_data.teams, key=lambda t: (t.wins, t.points_for), reverse=True
             )
 
+            teams = []
             for rank, team in enumerate(sorted_teams, start=1):
-                division_standings["teams"].append(
+                teams.append(
                     {
                         "rank": rank,
                         "team_name": team.name,
@@ -202,7 +199,7 @@ class SeasonRecapJsonFormatter:
                     }
                 )
 
-            standings.append(division_standings)
+            standings.append({"division_name": division_data.name, "teams": teams})
 
         regular_season_data["final_standings"] = standings
 
@@ -213,7 +210,7 @@ class SeasonRecapJsonFormatter:
             return json.dumps(data, indent=2)
         return json.dumps(data)
 
-    def _format_playoff_round(self, playoff_round) -> dict[str, Any]:
+    def _format_playoff_round(self, playoff_round: PlayoffRound) -> dict[str, Any]:
         """
         Format a single playoff round as JSON.
 

@@ -25,7 +25,7 @@ from .cli_utils import (
     parse_league_ids_from_arg,
     setup_logging,
 )
-from .display import create_formatter
+from .display import BaseFormatter, create_formatter
 from .exceptions import FFTrackerError
 from .models import WeeklyChallenge, WeeklyGameResult, WeeklyPlayerStats
 from .services import ChallengeCalculator, ESPNService, WeeklyChallengeCalculator
@@ -163,7 +163,9 @@ Examples:
     return parser
 
 
-def build_formatter(format_name: str, year: int, format_args_dict: dict[str, dict[str, str]]):
+def build_formatter(
+    format_name: str, year: int, format_args_dict: dict[str, dict[str, str]]
+) -> BaseFormatter:
     """
     Build formatter instance with merged arguments.
 
