@@ -8,6 +8,8 @@ client and fake transport live here too.
 
 from __future__ import annotations
 
+import json
+import urllib.request
 from collections.abc import Sequence
 
 from ff_tracker.exceptions import AISummaryError
@@ -435,3 +437,32 @@ class FakeAIClient:
         if self.error is not None:
             raise self.error
         return self.response
+
+
+class FakeTransport:
+    """An ``HTTPTransport`` that records requests and returns bytes or raises."""
+
+    def __init__(self, body: bytes = b"", error: BaseException | None = None) -> None:
+        self.body = body
+        self.error = error
+        self.calls: list[tuple[urllib.request.Request, int]] = []
+
+    def __call__(self, request: urllib.request.Request, timeout: int) -> bytes:
+        """Record the request, then return the canned body or raise."""
+        self.calls.append((request, timeout))
+        if self.error is not None:
+            raise self.error
+        return self.body
+
+
+def envelope(content: str, finish_reason: str = "stop", usage: dict[str, int] | None = None) -> bytes:
+    """Build a Chat Completions response body."""
+    payload: dict[str, object] = {
+        "id": "chatcmpl-test",
+        "choices": [
+            {"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": finish_reason}
+        ],
+    }
+    if usage is not None:
+        payload["usage"] = usage
+    return json.dumps(payload).encode("utf-8")
