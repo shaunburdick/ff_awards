@@ -7,8 +7,18 @@ including regular season, playoffs, and championship results.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from tabulate import tabulate
 
+from ..models import (
+    ChallengeResult,
+    ChampionshipLeaderboard,
+    DivisionChampion,
+    DivisionData,
+    PlayoffMatchup,
+    PlayoffRound,
+)
 from ..models.season_summary import SeasonSummary
 
 
@@ -157,7 +167,7 @@ class SeasonRecapConsoleFormatter:
 
         return "\n".join(output_lines)
 
-    def _format_championship_leaderboard(self, championship) -> str:
+    def _format_championship_leaderboard(self, championship: ChampionshipLeaderboard) -> str:
         """
         Format championship leaderboard table.
 
@@ -186,7 +196,7 @@ class SeasonRecapConsoleFormatter:
 
         return tabulate(rows, headers=headers, tablefmt="grid")
 
-    def _format_playoff_round(self, playoff_round) -> str:
+    def _format_playoff_round(self, playoff_round: PlayoffRound) -> str:
         """
         Format a single playoff round across all divisions.
 
@@ -216,7 +226,7 @@ class SeasonRecapConsoleFormatter:
 
         return "\n".join(output_parts)
 
-    def _format_playoff_matchup(self, matchup) -> str:
+    def _format_playoff_matchup(self, matchup: PlayoffMatchup) -> str:
         """
         Format a single playoff matchup.
 
@@ -250,7 +260,7 @@ class SeasonRecapConsoleFormatter:
 
         return "\n".join(lines)
 
-    def _format_division_champions(self, champions) -> str:
+    def _format_division_champions(self, champions: Sequence[DivisionChampion]) -> str:
         """
         Format division champions table.
 
@@ -276,7 +286,7 @@ class SeasonRecapConsoleFormatter:
 
         return tabulate(rows, headers=headers, tablefmt="grid")
 
-    def _format_season_challenges(self, challenges) -> str:
+    def _format_season_challenges(self, challenges: Sequence[ChallengeResult]) -> str:
         """
         Format season challenges table.
 
@@ -302,7 +312,7 @@ class SeasonRecapConsoleFormatter:
 
         return tabulate(rows, headers=headers, tablefmt="grid")
 
-    def _format_division_standings(self, division_data) -> str:
+    def _format_division_standings(self, division_data: DivisionData) -> str:
         """
         Format standings table for a single division.
 

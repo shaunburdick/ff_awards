@@ -576,3 +576,184 @@ class TestWeeklyChallenges:
         assert "current_week" in data
         assert data["current_week"] == 10
         assert "report_type" in data
+
+
+class TestWeeklyHighlightFields:
+    """Weekly highlights keep team and player fields apart, with typed points."""
+
+    @pytest.fixture
+    def shaped_challenges(self) -> list[WeeklyChallenge]:
+        """Challenges shaped exactly as WeeklyChallengeCalculator builds them."""
+        return [
+            WeeklyChallenge(
+                challenge_name="Closest Game This Week",
+                week=6,
+                winner="Donut Lose",
+                owner=None,
+                division="MM Driveway Surfers",
+                value="126.14 - 125.06 (Δ1.08)",
+                description="Donut Lose won by only 1.08 points",
+                additional_info={
+                    "score": 126.14,
+                    "opponent": "In JJ We Trust",
+                    "opponent_score": 125.06,
+                    "won": True,
+                    "margin": 1.08,
+                },
+            ),
+            WeeklyChallenge(
+                challenge_name="Top Scorer (Player)",
+                week=6,
+                winner="Christian McCaffrey",
+                owner=None,
+                division="MM Driveway Surfers",
+                value="30.70",
+                description="Christian McCaffrey (RB) scored 30.70 points",
+                additional_info={
+                    "position": "RB",
+                    "team": "Butt Fumble",
+                    "pro_team": "SF",
+                },
+            ),
+            WeeklyChallenge(
+                challenge_name="Best QB",
+                week=6,
+                winner="Trevor Lawrence",
+                owner=None,
+                division="My 2026 League",
+                value="27.34",
+                description="Trevor Lawrence scored 27.34 points",
+                additional_info={
+                    "position": "QB",
+                    "team": "Caserta Chumps",
+                    "pro_team": "JAX",
+                },
+            ),
+            WeeklyChallenge(
+                challenge_name="Overachiever",
+                week=6,
+                winner="Butt Fumble",
+                owner=None,
+                division="MM Driveway Surfers",
+                value="+9.82",
+                description="Butt Fumble scored 9.82 above starter projections",
+                additional_info={
+                    "score": 147.78,
+                    "starter_projection": 137.96,
+                    "true_diff": 9.82,
+                    "opponent": "Caserta Chumps",
+                },
+            ),
+            WeeklyChallenge(
+                challenge_name="Below Expectations",
+                week=6,
+                winner="Drew's Daring Team",
+                owner=None,
+                division="The Hood 2026",
+                value="-51.71",
+                description="Drew's Daring Team scored -51.71 below starter projections",
+                additional_info={
+                    "score": 90.44,
+                    "starter_projection": 142.15,
+                    "true_diff": -51.71,
+                    "opponent": "Someone Else",
+                },
+            ),
+        ]
+
+    def _entries(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        shaped_challenges: list[WeeklyChallenge],
+    ) -> list[dict[str, object]]:
+        formatter = JsonFormatter(year=2024)
+        output = formatter.format_output(
+            divisions=[sample_division],
+            challenges=sample_challenges,
+            weekly_challenges=shaped_challenges,
+            current_week=6,
+        )
+        return json.loads(output)["weekly_player_highlights"]
+
+    def test_team_challenge_carries_team_name_only(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        shaped_challenges: list[WeeklyChallenge],
+    ) -> None:
+        """A team challenge publishes team_name, never player_name or position."""
+        team_entry = self._entries(
+            sample_division, sample_challenges, shaped_challenges
+        )[0]
+
+        assert team_entry["challenge_type"] == "team"
+        assert team_entry["team_name"] == "Donut Lose"
+        assert "player_name" not in team_entry
+        assert "position" not in team_entry
+        assert team_entry["division"] == "MM Driveway Surfers"
+        assert team_entry["value"] == "126.14 - 125.06 (Δ1.08)"
+
+    def test_player_challenge_carries_player_name(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        shaped_challenges: list[WeeklyChallenge],
+    ) -> None:
+        """A player challenge publishes the player, position, team, and league."""
+        player_entry = self._entries(
+            sample_division, sample_challenges, shaped_challenges
+        )[1]
+
+        assert player_entry["challenge_type"] == "player"
+        assert player_entry["player_name"] == "Christian McCaffrey"
+        assert player_entry["position"] == "RB"
+        assert player_entry["team_name"] == "Butt Fumble"
+        assert player_entry["division"] == "MM Driveway Surfers"
+
+    def test_player_challenge_team_name_comes_from_team_key(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        shaped_challenges: list[WeeklyChallenge],
+    ) -> None:
+        """team_name comes from additional_info["team"]."""
+        qb_entry = self._entries(
+            sample_division, sample_challenges, shaped_challenges
+        )[2]
+
+        assert qb_entry["player_name"] == "Trevor Lawrence"
+        assert qb_entry["team_name"] == "Caserta Chumps"
+
+    def test_points_are_numbers_or_null(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        shaped_challenges: list[WeeklyChallenge],
+    ) -> None:
+        """points is a float for plain numbers and null otherwise, never a string."""
+        entries = self._entries(sample_division, sample_challenges, shaped_challenges)
+
+        assert not any(isinstance(entry["points"], str) for entry in entries)
+        assert entries[0]["points"] is None  # "126.14 - 125.06 (Δ1.08)"
+        assert entries[1]["points"] == 30.70
+        assert entries[2]["points"] == 27.34
+
+    def test_signed_deltas_are_not_points(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        shaped_challenges: list[WeeklyChallenge],
+    ) -> None:
+        """Projection deltas keep their sign in value but never become points."""
+        entries = self._entries(sample_division, sample_challenges, shaped_challenges)
+
+        overachiever, below = entries[3], entries[4]
+        assert overachiever["value"] == "+9.82"
+        assert overachiever["points"] is None
+        assert below["value"] == "-51.71"
+        assert below["points"] is None
+        assert not any(
+            isinstance(entry["points"], float) and entry["points"] < 0
+            for entry in entries
+        )

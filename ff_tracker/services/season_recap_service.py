@@ -244,7 +244,7 @@ class SeasonRecapService:
 
             # Check all teams' rosters
             for team in league.teams:
-                roster_players = team.roster  # type: ignore[attr-defined]
+                roster_players = team.roster
 
                 for player in roster_players:
                     # Check if player has Week data
@@ -673,7 +673,7 @@ class SeasonRecapService:
                 structure=structure,
                 regular_season=regular_season,
                 season_challenges=tuple(season_challenges),
-                playoffs=playoff_summary,  # type: ignore[arg-type]
+                playoffs=playoff_summary,
                 championship=championship,
             )
 

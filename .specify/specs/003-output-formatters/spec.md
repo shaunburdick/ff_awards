@@ -182,6 +182,22 @@ Provide 5 different output formats (console, sheets, email, JSON, markdown) for 
 - **Type**: Valid JSON
 - **Encoding**: UTF-8
 - **Structure**: Object with metadata, divisions, challenges arrays
+- **`weekly_player_highlights`**: one entry per weekly challenge, typed by
+  `challenge_type` so team names and player names never share a field:
+  - Team challenges (`"team"`): `team_name` is the winning team - or
+    `Tie: A and B` when the closest game was a tie - and `player_name` and
+    `position` are absent, not empty.
+  - Player challenges (`"player"`): `player_name` is the player, `position` the
+    position, and `team_name` the player's fantasy team, read from
+    `additional_info["team"]` and absent when that key is missing or empty.
+  - All entries: `challenge_name`, `challenge_type`, `division`, `value`,
+    `points`.
+  - `division` is the winner's league - the same league the team challenges
+    report. `N/A` appears only on placeholder entries that have no winner.
+  - `value` is the raw formatted string every other format prints.
+  - `points` is a float only when `value` is an unsigned score, otherwise
+    `null`. Formatted strings and signed projection deltas (`+9.82`) are not
+    scores; `points` is never a string.
 
 #### Markdown Format
 - **Type**: GitHub-flavored markdown
@@ -245,3 +261,4 @@ How will we know this feature is successful?
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2025-11-14 | AI Agent | Initial specification for output formatters |
+| 1.1 | 2026-10-21 | AI Agent | Weekly highlight fields split by type; `division` is the winner's league; `points` typed |

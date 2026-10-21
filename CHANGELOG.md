@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed - Weekly challenge facts
+- **Closest Game This Week names the game's winner.** The challenge took the
+  first row of the closest matchup, so a team could win it by *losing* and the
+  score read from the loser's side (`125.06 - 126.14 (Δ1.08)` for In JJ We
+  Trust). It now reports the winning side (`126.14 - 125.06 (Δ1.08)`), and a
+  genuine tie is labelled `Tie: A and B` with its description reading as a tie
+  instead of naming one team.
+- **Player highlights report a real league.** Top Scorer and Best-by-Position
+  set `division: "N/A"` and hid the league in `additional_info["league_division"]`;
+  `division` is now the winning player's league, like the six team challenges.
+- **JSON weekly highlights separate team and player fields.** Team entries now
+  publish `team_name` instead of putting a team name in `player_name`;
+  `player_name` and `position` are absent for team entries, and the always-empty
+  `fantasy_team` key is gone. The console and markdown playoff player tables read
+  the same `additional_info["team"]` key, so their Team column shows the fantasy
+  team instead of a blank or the league name.
+- **JSON `points` is always typed.** It was a float in some entries and a
+  formatted string in others; it is now a float for unsigned scores and `null`
+  for formatted strings and signed projection deltas (`+9.82`). The formatted
+  text stays in the new `value` field.
+
 ## [3.4.0] - 2026-09-29 (Email Standings Completeness)
 
 ### Changed - Email standings default to all teams

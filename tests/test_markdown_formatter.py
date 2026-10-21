@@ -604,3 +604,25 @@ class TestMultipleDivisions:
         assert "Alice's Team" in output
         assert "Bob's Team" in output
         assert "|" in output  # Markdown table
+
+
+class TestWeeklyPlayerTableTeamColumn:
+    """Regression: the Team column shows the fantasy team, never the league name."""
+
+    def test_team_column_uses_player_fantasy_team(self) -> None:
+        """A playoff player table reads additional_info['team']."""
+        challenge = WeeklyChallenge(
+            challenge_name="Top Scorer (Player)",
+            week=15,
+            winner="Christian McCaffrey",
+            owner=None,
+            division="MM Driveway Surfers",
+            value="30.70",
+            description="Christian McCaffrey (RB) scored 30.70 points",
+            additional_info={"position": "RB", "team": "Butt Fumble", "pro_team": "SF"},
+        )
+
+        output = MarkdownFormatter(year=2026)._format_weekly_player_table([challenge])
+
+        assert "| Butt Fumble |" in output
+        assert "MM Driveway Surfers" not in output

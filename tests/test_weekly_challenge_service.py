@@ -407,8 +407,113 @@ class TestTeamChallenges:
         assert result.challenge_name == "Closest Game This Week"
         assert result.winner == "Eve's Team"  # Won by 1.25 points
         assert result.week == 10
-        assert "1.25" in result.description
-        assert result.additional_info["margin"] == 1.25
+        assert result.value == "105.25 - 104.00 (Δ1.25)"
+        assert result.description == "Eve's Team won by only 1.25 points"
+
+    def test_closest_game_names_winner_when_loser_row_is_first(self) -> None:
+        """Week 6 regression: the losing row must not win the challenge."""
+        games = [
+            WeeklyGameResult(
+                team_name="In JJ We Trust",
+                score=125.06,
+                projected_score=130.00,
+                opponent_name="Donut Lose",
+                opponent_score=126.14,
+                opponent_projected_score=120.00,
+                won=False,
+                week=6,
+                margin=1.08,
+                projection_diff=-4.94,
+                division="MM Driveway Surfers",
+            ),
+            WeeklyGameResult(
+                team_name="Donut Lose",
+                score=126.14,
+                projected_score=120.00,
+                opponent_name="In JJ We Trust",
+                opponent_score=125.06,
+                opponent_projected_score=130.00,
+                won=True,
+                week=6,
+                margin=1.08,
+                projection_diff=6.14,
+                division="MM Driveway Surfers",
+            ),
+        ]
+
+        calculator = WeeklyChallengeCalculator()
+        result = calculator._calculate_closest_game(games, week=6)
+
+        assert result.winner == "Donut Lose"
+        assert result.value == "126.14 - 125.06 (Δ1.08)"
+        assert result.description == "Donut Lose won by only 1.08 points"
+        assert result.additional_info["score"] == 126.14
+        assert result.additional_info["opponent"] == "In JJ We Trust"
+        assert result.additional_info["opponent_score"] == 125.06
+        assert result.additional_info["won"] is True
+
+    def test_closest_game_tie_claims_no_winner(self) -> None:
+        """A genuine tie must not be reported as a win or a loss."""
+        games = [
+            WeeklyGameResult(
+                team_name="Tie One",
+                score=120.00,
+                projected_score=118.00,
+                opponent_name="Tie Two",
+                opponent_score=120.00,
+                opponent_projected_score=119.00,
+                won=False,
+                week=6,
+                margin=0.0,
+                projection_diff=2.00,
+                division="League",
+            ),
+            WeeklyGameResult(
+                team_name="Tie Two",
+                score=120.00,
+                projected_score=119.00,
+                opponent_name="Tie One",
+                opponent_score=120.00,
+                opponent_projected_score=118.00,
+                won=False,
+                week=6,
+                margin=0.0,
+                projection_diff=1.00,
+                division="League",
+            ),
+        ]
+
+        calculator = WeeklyChallengeCalculator()
+        result = calculator._calculate_closest_game(games, week=6)
+
+        assert result.winner == "Tie: Tie One and Tie Two"
+        assert result.additional_info["won"] is False
+        assert "Tie One and Tie Two tied at 120.00" in result.description
+
+    def test_closest_game_lone_loss_reports_a_loss(self) -> None:
+        """A losing row with no winning counterpart still describes the loss."""
+        games = [
+            WeeklyGameResult(
+                team_name="Lone Loser",
+                score=99.50,
+                projected_score=100.00,
+                opponent_name="Absent Winner",
+                opponent_score=100.00,
+                opponent_projected_score=100.00,
+                won=False,
+                week=6,
+                margin=0.50,
+                projection_diff=-0.50,
+                division="League",
+            )
+        ]
+
+        calculator = WeeklyChallengeCalculator()
+        result = calculator._calculate_closest_game(games, week=6)
+
+        assert result.winner == "Lone Loser"
+        assert result.description == "Lone Loser lost by only 0.50 points"
+        assert result.additional_info["won"] is False
 
     def test_closest_game_shows_win_or_loss(self) -> None:
         """Test that closest game description shows won/lost."""
@@ -425,14 +530,27 @@ class TestTeamChallenges:
                 margin=0.5,
                 projection_diff=5.0,
                 division="League",
-            )
+            ),
+            WeeklyGameResult(
+                team_name="Close Winner",
+                score=100.5,
+                projected_score=98.0,
+                opponent_name="Close Loser",
+                opponent_score=100.0,
+                opponent_projected_score=95.0,
+                won=True,
+                week=10,
+                margin=0.5,
+                projection_diff=2.5,
+                division="League",
+            ),
         ]
 
         calculator = WeeklyChallengeCalculator()
         result = calculator._calculate_closest_game(games, week=10)
 
-        assert result.winner == "Close Loser"
-        assert "lost" in result.description.lower()
+        assert result.winner == "Close Winner"
+        assert "won by only 0.50" in result.description
 
 
 class TestProjectionChallenges:
@@ -521,6 +639,8 @@ class TestPlayerChallenges:
         assert result.week == 10
         assert "35.50" in result.value
         assert result.additional_info["position"] == "QB"
+        assert result.division == "League A"
+        assert "league_division" not in result.additional_info
 
     def test_top_player_excludes_bench(
         self, sample_weekly_players: list[WeeklyPlayerStats]
@@ -567,6 +687,10 @@ class TestPlayerChallenges:
 
         assert by_name["Best D/ST"].winner == "49ers D/ST"
         assert "22.00" in by_name["Best D/ST"].value
+
+        # Division is the winner's league, same as the team challenges
+        assert by_name["Best QB"].division == "League A"
+        assert by_name["Best D/ST"].division == "League B"
 
     def test_top_by_position_missing_position_skipped(self) -> None:
         """Test that positions with no players are skipped."""

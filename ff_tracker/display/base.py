@@ -21,6 +21,7 @@ from ..models import (
     WeeklyChallenge,
 )
 from ..models.championship import ChampionshipRoster
+from ..models.season_summary import SeasonSummary
 
 
 class ReportMode(Enum):
@@ -86,33 +87,39 @@ class OutputFormatter(Protocol):
 
     def format_output(
         self,
-        divisions: Sequence[DivisionData] | None = None,
-        challenges: Sequence[ChallengeResult] | None = None,
+        divisions: Sequence[DivisionData],
+        challenges: Sequence[ChallengeResult],
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
         championship_rosters: Sequence[ChampionshipRoster] | None = None,
-        context: ReportContext | None = None,
     ) -> str:
         """
         Format the complete output for display.
 
-        This method supports two calling conventions for backward compatibility:
+        Args:
+            divisions: List of division data
+            challenges: List of season challenge results
+            weekly_challenges: List of weekly challenge results
+            current_week: Current fantasy week number
+            championship: Championship leaderboard
+            championship_rosters: Detailed rosters for championship teams
 
-        1. New style (recommended) - pass context object:
-           formatter.format_output(context=report_context)
+        Returns:
+            Formatted output string
+        """
+        ...
 
-        2. Old style (deprecated) - pass individual parameters:
-           formatter.format_output(divisions, challenges, weekly_challenges, ...)
+
+class SeasonRecapFormatter(Protocol):
+    """Protocol for season recap formatters, which render a whole-season summary."""
+
+    def format(self, summary: SeasonSummary) -> str:
+        """
+        Render a complete season summary for display.
 
         Args:
-            divisions: List of division data (deprecated - use context)
-            challenges: List of season challenge results (deprecated - use context)
-            weekly_challenges: List of weekly challenge results (deprecated - use context)
-            current_week: Current fantasy week number (deprecated - use context)
-            championship: Championship leaderboard (deprecated - use context)
-            championship_rosters: Detailed rosters for championship teams (deprecated - use context)
-            context: ReportContext object containing all report data (new style)
+            summary: Complete season data (regular season, playoffs, championship)
 
         Returns:
             Formatted output string
@@ -232,19 +239,18 @@ class BaseFormatter(ABC):
     @abstractmethod
     def format_output(
         self,
-        divisions: Sequence[DivisionData] | None = None,
-        challenges: Sequence[ChallengeResult] | None = None,
+        divisions: Sequence[DivisionData],
+        challenges: Sequence[ChallengeResult],
         weekly_challenges: Sequence[WeeklyChallenge] | None = None,
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
         championship_rosters: Sequence[ChampionshipRoster] | None = None,
-        context: ReportContext | None = None,
     ) -> str:
         """
         Format the complete output for display.
 
-        Supports both old-style (individual parameters) and new-style (context object).
-        Subclasses should implement this method using the context object.
+        Callers supply every section explicitly; sections that a given mode does
+        not use are passed empty rather than omitted.
         """
         pass
 

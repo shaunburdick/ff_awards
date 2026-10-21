@@ -359,7 +359,7 @@ class MarkdownFormatter(BaseFormatter):
         for challenge in player_challenges:
             position = challenge.additional_info.get("position", "")
             winner_display = f"{challenge.winner} ({position})"
-            team_name = challenge.additional_info.get("team_name", challenge.division)
+            team_name = challenge.additional_info.get("team", "")
 
             lines.append(
                 f"| {challenge.challenge_name} | {winner_display} | {team_name} | {challenge.value} |"

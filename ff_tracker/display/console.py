@@ -356,7 +356,7 @@ class ConsoleFormatter(BaseFormatter):
             # Show player name with position
             position = challenge.additional_info.get("position", "")
             winner_display = f"{challenge.winner} ({position})"
-            team_name = challenge.additional_info.get("team_name", "")
+            team_name = challenge.additional_info.get("team", "")
 
             player_table.append(
                 [
