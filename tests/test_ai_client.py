@@ -126,6 +126,7 @@ class TestResponseHandling:
             b'{"choices": "nope"}',
             b'{"choices": [{"message": {"content": ""}, "finish_reason": "stop"}]}',
             b'{"choices": [{"message": {"content": "   "}, "finish_reason": "stop"}]}',
+            b'{"choices": [{"message": {"content": null}, "finish_reason": "stop"}]}',
             b'{"choices": [{"message": {"content": "x"}, "finish_reason": 7}]}',
         ],
     )
@@ -134,9 +135,16 @@ class TestResponseHandling:
         with pytest.raises(AIContractError, match="did not match the summary contract"):
             client.complete(_request())
 
-    def test_length_with_empty_content_is_truncation_not_a_contract_failure(self) -> None:
+    @pytest.mark.parametrize("content", [b'""', b"null"])
+    def test_length_with_empty_content_is_truncation_not_a_contract_failure(
+        self, content: bytes
+    ) -> None:
         """A reasoning model can spend the whole budget and return no content."""
-        body = b'{"choices": [{"message": {"content": ""}, "finish_reason": "length"}]}'
+        body = (
+            b'{"choices": [{"message": {"content": '
+            + content
+            + b'}, "finish_reason": "length"}]}'
+        )
         client = OpenAICompatibleClient(_config(), FakeTransport(body))
 
         with pytest.raises(AITruncationError, match="finish_reason=length"):

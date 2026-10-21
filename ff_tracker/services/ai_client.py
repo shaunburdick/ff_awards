@@ -140,10 +140,11 @@ class OpenAICompatibleClient:
         )
 
         # finish_reason is the authority: a reasoning model can burn the whole
-        # budget and return empty content, which is truncation, not a bad shape.
+        # budget and come back with null or empty content, which is truncation,
+        # not a bad shape.
         if finish_reason == "length":
             raise AITruncationError()
-        if not content.strip():
+        if content is None or not content.strip():
             raise AIContractError(CONTRACT_REASON)
         return content
 
@@ -190,7 +191,7 @@ class OpenAICompatibleClient:
         finally:
             error.close()
 
-    def _parse_envelope(self, raw: bytes) -> tuple[str, str]:
+    def _parse_envelope(self, raw: bytes) -> tuple[str | None, str]:
         """
         Extract the message content and finish reason from the response.
 
@@ -222,7 +223,7 @@ class OpenAICompatibleClient:
         message_dict: dict[str, object] = message
 
         content = message_dict.get("content")
-        if not isinstance(content, str):
+        if content is not None and not isinstance(content, str):
             raise AIContractError(CONTRACT_REASON)
 
         finish_reason = first_choice.get("finish_reason")
