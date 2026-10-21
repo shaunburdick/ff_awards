@@ -245,7 +245,8 @@ class SeasonSummary:
     structure: SeasonStructure
     regular_season: RegularSeasonSummary
     season_challenges: tuple[ChallengeResult, ...]
-    # None for a partial recap built with --force before the playoffs start.
+    # None when a --force recap has no playoff section: either built before the
+    # playoffs start, or playoff extraction failed.
     playoffs: PlayoffSummary | None
     championship: ChampionshipLeaderboard | None
 
