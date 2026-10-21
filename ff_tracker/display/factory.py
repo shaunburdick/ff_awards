@@ -7,7 +7,9 @@ between main.py, championship.py, and season_recap.py.
 
 from __future__ import annotations
 
-from .base import BaseFormatter
+from typing import Protocol, TypeVar
+
+from .base import BaseFormatter, SeasonRecapFormatter
 from .console import ConsoleFormatter
 from .email import EmailFormatter
 from .json import JsonFormatter
@@ -18,6 +20,16 @@ from .season_recap_json import SeasonRecapJsonFormatter
 from .season_recap_markdown import SeasonRecapMarkdownFormatter
 from .season_recap_sheets import SeasonRecapSheetsFormatter
 from .sheets import SheetsFormatter
+
+FormatterT = TypeVar("FormatterT", covariant=True)
+
+
+class FormatterClass(Protocol[FormatterT]):
+    """A formatter class as the factories call it: (year, format_args) -> instance."""
+
+    def __call__(self, year: int, format_args: dict[str, str] | None = None) -> FormatterT:
+        """Instantiate the formatter for a season year."""
+        ...
 
 
 def create_formatter(
@@ -46,7 +58,7 @@ def create_formatter(
         >>> formatter = create_formatter("console", 2024)
         >>> formatter = create_formatter("email", 2024, {"accent_color": "#007bff"})
     """
-    formatters = {
+    formatters: dict[str, FormatterClass[BaseFormatter]] = {
         "console": ConsoleFormatter,
         "sheets": SheetsFormatter,
         "email": EmailFormatter,
@@ -81,7 +93,7 @@ def create_season_recap_formatter(
     format_name: str,
     year: int,
     format_args: dict[str, str] | None = None,
-) -> BaseFormatter:
+) -> SeasonRecapFormatter:
     """
     Create a season recap formatter instance by name.
 
@@ -103,7 +115,7 @@ def create_season_recap_formatter(
         >>> formatter = create_season_recap_formatter("console", 2024)
         >>> formatter = create_season_recap_formatter("email", 2024, {"accent_color": "#007bff"})
     """
-    formatters = {
+    formatters: dict[str, FormatterClass[SeasonRecapFormatter]] = {
         "console": SeasonRecapConsoleFormatter,
         "json": SeasonRecapJsonFormatter,
         "sheets": SeasonRecapSheetsFormatter,

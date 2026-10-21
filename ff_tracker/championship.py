@@ -34,7 +34,7 @@ from .cli_utils import (
     setup_logging,
 )
 from .config import create_config
-from .display import create_formatter
+from .display import BaseFormatter, create_formatter
 from .exceptions import FFTrackerError
 from .services.championship_service import ChampionshipService
 from .services.espn_service import ESPNService
@@ -377,7 +377,9 @@ def mode_validate(
         )
 
 
-def get_formatter(format_name: str, year: int, format_args: dict[str, str] | None = None):
+def get_formatter(
+    format_name: str, year: int, format_args: dict[str, str] | None = None
+) -> BaseFormatter:
     """
     Get formatter instance by name.
 
@@ -415,7 +417,6 @@ def main() -> int:
             league_ids = parse_league_ids_from_arg(args.league_ids)
         else:
             parser.error("Either league_ids argument or --env flag is required")
-            return 1
 
         # Create configuration
         config = create_config(

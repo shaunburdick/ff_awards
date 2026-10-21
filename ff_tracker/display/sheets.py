@@ -148,10 +148,11 @@ class SheetsFormatter(BaseFormatter):
                 output_lines.append("OVERALL SEASON CHALLENGES")
             output_lines.append("Challenge\tWinner\tOwner\tDivision\tDetails")
 
-            for challenge in challenges:
+            for season_challenge in challenges:
                 output_lines.append(
-                    f"{challenge.challenge_name}\t{challenge.winner}\t{challenge.owner.full_name}\t"
-                    f"{challenge.division}\t{challenge.description}"
+                    f"{season_challenge.challenge_name}\t{season_challenge.winner}\t"
+                    f"{season_challenge.owner.full_name}\t"
+                    f"{season_challenge.division}\t{season_challenge.description}"
                 )
 
             output_lines.append("")

@@ -392,14 +392,14 @@ class EmailFormatter(BaseFormatter):
             html_content += '<table class="challenge-table">\n'
             html_content += "<tr><th>Challenge</th><th>Winner</th><th>Owner</th><th>Division</th><th>Details</th></tr>\n"
 
-            for challenge in challenges:
+            for season_challenge in challenges:
                 html_content += (
                     f"<tr>"
-                    f'<td class="challenge-name">{self._escape_html(challenge.challenge_name)}</td>'
-                    f'<td class="winner">{self._escape_html(challenge.winner)}</td>'
-                    f"<td>{self._escape_html(challenge.owner.full_name)}</td>"
-                    f"<td>{self._escape_html(challenge.division)}</td>"
-                    f"<td>{self._escape_html(challenge.description)}</td>"
+                    f'<td class="challenge-name">{self._escape_html(season_challenge.challenge_name)}</td>'
+                    f'<td class="winner">{self._escape_html(season_challenge.winner)}</td>'
+                    f"<td>{self._escape_html(season_challenge.owner.full_name)}</td>"
+                    f"<td>{self._escape_html(season_challenge.division)}</td>"
+                    f"<td>{self._escape_html(season_challenge.description)}</td>"
                     f"</tr>\n"
                 )
 
