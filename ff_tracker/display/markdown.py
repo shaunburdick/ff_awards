@@ -155,6 +155,11 @@ class MarkdownFormatter(BaseFormatter):
                 output_lines.append(weekly_table)
                 output_lines.append("")
 
+        # AI narrative: after the weekly highlights, before the season challenges
+        if ai_summary is not None:
+            output_lines.append("")
+            output_lines.append(self._format_ai_summary(ai_summary))
+
         # Season challenges (with historical note if in playoffs)
         if challenges:
             if is_playoff_mode:
@@ -201,11 +206,6 @@ class MarkdownFormatter(BaseFormatter):
                 output_lines.append(f"📊 **Game data:** {total_games} individual results processed")
             else:
                 output_lines.append("⚠️ **Game data:** Limited - some challenges may be incomplete")
-
-        # AI narrative: last section, only when the feature produced something to say
-        if ai_summary is not None:
-            output_lines.append("")
-            output_lines.append(self._format_ai_summary(ai_summary))
 
         return "\n".join(output_lines)
 

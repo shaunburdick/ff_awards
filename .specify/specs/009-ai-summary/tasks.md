@@ -48,7 +48,7 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 - [ ] New `ff_tracker/models/ai_summary.py`: `AISummaryLeague`, `AIProvenance`, `AISummary`, `AISummaryUnavailable`, `AISummaryResult`
 - [ ] `AISummaryLeague.__post_init__`: league non-empty; ≥1 paragraph; every paragraph has ≥1 word after `strip()`; every bullet non-empty
 - [ ] `AISummary.__post_init__`: headline non-empty, ≥1 league, season_note non-empty
-- [ ] `AIProvenance.__post_init__`: model/prompt_sha/generated_at non-empty; `truncated` defaults `False`
+- [ ] `AIProvenance.__post_init__`: model/prompt_sha/generated_at non-empty; `truncated` defaults `False`; `attempts` defaults `1` and must be 1 or 2
 - [ ] `AISummaryUnavailable.reason` non-empty; `notice` property returns `AI summary unavailable: {reason}. The report is unaffected.`
 - [ ] `AISummaryResult = Union[AISummary, AISummaryUnavailable]` — `typing.Union`, not `X | Y` (runtime alias on py3.9)
 - [ ] Export all of the above from `models/__init__.py` (`__all__`)
@@ -56,7 +56,7 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 
 **Validation**: `pytest -q` green; `mypy ff_tracker` clean.
 
-**ACs**: AC-002 (JSON shape) · AC-013/AC-015 (`truncated`) · FR-004 · FR-008
+**ACs**: AC-002 (JSON shape) · AC-013/AC-015 (`truncated`) · AC-022 (`attempts: 1`) · FR-004 · FR-008
 
 **Files**: new `models/ai_summary.py`, `models/__init__.py`, new `tests/test_ai_summary_models.py`
 
@@ -152,9 +152,11 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 **Goal**: the whole narrative path in one task (Gate 2 merged the old Tasks 7 and 8: the happy path cannot pass while matching or normalisation is a stub).
 
 - [ ] New `ff_tracker/services/ai_summary_service.py`: `SYSTEM_PROMPT` constant (contract, caps, no-invented-facts, commissioner voice, 60-word floor as guidance), `INSTRUCTIONS_HEADING = "### COMMISSIONER'S INSTRUCTIONS"`
-- [ ] `build_system_prompt(user_prompt)` appends the block only when non-empty; `prompt_sha(user_prompt)` = `sha256(template + "\n\x00\n" + prompt).hexdigest()[:12]`
+- [ ] `build_system_prompt(user_prompt, league_names)` appends (a) the league scope built from the digest at request time — exact count, names verbatim, "exactly N entries, in that order, no add/duplicate/split/rename" — and (b) the block only when non-empty; `prompt_sha(system_prompt, user_prompt)` = `sha256(composed + "\n\x00\n" + user_prompt).hexdigest()[:12]`, so the league scope is part of the hash
 - [ ] `AISummaryService(config, client)`; `generate(...) -> AISummaryResult` = `try: return self._generate(...) except AISummaryError as e: return AISummaryUnavailable(e.reason)`
 - [ ] `_generate`: digest → `AIRequest` → `client.complete` → `_parse_response` → `_match_leagues` → `_normalise` → `AISummary`
+- [ ] `_generate` retry: at most **two** attempts, looping around client+parse+match, catching **only** `AIContractError`; the second attempt reuses the same `AIRequest` object (same prompt, payload, model, budget); a second contract failure re-raises into the fail-open boundary; `AIHTTPError`/`AITransportError`/`AITimeoutError`/`AITruncationError` are never retried
+- [ ] `_normalise(..., attempts)` writes `attempts` into `AIProvenance` (1 or 2)
 - [ ] `_parse_response`: bind `json.loads` to `object`, narrow with `isinstance`; convert **only** `json.JSONDecodeError` to `AIContractError(CONTRACT_REASON)`; every other rejection is an explicit check raising `AIContractError` (no `except TypeError`/`ValueError`/`KeyError`, no `except Exception`)
 - [ ] `_match_leagues` — FR-004's total order: (1) all names match exactly once after `strip().casefold()` and counts agree → map by name, emit in **digest order**; (2) else equal counts → zip by position, headings from `division.name`, response names discarded; (3) else `AIContractError(f"league count mismatch ({len(divisions)} leagues, {len(entries)} sections)")`
 - [ ] `_normalise` — drop bullets beyond 3 → drop paragraphs beyond 3 → drop trailing paragraphs while `len(text.split())` total > 120, truncating the first paragraph at the last word boundary ≤120 with `…` when it alone exceeds the budget (dropping the rest) → headline ≤15 words, `season_note` ≤40 words, both word-boundary + `…`; `truncated` true when anything was dropped or shortened
@@ -166,11 +168,13 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
       (b) `patch("ff_tracker.services.ai_summary_service.json.loads", side_effect=TypeError("bug"))` makes `generate` **raise** — proves `_parse_response` does not catch `TypeError`, which is the defect the first case alone would not detect (Gate 2 re-review M3)
 - [ ] `tests/test_ai_summary_service.py` — matching: reordered entries, case/whitespace variants (AC-008 i); stray entry, duplicated entry, all-different names at equal counts → positional headings from our names, no response-supplied name visible (AC-008 ii); differing counts → the exact count-mismatch reason and nothing rendered (AC-008 iii)
 - [ ] `tests/test_ai_summary_service.py` — normalisation: four paragraphs + 200-word paragraph + four bullets + 20-word headline + 60-word note → caps met, first paragraph and first three bullets survive, two runs byte-identical (AC-013); 200-word first paragraph → ≤120 words with `…` and the others dropped (AC-014); each drop/shorten sets `truncated` (AC-015)
-- [ ] `tests/test_ai_summary_service.py` — logging: `caplog` shows the prompt at DEBUG and no digest marker, team name or key at any level (AC-006)
+- [ ] `tests/test_ai_summary_service.py` — prompt: the scope states "exactly N leagues" and the quoted names from the digest; a different league set changes the sentence and `prompt_sha`; no scope for an empty league list
+- [ ] `tests/test_ai_summary_service.py` — **retry** (AC-019…AC-022): invalid-then-valid → 2 calls, `attempts: 2`, byte-identical requests; invalid twice → 2 calls and the notice; HTTP 500 / transport / timeout / truncation → 1 call each; first-attempt success → `attempts: 1`
+- [ ] `tests/test_ai_summary_service.py` — logging: `caplog` shows the prompt at DEBUG and no digest marker, team name, score or key at any level (AC-006)
 
 **Validation**: `pytest -q` green; no formatter can see `ai_summary` yet (nothing passes it).
 
-**ACs**: AC-004 · AC-006 · AC-007 · AC-008 · AC-013 · AC-014 · AC-015 · AC-016 · FR-004 · FR-006 · FR-008 · FR-009 · FR-010
+**ACs**: AC-004 · AC-006 · AC-007 · AC-008 · AC-013 · AC-014 · AC-015 · AC-016 · AC-019 · AC-020 · AC-021 · AC-022 · FR-003 · FR-004 · FR-006 · FR-008 · FR-009 · FR-010
 
 **Files**: new `services/ai_summary_service.py`, new `tests/test_ai_summary_service.py`, `tests/ai_fakes.py`
 
@@ -184,7 +188,7 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 
 - [ ] `display/base.py`: `ai_summary: AISummaryResult | None = None` on `OutputFormatter.format_output` (`:88`) **and** `BaseFormatter.format_output` (`:239`), last and defaulted; import the types from `..models`
 - [ ] All five concrete `format_output` signatures gain the same parameter **in this task** — mypy rejects an override that omits a supertype parameter, so they must move together (only JSON renders yet)
-- [ ] `display/json.py`: append `data["ai_summary"]` last when the argument is not `None` — `AISummary` → `{headline, season_note, leagues, provenance{model, prompt_sha, generated_at, truncated}}`; `AISummaryUnavailable` → `{"error": <notice>}`; `None` → key absent
+- [ ] `display/json.py`: top-level `data["ai_summary"]` when the argument is not `None` (position unchanged; JSON has no order-sensitive slot) — `AISummary` → `{headline, season_note, leagues, provenance{model, prompt_sha, generated_at, truncated, attempts}}`; `AISummaryUnavailable` → `{"error": <notice>}`; `None` → key absent
 - [ ] `tests/test_json_formatter.py`: narrative object shape and provenance values; error object; key absent when `None`; **AC-001 prefix/suffix**: parse both documents, drop `ai_summary` from the on-document, compare equal
 
 **Byte-identical when off**: the parameter defaults to `None`, and the JSON key is only assigned when it is not `None`; with `None` the serialised document is unchanged, so existing JSON tests and AC-001 hold without touching any other branch.
@@ -201,15 +205,15 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 
 **Goal**: the two text formats.
 
-- [ ] `display/console.py`: `_format_ai_summary` → separator rules + `🤖 COMMISSIONER'S TAKE (AI-GENERATED)`, headline, per-league name line, one line per paragraph (no wrapping), `• ` bullets, `Generated by <model> · AI-generated text`; appended at the end (after the trailing `📊 Game data:` line when present, which keeps its position — the insertion is an append, not a move); notice is one line in the same place
-- [ ] `display/markdown.py`: `_format_ai_summary` → `## 🤖 Commissioner's Take (AI-generated)`, `### <league>`, paragraphs, `- ` bullets, `_Generated by <model> · AI-generated text_`; same append rule; notice one italic line; TOC untouched
+- [ ] `display/console.py`: `_format_ai_summary` → separator rules + `🤖 COMMISSIONER'S TAKE (AI-GENERATED)`, headline, per-league name line, one line per paragraph (no wrapping), `• ` bullets, `Generated by <model> · AI-generated text`; inserted **after the weekly highlights and before the season-long challenges** (FR-005 v0.12); notice is one line in that same slot
+- [ ] `display/markdown.py`: `_format_ai_summary` → `## 🤖 Commissioner's Take (AI-generated)`, `### <league>`, paragraphs, `- ` bullets, `_Generated by <model> · AI-generated text_`; inserted after the weekly highlight sections and before the season challenges; notice one italic line in the same slot; TOC untouched
 - [ ] `tests/test_ai_summary_rendering.py`: AC-001 for both (prefix/suffix against the same input with `ai_summary=None`), AC-002 (section present, after the standings section, labelled), notice-only case, a paragraph with tab/newline/quotes/`<`/`&`/emoji stays one console line (AC-011)
 
 **Byte-identical when off**: the block is appended only when the argument is not `None`; no separator, blank line or heading is added on the `None` path, so AC-001's suffix is the existing trailing content, byte for byte.
 
 **Validation**: `pytest -q` green.
 
-**ACs**: AC-001 · AC-002 · AC-011 · FR-005
+**ACs**: AC-001 · AC-002 · AC-011 · AC-018 · FR-005
 
 **Files**: `display/console.py`, `display/markdown.py`, new `tests/test_ai_summary_rendering.py`
 
@@ -219,8 +223,8 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 
 **Goal**: the two escaping-sensitive formats.
 
-- [ ] `display/sheets.py`: blank row, `AI SUMMARY (AI-GENERATED)`, `HEADLINE:`, one `LEAGUE:` row per league, one row per paragraph, `- ` bullet rows, attribution row; every cell flattened (`\t`/`\r`/`\n` → space) so column counts never break; appended at the very end (sheets' `Game data:` line is mid-report, so the last section is the overall table)
-- [ ] `display/email.py`: section before `<div class="footer">` — `<h2>🤖 Commissioner's Take (AI-generated)</h2>`, AI-generated marker, `<p>` paragraphs via `_escape_html`, `<ul><li>` bullets, attribution line; notice as a single `<p>`
+- [ ] `display/sheets.py`: blank row, `AI SUMMARY (AI-GENERATED)`, `HEADLINE:`, one `LEAGUE:` row per league, one row per paragraph, `- ` bullet rows, attribution row; every cell flattened (`\t`/`\r`/`\n` → space) so column counts never break; inserted after the weekly challenge rows and before the season-challenge rows
+- [ ] `display/email.py`: section after the weekly-highlight `<div>` and before the season challenges — `<h2>🤖 Commissioner's Take (AI-generated)</h2>`, AI-generated marker, `<p>` paragraphs via `_escape_html`, `<ul><li>` bullets, attribution line; notice as a single `<p>` in the same slot
 - [ ] `tests/test_ai_summary_rendering.py`: AC-001 for both, AC-002, notice case, AC-011 (tab/newline/`"`/`<`/`&`/emoji: one sheet row with the right tab count, HTML-escaped in email, and the email section lands before the footer)
 - [ ] `tests/test_ai_summary_rendering.py`: **AC-012 mode agreement** — parametrise over a playoff fixture and a championship fixture; for each, build the digest from the same inputs and assert `digest["mode"]` matches the mode marker the five outputs already emit (`FINAL REGULAR SEASON STANDINGS` for playoffs, `CHAMPIONSHIP WEEK` for championship, `report_type` in JSON). The assertion is about the digest's *filtering* agreeing with what the formatters render, not about re-deriving the predicate
 
@@ -228,7 +232,7 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 
 **Validation**: `pytest -q` green; the sheet output has a constant field count per row in the new block.
 
-**ACs**: AC-001 · AC-002 · AC-011 · FR-005
+**ACs**: AC-001 · AC-002 · AC-011 · AC-018 · FR-005
 
 **Files**: `display/sheets.py`, `display/email.py`, `tests/test_ai_summary_rendering.py`
 
@@ -297,8 +301,8 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 
 - [ ] All 17 ACs covered by an offline test (task list above), plus WC-001 statically
 - [ ] Feature off: five formats byte-identical, zero calls, no notice, no warning (AC-001)
-- [ ] Feature on: section in all five formats, last, labelled, before the format footer (AC-002/FR-005)
-- [ ] One provider call per run across 1/3/10 leagues and `--output-dir` (AC-003)
+- [ ] Feature on: section in all five formats, after the weekly highlights and before the season challenges (AC-002/AC-018/FR-005); JSON keeps its top-level key
+- [ ] One provider call per run across 1/3/10 leagues and `--output-dir` in the normal case, at most one contract retry (AC-003/AC-019)
 - [ ] Every failure path: full report, exit 0, one notice, one `::warning::` under Actions (AC-004)
 - [ ] No key, request body, response body or endpoint path in any artefact (AC-005)
 - [ ] `test_generate_propagates_programming_errors` exists and passes; the production `_urlopen` path is covered by a patched-`urlopen` test
@@ -330,3 +334,4 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 |---|---|---|---|
 | 1.0 | 2026-10-21 | AI Agent | Initial 14-task breakdown, one AC map per task, signature-ordering constraint recorded |
 | 1.1 | 2026-10-21 | AI Agent | Gate 2 revisions: old Tasks 7 and 8 merged into one narrative task (13 total, renumbered); Task 7 gains `test_generate_propagates_programming_errors` and the `JSONDecodeError`-only parse rule; Task 5 adopts `TypedDict` plus a golden recursive key-set test; Task 6 corrects the transport to `_urlopen(request, timeout) -> bytes` and adds the `patch("urllib.request.urlopen")` test; Task 4 adds the `.env`-only ordering test; Task 1 uses `int \| None = None`; Task 11's `--help` reduces to the egress paragraph; Task 12 drops `AI_SUMMARY_MODEL`; Task 13 drops `AGENTS.md` |
+| 1.2 | 2026-10-21 | AI Agent | Spec v0.12: Task 7 gains the league-scope prompt (count and names from the digest, hashed), the one-retry contract loop and `attempts`; Task 2 gains `provenance.attempts` (1 or 2); Task 8 records `attempts` in JSON; Tasks 9 and 10 move the section between the weekly highlights and the season challenges with the notice in the same slot, and claim AC-018; Task 7 claims AC-019…AC-022. |

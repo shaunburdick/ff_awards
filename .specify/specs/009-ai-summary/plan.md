@@ -12,7 +12,7 @@
 
 Add one optional section to the weekly report (`ff-tracker`), in all five formats, generated once per run from the report's own domain models, rendered last, and never able to stop the report. Nothing else changes: no new CLI, no new format, no new dependency, no change to `ff-championship` or `ff-season-recap`.
 
-**Out of scope** (spec "Not doing", unchanged): season recap and championship CLIs, other provider families, streaming/retries/caching, a user-authored system prompt, `weekly_games` in JSON, per-format opt-out, factual verification, format arguments for this feature.
+**Out of scope** (spec "Not doing", unchanged): season recap and championship CLIs, other provider families, streaming/caching, retries beyond the single contract retry FR-003 allows, a user-authored system prompt, `weekly_games` in JSON, per-format opt-out, factual verification, format arguments for this feature.
 
 ---
 
@@ -27,7 +27,7 @@ Add one optional section to the weekly report (`ff-tracker`), in all five format
 - **Testing**: pytest + `unittest.mock.patch` (already the repo's pattern in `tests/test_main_cli.py`) + one in-repo fake client. **No network in the suite.**
 
 ### Rationale
-The single HTTP call, one JSON body and one prompt are small enough that a dependency (httpx, openai SDK) buys nothing and costs a lockfile entry, a supply-chain surface and a second retry/timeout policy to reason about. `urllib` also makes the "no retries, no streaming" rule structural: there is no client library that might retry behind our back.
+The single HTTP call, one JSON body and one prompt are small enough that a dependency (httpx, openai SDK) buys nothing and costs a lockfile entry, a supply-chain surface and a second retry/timeout policy to reason about. `urllib` also keeps retry policy structural: the client is one-shot, and the single contract retry lives in the summary service, so no library retries behind our back.
 
 **Constitutional Compliance**:
 - Article I: fully typed, no `Any` (the digest is a `TypedDict`, parsed JSON is narrowed from `object`)
@@ -200,27 +200,27 @@ Two test levels, both network-free:
 - **Service level**: `FakeAIClient` implements `AIClient`.
 - **Client level**: `FakeTransport` implements `HTTPTransport` for the request/error matrix, **plus** one test that patches `urllib.request.urlopen` and drives `_urlopen` itself — the default (production) path, which every injected-fake test would otherwise never execute.
 
-### Decision 7: Where the section lands, and why the trailing "Game data" line counts as a footer
+### Decision 7: Where the section lands — after the weekly highlights
 
-Per format, the section is inserted so that **no existing line moves**:
+FR-005 v0.12 fixes the order: `header → weekly highlights → Commissioner's Take → season-long challenges → per-league standings → overall top teams → game data`. The section is inserted between the highlights and the season challenges, so no existing line moves and the failure notice takes the same slot.
 
-| Format | Insert before | Rationale |
-|---|---|---|
-| console | the trailing `📊 Game data: …` line when present (regular season), otherwise the end (playoff mode) | that line is the report's closing summary; the section is "after standings" and before it |
-| sheets | the end — after the final `OVERALL TOP TEAMS` block | sheets emits its `Game data:` line *mid-report* (right after season challenges), so the last section is the overall table, not standings |
-| markdown | the trailing `📊 **Game data:** …` line when present, otherwise the end | same as console |
-| email | the `<div class="footer">` block | that block *is* the footer (game data + version + repo link) |
-| json | nothing — new top-level `ai_summary` key appended last | JSON has no order-sensitive footer |
+| Format | Insert after | Before | Notes |
+|---|---|---|---|
+| console | the weekly highlights table (and its championship note) | the `💰 SEASON-LONG CHALLENGES` / `📊 REGULAR SEASON FINAL RESULTS` block | the blank-line + banner pattern is unchanged |
+| sheets | the weekly challenge rows | the `OVERALL SEASON CHALLENGES` rows | the AI block keeps its blank row |
+| markdown | the weekly highlight sections | the `## 💰 OVERALL SEASON CHALLENGES` / `# 📊 …` block | the TOC is a fixed list and still omits the new heading |
+| email | the weekly-highlight `<div>` | the season-challenge section | the footer stays last |
+| json | — | — | top-level `ai_summary`, unchanged |
 
-For console and markdown the trailing "Game data" line is the only content after standings, so treating it as the footer satisfies FR-005 ("after the existing deterministic sections and before any format footer") and gives AC-001 a non-empty post-section suffix. Sheets prints its `Game data:` line *before* the standings (right after the season challenges), so the section is appended at the very end there and AC-001's suffix is empty — "output equals its prefix" is the same assertion with a shorter suffix.
+The AC-001 prefix/suffix assertion is now a **pure insertion in the middle**: `off` equals the on-output with the section removed, which the difflib opcode test proves (exactly one `insert` op, everything else equal). Repositioning is what changed; the bytes outside the block did not.
 
-**Championship mode** (Gate 2 correction): console emits weekly highlights, then season challenges, then skips standings (`console.py:126-136`), so the report ends on the season-challenge table — not on a player-highlight note line as v1.0 claimed. Append-at-end is still correct in every mode; the v1.0 reason was wrong, the placement was not.
+**Championship mode**: the same slot — after the weekly highlights (which run there too) and before the season-challenge table, which is then the last deterministic block.
 
 **Not changed**: the markdown table of contents is a fixed list (`markdown.py:89-102`), so the new `##` heading does not enter it. Adding it would change an existing section's content; FR-005 forbids that.
 
-### Decision 8: `prompt_sha` hashes the template and the raw user prompt, 12 hex chars
+### Decision 8: `prompt_sha` hashes the composed system prompt and the user prompt, 12 hex chars
 
-`sha256(SYSTEM_PROMPT + "\n\x00\n" + user_prompt).hexdigest()[:12]` — the fixed separator is `\n\x00\n`, the length matches the spec's example (`9f2c1ab4e7d0`). Hashing the *composed* prompt instead would count the instructions block twice and make the hash sensitive to the block's delimiters rather than to the instructions.
+`sha256(system_prompt + "\n\x00\n" + user_prompt).hexdigest()[:12]` — the fixed separator is `\n\x00\n`, the length matches the spec's example (`9f2c1ab4e7d0`), and `system_prompt` is the **composed** prompt (`build_system_prompt(user_prompt, league_names)`), because FR-008 hashes the prompt text and the league scope is now part of it. The hash therefore moves when the contract, the league set or the commissioner block changes — which is the point: an archived report's prompt+scope is identifiable from the hash alone.
 
 ---
 
@@ -245,7 +245,8 @@ class AIProvenance:
     prompt_sha: str      # 12 hex chars
     generated_at: str    # ISO 8601 UTC, e.g. 2026-10-14T05:03:11Z
     truncated: bool = False
-    # __post_init__: all strings non-empty
+    attempts: int = 1    # 1, or 2 when the contract retry was spent
+    # __post_init__: all strings non-empty; attempts in {1, 2}
 
 @dataclass(frozen=True)
 class AISummary:
@@ -463,8 +464,9 @@ class AISummaryService:
     def _normalise(self, ...) -> AISummary
 ```
 
-- **Prompt**: the constant states the JSON contract, the caps, the no-invented-facts rule, the commissioner voice, and the 60-word guidance floor (explicitly guidance, not a validated requirement). `build_system_prompt` appends the block only for a non-empty user prompt.
-- **Request**: `AIRequest(system_prompt=build_system_prompt(config.user_prompt), user_message=json.dumps(digest, ensure_ascii=False))`.
+- **Prompt**: the constant states the JSON contract, the caps, the no-invented-facts rule, the commissioner voice, and the 60-word guidance floor (explicitly guidance, not a validated requirement). `build_system_prompt(config.user_prompt, league_names)` then appends two things: the **league scope** — the exact count and the names verbatim, built from the digest at request time (`League scope: this report covers exactly 3 leagues: "A", "B", "C". Return exactly 3 entries in "leagues" - one for each name above, using those names verbatim and in that order. Do not add, duplicate, split or rename a league.`), and the commissioner block only for a non-empty user prompt. The anchor exists because a live run returned four sections for three leagues; no matching rule can repair an extra section.
+- **Request**: `AIRequest(system_prompt=build_system_prompt(config.user_prompt, [league["league"] for league in digest["leagues"]]), user_message=json.dumps(digest, ensure_ascii=False), max_tokens=config.max_tokens, reasoning_effort=config.reasoning_effort)`.
+- **Retry (FR-003)**: `_generate` loops at most twice around *client call + parse + match*, catching only `AIContractError`. A contract failure on attempt 1 sets `attempts = 2` and re-sends the **same `AIRequest` object** — same prompt, payload, model and budget, no mutation. A second contract failure re-raises into the ordinary fail-open boundary. `AIHTTPError`, `AITransportError`, `AITimeoutError` and `AITruncationError` are not caught, so they surface after exactly one call. The retry lives here, not in the client, because the client must stay one-shot and honest about what happened; `_normalise` receives `attempts` and writes it into provenance.
 - **Parse** (`_parse_response`): `json.loads` → structural checks (headline `str` non-empty; `leagues` list of dicts; `league` `str`; `paragraphs` list of `str` with ≥1 having a word after strip; `bullets` list of `str`; `season_note` `str` non-empty). Exactly one exception is converted — `json.JSONDecodeError` → `AIContractError(CONTRACT_REASON)`; every other rejection is an explicit `isinstance`/`len`/`strip` check that raises `AIContractError` itself. No `except TypeError`/`ValueError`/`KeyError`, and no `except Exception` (Decision 1). The parsed value is bound to `object` and narrowed level by level, so nothing returns `Any`.
 - **Match** (`_match_leagues`) — FR-004's total order, applied once:
   1. `by_name = {e["league"].strip().casefold(): e}`; if `len(by_name) == len(entries) == len(divisions)` and every league name is a key → map by name, emit in **digest order** (response order irrelevant).
@@ -492,8 +494,8 @@ Each gains one private method, `_format_ai_summary(ai_summary) -> str | list[str
 |---|---|---|
 | `console.py` | `🤖 COMMISSIONER'S TAKE (AI-GENERATED)` header with the usual `"=" * 80` rules, headline, per-league name line, paragraphs (one line each — no wrapping, AC-011), `• ` bullets, `Generated by <model> · AI-generated text` | one line, same position |
 | `sheets.py` | blank row, `AI SUMMARY (AI-GENERATED)`, `HEADLINE: …`, `LEAGUE: …` per league, one row per paragraph, `- ` bullet rows, attribution row; every cell flattened (`\t`, `\r`, `\n` → space) | one flattened notice row |
-| `email.py` | `<h2>🤖 Commissioner's Take (AI-generated)</h2>` + marker, `<p>` paragraphs (`_escape_html`), `<ul><li>`, attribution line; inserted before `<div class="footer">` | one `<p>` |
-| `json.py` | `data["ai_summary"]` appended last: `headline`, `season_note`, `leagues`, `provenance` | `{"error": notice}` |
+| `email.py` | `<h2>🤖 Commissioner's Take (AI-generated)</h2>` + marker, `<p>` paragraphs (`_escape_html`), `<ul><li>`, attribution line; inserted after the weekly highlights, before the season challenges | one `<p>` |
+| `json.py` | top-level `ai_summary` key (not positional): `headline`, `season_note`, `leagues`, `provenance` (incl. `attempts`) | `{"error": notice}` |
 | `markdown.py` | `## 🤖 Commissioner's Take (AI-generated)`, `### <league>`, paragraphs, `- ` bullets, `_Generated by <model> · AI-generated text_` | one line (italic) |
 
 The JSON `leagues` entries reuse our league names and the normalised paragraphs/bullets — no re-matching in the formatter (display never computes).
@@ -557,7 +559,7 @@ env:
 **New (11)**
 | File | Contents |
 |---|---|
-| `ff_tracker/models/ai_summary.py` | `AISummaryLeague`, `AIProvenance`, `AISummary`, `AISummaryUnavailable`, `AISummaryResult` |
+| `ff_tracker/models/ai_summary.py` | `AISummaryLeague`, `AIProvenance` (incl. `attempts: 1\|2`), `AISummary`, `AISummaryUnavailable`, `AISummaryResult` |
 | `ff_tracker/services/ai_digest.py` | `build_digest` + typed helpers |
 | `ff_tracker/services/ai_client.py` | `AIRequest`, `AIClient`, `HTTPTransport`, `OpenAICompatibleClient`, `MAX_TOKENS` |
 | `ff_tracker/services/ai_summary_service.py` | `SYSTEM_PROMPT`, `build_system_prompt`, `prompt_sha`, `AISummaryService` |
@@ -665,6 +667,11 @@ No network: `FakeAIClient` implements `AIClient`; `FakeTransport` implements `HT
 | AC-013/014/015 caps, first-paragraph truncation, `truncated` | service normalisation tests |
 | AC-016 user prompt reaches the block, changes `prompt_sha`, cannot break the shape | service test |
 | AC-017 prompt cap + non-default limit | config test |
+| AC-018 placement in console/markdown/email/sheets, notice in the same slot, JSON unchanged | `test_ai_summary_rendering.py` — per-format marker order (`weekly < ai < season`), notice order, JSON key |
+| AC-019 contract-failure retry then success: 2 calls, `attempts: 2`, identical request | `TestRetry::test_contract_failure_then_success_retries_once`, `test_retry_reuses_the_identical_request` |
+| AC-020 two contract failures: 2 calls, notice, exit 0 | `TestRetry::test_two_contract_failures_stop_after_two_calls` |
+| AC-021 no retry on HTTP 500 / transport / timeout / truncation | `TestRetry::test_non_contract_failures_are_not_retried` (4 ids) |
+| AC-022 first-attempt success records `attempts: 1` | `TestRetry::test_first_attempt_success_records_one_attempt` |
 | WC-001 static workflow check | `tests/test_ai_summary_config_workflow.py` (string assertions on the YAML, no YAML dependency) |
 | LV-001…004 | manual, once, against the live provider (not in the suite) |
 
@@ -703,7 +710,7 @@ Guards the ACs do not name but Gate 2 required:
 
 With the feature off, `load_ai_summary_config()` is one dict read and an `os.getenv` loop; the run budget is unchanged (Article X, as scoped in Complexity Tracking).
 
-With it on, the run gains one provider call: 7.7–34.4 s in the spike, bounded by `AI_SUMMARY_TIMEOUT` (default 120 s). Nothing is retried and nothing is cached; one call per run regardless of league or format count, which is the only performance requirement this feature can enforce.
+With it on, the run gains one provider call: 7.7–34.4 s in the spike, bounded by `AI_SUMMARY_TIMEOUT` (default 120 s). A contract failure adds exactly one identical retry (two calls, roughly two socket-read timeouts worst case); nothing else is retried and nothing is cached. One call per run in the normal case regardless of league or format count, which is the only performance requirement this feature can enforce.
 
 Digest size is bounded by the data: 3–4 leagues × (≤16 standings rows + ≤8 matchup rows + ≤7 challenges) — a few KB of JSON, far inside any model's context.
 
@@ -743,7 +750,7 @@ Digest size is bounded by the data: 3–4 leagues × (≤16 standings rows + ≤
 
 **Spec reasoning (v0.8)**: 7.7–34.4 s per call in the spike, bounded by `AI_SUMMARY_TIMEOUT` **on each socket read**. There is no wall-clock deadline, so a pathologically slow provider can exceed the configured value. The 5-second budget applies to the deterministic report with the feature off.
 
-**Boundary this plan implements**: off by default; zero added network I/O when off; one call per run when on; no retries, no streaming, no per-format second call; no thread or signal wrapper (a timed-out `urlopen` cannot be cancelled, so a worker thread would hang shutdown for the same duration it was meant to bound). A caller that cares about schedule duration leaves the feature off, which is the default.
+**Boundary this plan implements**: off by default; zero added network I/O when off; one call per run when on, plus at most one identical retry after a contract failure; no other retries, no streaming, no per-format second call; no thread or signal wrapper (a timed-out `urlopen` cannot be cancelled, so a worker thread would hang shutdown for the same duration it was meant to bound). A caller that cares about schedule duration leaves the feature off, which is the default.
 
 ### Held without a governing FR
 
@@ -790,3 +797,4 @@ None open. Decisions the spec leaves to the plan, recorded here so Gate 3 can ob
 | 1.0 | 2026-10-21 | AI Agent | Initial implementation plan: 14 tasks, 11 new files, 21 modified files, two declared deviations, seven plan-level decisions recorded for Gate 2 |
 | 1.1 | 2026-10-21 | AI Agent | Gate 2 revisions. Fail-open breadth narrowed: only `JSONDecodeError` is converted in `_parse_response`, every other rejection is an explicit check, and `test_generate_propagates_programming_errors` is a done-criterion. Digest adopted as a `TypedDict` document (total keys, `null` for unknown) with a golden recursive key-set test. Transport corrected to the `_urlopen(request, timeout) -> bytes` wrapper plus a `patch("urllib.request.urlopen")` test, because `urlopen` returns `HTTPResponse` and takes `data` second. Config load ordering stated: the loader calls `load_environment()` and runs after `create_config`, with a `.env`-only test. `reg_season_count` changed to `int \| None = None` so "unknown" is not a fabricated 14. Tasks 7 and 8 merged into one narrative task (13 total, renumbered) so the green-suite-per-task invariant holds. Cuts applied: the `--help` variable table reduces to the egress paragraph, `AI_SUMMARY_MODEL` leaves the workflow `env:`, the `AGENTS.md` paragraph is dropped. Console/championship placement rationale corrected (the report ends on the season-challenge table). Spec nit recorded: the configuration table still calls `AI_SUMMARY_TIMEOUT` a whole-call timeout |
 | 1.2 | 2026-10-21 | AI Agent | Gate 3 bookkeeping: the Article III boundary now records why the AI exception hierarchy derives from `Exception` rather than `FFTrackerError` (so a narrative failure cannot be rendered as a report error) and why transport failures, including mid-body `OSError`/`HTTPException`, are mapped inside the client; a new "Held without a governing FR" note records the non-default `User-Agent` as a hard requirement of the default endpoint, which no criterion covers. |
+| 1.3 | 2026-10-21 | AI Agent | Spec v0.12: the section moves from the report's end to between the weekly highlights and the season challenges in console, markdown, email and sheets (JSON unchanged), so Decision 7's placement table and Component 9 are restated and AC-001 becomes a mid-document insertion; `_generate` retries once for `AIContractError` only, reusing the same request, with `provenance.attempts` (1 or 2) recording it; the system prompt names the exact league count and the names, built from the digest at request time, so `prompt_sha` now hashes the composed prompt; AC-018…AC-022 added to the mapping and the performance note moved from "no retries" to "one identical retry". |

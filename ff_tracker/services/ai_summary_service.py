@@ -92,27 +92,44 @@ class _RawNarrative(TypedDict):
     season_note: str
 
 
-def build_system_prompt(user_prompt: str) -> str:
+def build_system_prompt(user_prompt: str, league_names: Sequence[str]) -> str:
     """
-    Return the system prompt, with the commissioner's instructions appended.
+    Return the system prompt: contract, the exact league scope, then the block.
 
-    An empty or whitespace-only prompt means "no extra instructions" and the
-    block is omitted rather than sent empty.
+    The league count and names are built from the digest at request time, so the
+    model is anchored to exactly the sections that exist: a live run returned
+    four sections for three leagues, which no case-insensitive matching can
+    repair. An empty or whitespace-only user prompt means "no extra
+    instructions" and that block is omitted rather than sent empty.
     """
-    if not user_prompt.strip():
-        return SYSTEM_PROMPT
-    return f"{SYSTEM_PROMPT}\n\n{INSTRUCTIONS_HEADING}\n{user_prompt}"
+    prompt = SYSTEM_PROMPT
+
+    if league_names:
+        count = len(league_names)
+        noun = "league" if count == 1 else "leagues"
+        quoted = ", ".join(f'"{name}"' for name in league_names)
+        prompt += (
+            f"\nLeague scope: this report covers exactly {count} {noun}: {quoted}.\n"
+            f'Return exactly {count} entries in "leagues" - one for each name above, '
+            "using those names verbatim and in that order. Do not add, duplicate, "
+            "split or rename a league.\n"
+        )
+
+    if user_prompt.strip():
+        prompt += f"\n\n{INSTRUCTIONS_HEADING}\n{user_prompt}"
+    return prompt
 
 
-def prompt_sha(user_prompt: str) -> str:
+def prompt_sha(system_prompt: str, user_prompt: str) -> str:
     """
-    Hash the template and the user prompt, in that order, with a fixed separator.
+    Hash the composed system prompt and the user prompt, in that order.
 
-    The limitation is stated in the spec: the prompt itself is not archived, so
-    an archived CI report is reproducible only from the committed workflow
-    value together with this hash.
+    The separator is fixed, so the hash moves whenever the contract, the league
+    scope or the commissioner's block changes. The limitation is stated in the
+    spec: the prompt itself is not archived, so an archived CI report is
+    reproducible only from the committed workflow value together with this hash.
     """
-    material = f"{SYSTEM_PROMPT}{PROMPT_HASH_SEPARATOR}{user_prompt}"
+    material = f"{system_prompt}{PROMPT_HASH_SEPARATOR}{user_prompt}"
     return hashlib.sha256(material.encode("utf-8")).hexdigest()[:PROMPT_HASH_LENGTH]
 
 
@@ -160,12 +177,23 @@ class AISummaryService:
         current_week: int | None,
         championship: ChampionshipLeaderboard | None,
     ) -> AISummary:
-        """Build, send, parse, match and normalise one narrative."""
+        """
+        Build, send, parse, match and normalise one narrative.
+
+        At most one retry, and only for a contract failure: malformed JSON, a
+        wrong shape, a league count or name mismatch, or an empty required
+        field. Those are sampling noise. HTTP errors, transport failures,
+        timeouts and truncation are not retried — the second attempt would fail
+        identically at the same cost. The retry reuses the same request
+        object, so prompt, payload, model and budget are unchanged.
+        """
         digest = build_digest(
             divisions, challenges, weekly_challenges, current_week, championship
         )
+        league_names = [league["league"] for league in digest["leagues"]]
+        system_prompt = build_system_prompt(self._config.user_prompt, league_names)
         request = AIRequest(
-            system_prompt=build_system_prompt(self._config.user_prompt),
+            system_prompt=system_prompt,
             user_message=json.dumps(digest, ensure_ascii=False),
             max_tokens=self._config.max_tokens,
             reasoning_effort=self._config.reasoning_effort,
@@ -174,10 +202,20 @@ class AISummaryService:
         # world-readable, so a local -vv run is the only place it belongs.
         logger.debug("AI summary system prompt:\n%s", request.system_prompt)
 
-        content = self._client.complete(request)
-        narrative = self._parse_response(content)
-        leagues = self._match_leagues(narrative["leagues"], divisions)
-        return self._normalise(narrative, leagues)
+        attempts = 1
+        while True:
+            try:
+                content = self._client.complete(request)
+                narrative = self._parse_response(content)
+                matched = self._match_leagues(narrative["leagues"], divisions)
+                return self._normalise(narrative, matched, attempts, system_prompt)
+            except AIContractError:
+                if attempts >= 2:
+                    raise
+                # DEBUG: FR-009's allowlist covers model/status/latency/tokens,
+                # and provenance.attempts is the durable record of the retry.
+                logger.debug("AI summary contract failure; retrying once")
+                attempts = 2
 
     def _parse_response(self, content: str) -> _RawNarrative:
         """
@@ -253,6 +291,8 @@ class AISummaryService:
         self,
         narrative: _RawNarrative,
         matched: Sequence[tuple[str, _RawLeague]],
+        attempts: int,
+        system_prompt: str,
     ) -> AISummary:
         """Apply the caps, structurally, and record whether anything was cut."""
         truncated = False
@@ -272,9 +312,10 @@ class AISummaryService:
             season_note=season_note,
             provenance=AIProvenance(
                 model=self._config.model,
-                prompt_sha=prompt_sha(self._config.user_prompt),
+                prompt_sha=prompt_sha(system_prompt, self._config.user_prompt),
                 generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 truncated=truncated or headline_cut or note_cut,
+                attempts=attempts,
             ),
         )
 

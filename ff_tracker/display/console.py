@@ -131,6 +131,11 @@ class ConsoleFormatter(BaseFormatter):
                         "Note: Player highlights include all players across all teams."
                     )
 
+        # AI narrative: after the weekly highlights, before the season challenges
+        if ai_summary is not None:
+            output_lines.append("")
+            output_lines.append(self._format_ai_summary(ai_summary))
+
         # Season challenges (with historical note if in playoffs)
         if challenges:
             output_lines.append("")
@@ -171,11 +176,6 @@ class ConsoleFormatter(BaseFormatter):
                 output_lines.append(f"\n📊 Game data: {total_games} individual results processed")
             else:
                 output_lines.append("\n⚠️  Game data: Limited - some challenges may be incomplete")
-
-        # AI narrative: last section, only when the feature produced something to say
-        if ai_summary is not None:
-            output_lines.append("")
-            output_lines.append(self._format_ai_summary(ai_summary))
 
         return "\n".join(output_lines)
 

@@ -146,6 +146,11 @@ class SheetsFormatter(BaseFormatter):
 
                 output_lines.append("")
 
+        # AI narrative: after the weekly challenge rows, before the season rows
+        if ai_summary is not None:
+            output_lines.append("")
+            output_lines.extend(self._format_ai_summary(ai_summary))
+
         # Season challenges with historical note in playoff mode
         if challenges:
             if is_playoff_mode:
@@ -211,11 +216,6 @@ class SheetsFormatter(BaseFormatter):
                 f"{i}\t{team.name}\t{team.owner.full_name}\t{team.division}\t{team.points_for:.1f}\t"
                 f"{team.points_against:.1f}\t{team.wins}-{team.losses}\t{playoff_indicator}"
             )
-
-        # AI narrative: last block, appended so nothing deterministic moves
-        if ai_summary is not None:
-            output_lines.append("")
-            output_lines.extend(self._format_ai_summary(ai_summary))
 
         return "\n".join(output_lines)
 

@@ -388,6 +388,10 @@ class EmailFormatter(BaseFormatter):
 
             html_content += "</div>\n"
 
+        # AI narrative: after the weekly highlights, before the season challenges
+        if ai_summary is not None:
+            html_content += self._format_ai_summary(ai_summary)
+
         # Season challenges with historical note in playoff mode
         if challenges:
             if is_playoff_mode:
@@ -485,10 +489,6 @@ class EmailFormatter(BaseFormatter):
 
         html_content += "</table>\n"
         html_content += '<p style="margin-top: 15px; font-style: italic; color: #666;"><strong>*</strong> = Currently in playoff position</p>\n'
-
-        # AI narrative: after the deterministic sections, before the footer
-        if ai_summary is not None:
-            html_content += self._format_ai_summary(ai_summary)
 
         # Footer section (always present)
         total_games = self._calculate_total_games(divisions)

@@ -99,6 +99,32 @@ class TestAIProvenance:
             AIProvenance(model="m", prompt_sha="abc", generated_at=" ")
 
 
+class TestAttempts:
+    """provenance.attempts records whether the one contract retry was spent."""
+
+    def test_defaults_to_one(self) -> None:
+        assert _provenance().attempts == 1
+
+    def test_accepts_two(self) -> None:
+        provenance = AIProvenance(
+            model="deepseek-v4.1-flash",
+            prompt_sha="abc",
+            generated_at="2026-10-14T05:03:11Z",
+            attempts=2,
+        )
+        assert provenance.attempts == 2
+
+    @pytest.mark.parametrize("value", [0, 3, -1])
+    def test_rejects_anything_else(self, value: int) -> None:
+        with pytest.raises(DataValidationError, match="attempts must be 1 or 2"):
+            AIProvenance(
+                model="deepseek-v4.1-flash",
+                prompt_sha="abc",
+                generated_at="2026-10-14T05:03:11Z",
+                attempts=value,
+            )
+
+
 class TestAISummary:
     """Article II validation for the narrative."""
 

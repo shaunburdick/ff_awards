@@ -190,6 +190,7 @@ class JsonFormatter(BaseFormatter):
                 "prompt_sha": ai_summary.provenance.prompt_sha,
                 "generated_at": ai_summary.provenance.generated_at,
                 "truncated": ai_summary.provenance.truncated,
+                "attempts": ai_summary.provenance.attempts,
             },
         }
 

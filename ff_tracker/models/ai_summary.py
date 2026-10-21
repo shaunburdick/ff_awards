@@ -56,6 +56,8 @@ class AIProvenance:
     prompt_sha: str
     generated_at: str  # ISO 8601 UTC
     truncated: bool = False
+    # 1, or 2 when one contract-failure retry was spent on sampling noise.
+    attempts: int = 1
 
     def __post_init__(self) -> None:
         """Validate provenance after construction."""
@@ -71,6 +73,9 @@ class AIProvenance:
 
         if not self.generated_at.strip():
             raise DataValidationError("Provenance timestamp cannot be empty")
+
+        if self.attempts not in (1, 2):
+            raise DataValidationError(f"Provenance attempts must be 1 or 2: {self.attempts}")
 
 
 @dataclass(frozen=True)

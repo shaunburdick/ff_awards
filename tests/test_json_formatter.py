@@ -847,6 +847,7 @@ class TestAISummarySection:
             "prompt_sha": "9f2c1ab4e7d0",
             "generated_at": "2026-10-14T05:03:11Z",
             "truncated": False,
+            "attempts": 1,
         }
 
     def test_serializes_the_notice_as_an_error(

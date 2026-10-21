@@ -12,11 +12,15 @@ from ai_fakes import LEAGUE_A, LEAGUE_B, FakeAIClient, FakeTransport, make_regul
 
 from ff_tracker.config import DEFAULT_AI_MAX_TOKENS, DEFAULT_AI_MODEL, AISummaryConfig
 from ff_tracker.exceptions import (
+    AIContractError,
     AIHTTPError,
     AISummaryError,
+    AITimeoutError,
+    AITransportError,
     AITruncationError,
 )
 from ff_tracker.models import AISummary, AISummaryUnavailable
+from ff_tracker.services.ai_client import AIRequest
 from ff_tracker.services.ai_summary_service import (
     HEADLINE_WORD_CAP,
     INSTRUCTIONS_HEADING,
@@ -77,6 +81,21 @@ def _response(
     return json.dumps(payload)
 
 
+class SequenceClient:
+    """Returns a canned response per call, or raises a canned error."""
+
+    def __init__(self, *responses: str | AISummaryError) -> None:
+        self.responses: list[str | AISummaryError] = list(responses)
+        self.requests: list[AIRequest] = []
+
+    def complete(self, request: AIRequest) -> str:
+        self.requests.append(request)
+        item = self.responses.pop(0)
+        if isinstance(item, AISummaryError):
+            raise item
+        return item
+
+
 def _service(
     response: str = "",
     *,
@@ -88,6 +107,10 @@ def _service(
     client = FakeAIClient(response=response, error=error)
     config = _config(user_prompt, max_tokens=max_tokens, reasoning_effort=reasoning_effort)
     return AISummaryService(config, client), client
+
+
+def _two_sections() -> list[dict[str, object]]:
+    return [_league_section(LEAGUE_A), _league_section(LEAGUE_B)]
 
 
 def _generate(service: AISummaryService, divisions=None) -> object:
@@ -166,14 +189,19 @@ class TestHappyPath:
 
 
 class TestSystemPrompt:
-    """FR-010: the commissioner's instructions arrive in a delimited block."""
+    """FR-003/FR-010: league scope and the commissioner's instructions."""
+
+    NAMES = [LEAGUE_A, LEAGUE_B]
+
+    def _prompt(self, user_prompt: str = "") -> str:
+        return build_system_prompt(user_prompt, self.NAMES)
 
     def test_no_block_without_a_user_prompt(self) -> None:
-        assert build_system_prompt("") == SYSTEM_PROMPT
-        assert INSTRUCTIONS_HEADING not in build_system_prompt("   \n ")
+        assert self._prompt() == build_system_prompt("", self.NAMES)
+        assert INSTRUCTIONS_HEADING not in build_system_prompt("   \n ", self.NAMES)
 
     def test_block_is_appended_verbatim(self) -> None:
-        composed = build_system_prompt(USER_PROMPT)
+        composed = self._prompt(USER_PROMPT)
         assert composed.startswith(SYSTEM_PROMPT)
         assert f"{INSTRUCTIONS_HEADING}\n{USER_PROMPT}" in composed
 
@@ -182,17 +210,54 @@ class TestSystemPrompt:
         _generate(service)
         assert f"{INSTRUCTIONS_HEADING}\n{USER_PROMPT}" in client.requests[0].system_prompt
 
+    def test_prompt_states_the_exact_count_and_names(self) -> None:
+        """AC: the count and names are built from the digest, not a constant."""
+        composed = self._prompt()
+
+        assert "exactly 2 leagues" in composed
+        assert f'"{LEAGUE_A}", "{LEAGUE_B}"' in composed
+        assert 'Return exactly 2 entries in "leagues"' in composed
+        assert "Do not add, duplicate, split or rename a league" in composed
+
+    def test_prompt_scope_follows_the_digest(self) -> None:
+        """A different league set changes the scope sentence, and the hash."""
+        one = build_system_prompt("", [LEAGUE_A])
+        two = build_system_prompt("", self.NAMES)
+
+        assert "exactly 1 league:" in one
+        assert f'"{LEAGUE_B}"' not in one
+        assert prompt_sha(one, "") != prompt_sha(two, "")
+
+    def test_scope_omitted_when_there_are_no_leagues(self) -> None:
+        assert "League scope" not in build_system_prompt("", [])
+
+    def test_request_carries_the_scope_from_the_digest(self) -> None:
+        service, client = _service(_response())
+        _generate(service)
+
+        prompt = client.requests[0].system_prompt
+        assert f'"{LEAGUE_A}"' in prompt and f'"{LEAGUE_B}"' in prompt
+
     def test_prompt_sha_is_stable_and_sensitive(self) -> None:
-        assert prompt_sha(USER_PROMPT) == prompt_sha(USER_PROMPT)
-        assert prompt_sha(USER_PROMPT) != prompt_sha("")
-        assert prompt_sha("") != prompt_sha("Different tone.")
+        prompt = self._prompt(USER_PROMPT)
+        assert prompt_sha(prompt, USER_PROMPT) == prompt_sha(prompt, USER_PROMPT)
+        assert prompt_sha(prompt, USER_PROMPT) != prompt_sha(prompt, "")
+        assert prompt_sha(prompt, "") != prompt_sha(prompt, "Different tone.")
+
+    def test_prompt_sha_covers_the_scope(self) -> None:
+        """The hash covers the composed prompt, so the names are part of it."""
+        assert prompt_sha(build_system_prompt("", [LEAGUE_A]), "") != prompt_sha(
+            build_system_prompt("", [LEAGUE_B]), ""
+        )
 
     def test_prompt_sha_reaches_provenance(self) -> None:
         service, _ = _service(_response(), user_prompt=USER_PROMPT)
         result = _generate(service)
 
         assert isinstance(result, AISummary)
-        assert result.provenance.prompt_sha == prompt_sha(USER_PROMPT)
+        assert result.provenance.prompt_sha == prompt_sha(
+            build_system_prompt(USER_PROMPT, self.NAMES), USER_PROMPT
+        )
 
     def test_system_prompt_names_the_contract_and_the_caps(self) -> None:
         assert "headline" in SYSTEM_PROMPT
@@ -251,6 +316,82 @@ class TestFailureDegradation:
 
         assert isinstance(result, AISummaryUnavailable)
         assert result.reason == "league count mismatch (2 leagues, 1 sections)"
+
+
+class TestRetry:
+    """AC-019..AC-022: one retry, contract failures only, same request object."""
+
+    def _service_with(self, *responses: str | AISummaryError) -> tuple[AISummaryService, SequenceClient]:
+        client = SequenceClient(*responses)
+        return AISummaryService(_config(), client), client
+
+    def _invalid_then_valid(self) -> tuple[AISummaryService, SequenceClient]:
+        four = [*_two_sections(), _league_section(LEAGUE_B)]
+        return self._service_with(_response(leagues=four), _response())
+
+    def test_contract_failure_then_success_retries_once(self) -> None:
+        service, client = self._invalid_then_valid()
+        result = _generate(service)
+
+        assert isinstance(result, AISummary)
+        assert len(client.requests) == 2
+        assert result.provenance.attempts == 2
+
+    def test_retry_reuses_the_identical_request(self) -> None:
+        service, client = self._invalid_then_valid()
+        _generate(service)
+
+        first, second = client.requests
+        assert first.system_prompt == second.system_prompt
+        assert first.user_message == second.user_message
+        assert first.max_tokens == second.max_tokens
+        assert first.reasoning_effort == second.reasoning_effort
+
+    def test_two_contract_failures_stop_after_two_calls(self) -> None:
+        four = [*_two_sections(), _league_section(LEAGUE_B)]
+        service, client = self._service_with(
+            _response(leagues=four), _response(leagues=four)
+        )
+        result = _generate(service)
+
+        assert isinstance(result, AISummaryUnavailable)
+        assert result.reason == "league count mismatch (2 leagues, 3 sections)"
+        assert len(client.requests) == 2
+
+    def test_client_contract_error_is_retried(self) -> None:
+        service, client = self._service_with(
+            AIContractError("response did not match the summary contract"), _response()
+        )
+        result = _generate(service)
+
+        assert isinstance(result, AISummary)
+        assert len(client.requests) == 2
+        assert result.provenance.attempts == 2
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            AIHTTPError(status=500, host="opencode.ai", model="deepseek-v4.1-flash"),
+            AITransportError(host="opencode.ai"),
+            AITimeoutError(seconds=120),
+            AITruncationError(),
+        ],
+        ids=["http-500", "transport", "timeout", "truncation"],
+    )
+    def test_non_contract_failures_are_not_retried(self, error: AISummaryError) -> None:
+        service, client = self._service_with(error)
+        result = _generate(service)
+
+        assert isinstance(result, AISummaryUnavailable)
+        assert len(client.requests) == 1
+
+    def test_first_attempt_success_records_one_attempt(self) -> None:
+        service, client = self._service_with(_response())
+        result = _generate(service)
+
+        assert isinstance(result, AISummary)
+        assert len(client.requests) == 1
+        assert result.provenance.attempts == 1
 
 
 class TestMidBodyFailure:
@@ -519,8 +660,11 @@ class TestLogging:
 
         joined = "\n".join(r.getMessage() for r in caplog.records)
         assert "sk-test" not in joined
+        # Team names, scores and the digest marker never appear, at any level;
+        # league names do, because the prompt now anchors the exact scope.
         assert "Butt Fumble" not in joined
-        assert "MM Driveway Surfers" not in joined
+        assert "147.78" not in joined
+        assert "DIGEST-MARKER" not in joined
 
     def test_warning_carries_only_the_reason(self, caplog: pytest.LogCaptureFixture) -> None:
         caplog.set_level(logging.WARNING)
