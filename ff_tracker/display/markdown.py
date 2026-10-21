@@ -9,7 +9,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, WeeklyChallenge
+from ..models import (
+    AISummaryResult,
+    ChallengeResult,
+    ChampionshipLeaderboard,
+    DivisionData,
+    WeeklyChallenge,
+)
 from ..models.championship import ChampionshipRoster
 from .base import BaseFormatter
 
@@ -43,6 +49,7 @@ class MarkdownFormatter(BaseFormatter):
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
         championship_rosters: Sequence[ChampionshipRoster] | None = None,
+        ai_summary: AISummaryResult | None = None,
     ) -> str:
         """Format complete output for Markdown display."""
         # Get format arguments

@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 
 import pytest
+from ai_fakes import make_narrative
 
 from ff_tracker.display.json import JsonFormatter
 from ff_tracker.models import (
+    AISummaryResult,
+    AISummaryUnavailable,
     ChallengeResult,
     DivisionData,
     GameResult,
@@ -757,3 +760,108 @@ class TestWeeklyHighlightFields:
             isinstance(entry["points"], float) and entry["points"] < 0
             for entry in entries
         )
+
+
+class TestAISummarySection:
+    """The AI section in JSON: narrative or notice, and AC-001 when off."""
+
+    def _output(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        sample_weekly_challenges: list[WeeklyChallenge],
+        ai_summary: AISummaryResult | None = None,
+    ) -> str:
+        formatter = JsonFormatter(year=2024)
+        return formatter.format_output(
+            divisions=[sample_division],
+            challenges=sample_challenges,
+            weekly_challenges=sample_weekly_challenges,
+            current_week=10,
+            ai_summary=ai_summary,
+        )
+
+    def _args(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        sample_weekly_challenges: list[WeeklyChallenge],
+    ) -> tuple[DivisionData, list[ChallengeResult], list[WeeklyChallenge]]:
+        return sample_division, sample_challenges, sample_weekly_challenges
+
+    def test_absent_when_the_feature_is_off(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        sample_weekly_challenges: list[WeeklyChallenge],
+    ) -> None:
+        output = self._output(*self._args(
+            sample_division, sample_challenges, sample_weekly_challenges
+        ))
+        assert "ai_summary" not in json.loads(output)
+
+    def test_serializes_the_narrative(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        sample_weekly_challenges: list[WeeklyChallenge],
+    ) -> None:
+        summary = make_narrative()
+        data = json.loads(
+            self._output(*self._args(
+                sample_division, sample_challenges, sample_weekly_challenges
+            ), ai_summary=summary)
+        )
+
+        ai = data["ai_summary"]
+        assert ai["headline"] == summary.headline
+        assert ai["season_note"] == summary.season_note
+        assert ai["leagues"] == [
+            {
+                "league": "MM Driveway Surfers",
+                "paragraphs": ["Butt Fumble stayed unbeaten through six weeks."],
+                "bullets": ["Donut Lose won by 1.08"],
+            }
+        ]
+        assert ai["provenance"] == {
+            "model": "glm-5.3-flash",
+            "prompt_sha": "9f2c1ab4e7d0",
+            "generated_at": "2026-10-14T05:03:11Z",
+            "truncated": False,
+        }
+
+    def test_serializes_the_notice_as_an_error(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        sample_weekly_challenges: list[WeeklyChallenge],
+    ) -> None:
+        data = json.loads(
+            self._output(*self._args(
+                sample_division, sample_challenges, sample_weekly_challenges
+            ), ai_summary=AISummaryUnavailable(reason="timed out after 120s"))
+        )
+
+        assert data["ai_summary"] == {
+            "error": "AI summary unavailable: timed out after 120s. The report is unaffected."
+        }
+
+    def test_ai_summary_is_the_last_key(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        sample_weekly_challenges: list[WeeklyChallenge],
+    ) -> None:
+        output = self._output(*self._args(
+            sample_division, sample_challenges, sample_weekly_challenges
+        ), ai_summary=make_narrative())
+        assert list(json.loads(output))[-1] == "ai_summary"
+
+    def test_feature_off_is_byte_identical(self, sample_division, sample_challenges, sample_weekly_challenges) -> None:
+        """AC-001: the off output equals the on output minus the key."""
+        args = self._args(sample_division, sample_challenges, sample_weekly_challenges)
+        off = json.loads(self._output(*args))
+        on = json.loads(self._output(*args, ai_summary=make_narrative()))
+
+        del on["ai_summary"]
+        assert on == off

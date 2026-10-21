@@ -14,6 +14,7 @@ from enum import Enum
 from typing import Protocol
 
 from ..models import (
+    AISummaryResult,
     ChallengeResult,
     ChampionshipLeaderboard,
     DivisionData,
@@ -93,6 +94,7 @@ class OutputFormatter(Protocol):
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
         championship_rosters: Sequence[ChampionshipRoster] | None = None,
+        ai_summary: AISummaryResult | None = None,
     ) -> str:
         """
         Format the complete output for display.
@@ -104,6 +106,7 @@ class OutputFormatter(Protocol):
             current_week: Current fantasy week number
             championship: Championship leaderboard
             championship_rosters: Detailed rosters for championship teams
+            ai_summary: AI narrative or its unavailability notice (optional)
 
         Returns:
             Formatted output string
@@ -245,6 +248,7 @@ class BaseFormatter(ABC):
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
         championship_rosters: Sequence[ChampionshipRoster] | None = None,
+        ai_summary: AISummaryResult | None = None,
     ) -> str:
         """
         Format the complete output for display.

@@ -10,7 +10,13 @@ from collections.abc import Sequence
 
 from tabulate import tabulate
 
-from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, WeeklyChallenge
+from ..models import (
+    AISummaryResult,
+    ChallengeResult,
+    ChampionshipLeaderboard,
+    DivisionData,
+    WeeklyChallenge,
+)
 from ..models.championship import ChampionshipRoster
 from .base import BaseFormatter
 
@@ -43,6 +49,7 @@ class ConsoleFormatter(BaseFormatter):
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
         championship_rosters: Sequence[ChampionshipRoster] | None = None,
+        ai_summary: AISummaryResult | None = None,
     ) -> str:
         """Format complete output for console display."""
         # Get format arguments

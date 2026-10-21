@@ -24,7 +24,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from importlib.metadata import version
 
-from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, WeeklyChallenge
+from ..models import (
+    AISummaryResult,
+    ChallengeResult,
+    ChampionshipLeaderboard,
+    DivisionData,
+    WeeklyChallenge,
+)
 from ..models.championship import ChampionshipRoster
 from .base import BaseFormatter
 
@@ -61,6 +67,7 @@ class EmailFormatter(BaseFormatter):
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
         championship_rosters: Sequence[ChampionshipRoster] | None = None,
+        ai_summary: AISummaryResult | None = None,
     ) -> str:
         """Format complete output for mobile-friendly HTML email."""
         # Get format arguments
