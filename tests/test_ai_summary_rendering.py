@@ -220,6 +220,95 @@ class TestSectionRendering:
         assert weekly < notice < season
         assert markers["ai"] not in on
 
+    # Per mode, the marker each format emits on either side of the take.
+    MODE_PLACEMENT: dict[str, dict[str, tuple[str, str]]] = {
+        "console": {
+            "playoffs": ("WEEKLY PLAYER HIGHLIGHTS - WEEK 15", "REGULAR SEASON FINAL RESULTS"),
+            "championship": ("WEEKLY PLAYER HIGHLIGHTS - WEEK 17", "SEASON-LONG CHALLENGES"),
+        },
+        "sheets": {
+            "playoffs": ("WEEK 15 PLAYER HIGHLIGHTS", "OVERALL SEASON CHALLENGES"),
+            "championship": ("WEEK 17 PLAYER HIGHLIGHTS", "OVERALL SEASON CHALLENGES"),
+        },
+        "email": {
+            "playoffs": ("Week 15 Player Highlights", "Season Challenge Results"),
+            "championship": ("Week 17 Player Highlights", "Season Challenge Results"),
+        },
+        "markdown": {
+            "playoffs": ("WEEKLY PLAYER HIGHLIGHTS - WEEK 15", "REGULAR SEASON FINAL RESULTS"),
+            "championship": ("WEEKLY PLAYER HIGHLIGHTS - WEEK 17", "OVERALL SEASON CHALLENGES"),
+        },
+    }
+
+    def _render_mode(self, format_name: str, mode: str) -> str:
+        if mode == "playoffs":
+            return _render(
+                format_name,
+                make_playoff_divisions(),
+                ai_summary=make_narrative(),
+                current_week=15,
+            )
+        return _render(
+            format_name,
+            make_championship_divisions(),
+            ai_summary=make_narrative(),
+            current_week=17,
+            championship=make_championship(),
+        )
+
+    @pytest.mark.parametrize("format_name", sorted(MODE_PLACEMENT))
+    @pytest.mark.parametrize("mode", ["playoffs", "championship"])
+    def test_section_sits_between_the_mode_sections(
+        self, format_name: str, mode: str
+    ) -> None:
+        """AC-018 in Weeks 15-16 and Week 17, not just the regular season."""
+        on = self._render_mode(format_name, mode)
+        highlights, season = self.MODE_PLACEMENT[format_name][mode]
+        ai = self.PLACEMENT[format_name]["ai"]
+
+        assert on.index(highlights) < on.index(ai) < on.index(season)
+
+    @pytest.mark.parametrize("format_name", sorted(MODE_PLACEMENT))
+    @pytest.mark.parametrize("mode", ["playoffs", "championship"])
+    def test_notice_sits_between_the_mode_sections(
+        self, format_name: str, mode: str
+    ) -> None:
+        if mode == "playoffs":
+            on = _render(
+                format_name,
+                make_playoff_divisions(),
+                ai_summary=AISummaryUnavailable(reason="timed out after 120s"),
+                current_week=15,
+            )
+        else:
+            on = _render(
+                format_name,
+                make_championship_divisions(),
+                ai_summary=AISummaryUnavailable(reason="timed out after 120s"),
+                current_week=17,
+                championship=make_championship(),
+            )
+        highlights, season = self.MODE_PLACEMENT[format_name][mode]
+
+        assert on.index(highlights) < on.index("AI summary unavailable") < on.index(season)
+
+    @pytest.mark.parametrize("format_name", sorted(PLACEMENT))
+    def test_section_renders_without_weekly_challenges(self, format_name: str) -> None:
+        """No highlights section at all: the take keeps the same slot."""
+        on = _render(
+            format_name,
+            make_regular_divisions(),
+            ai_summary=make_narrative(),
+            weekly=[],
+            current_week=6,
+        )
+        season = self.PLACEMENT[format_name]["season"]
+        ai = self.PLACEMENT[format_name]["ai"]
+
+        assert on.index(ai) < on.index(season)
+        assert "WEEKLY PLAYER HIGHLIGHTS" not in on
+        assert "WEEK 6 HIGHLIGHTS" not in on
+
     def test_email_section_sits_before_the_challenges_not_the_footer(self) -> None:
         _, on = _both("email", make_regular_divisions())
         assert on.index("Commissioner's Take") < on.index("Season Challenge Results")

@@ -34,7 +34,6 @@ from .ai_digest import build_digest
 logger = logging.getLogger(__name__)
 
 INSTRUCTIONS_HEADING = "### COMMISSIONER'S INSTRUCTIONS"
-PROMPT_HASH_SEPARATOR = "\n\x00\n"
 PROMPT_HASH_LENGTH = 12
 
 HEADLINE_WORD_CAP = 15
@@ -120,17 +119,17 @@ def build_system_prompt(user_prompt: str, league_names: Sequence[str]) -> str:
     return prompt
 
 
-def prompt_sha(system_prompt: str, user_prompt: str) -> str:
+def prompt_sha(system_prompt: str) -> str:
     """
-    Hash the composed system prompt and the user prompt, in that order.
+    Hash the composed system prompt.
 
-    The separator is fixed, so the hash moves whenever the contract, the league
-    scope or the commissioner's block changes. The limitation is stated in the
-    spec: the prompt itself is not archived, so an archived CI report is
-    reproducible only from the committed workflow value together with this hash.
+    The composed prompt already contains the league scope and, when set, the
+    commissioner's block, so hashing it once covers the template, the scope and
+    the user prompt. The limitation is stated in the spec: the prompt itself is
+    not archived, so an archived CI report is reproducible only from the
+    committed workflow value together with this hash.
     """
-    material = f"{system_prompt}{PROMPT_HASH_SEPARATOR}{user_prompt}"
-    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:PROMPT_HASH_LENGTH]
+    return hashlib.sha256(system_prompt.encode("utf-8")).hexdigest()[:PROMPT_HASH_LENGTH]
 
 
 class AISummaryService:
@@ -312,7 +311,7 @@ class AISummaryService:
             season_note=season_note,
             provenance=AIProvenance(
                 model=self._config.model,
-                prompt_sha=prompt_sha(system_prompt, self._config.user_prompt),
+                prompt_sha=prompt_sha(system_prompt),
                 generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 truncated=truncated or headline_cut or note_cut,
                 attempts=attempts,

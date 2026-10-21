@@ -8,9 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added - AI Summary (optional, `ff-tracker` only)
-- **A labelled, AI-written "commissioner's take" as the report's last section**
-  in all five formats, off by default, generated once per run and shared by every
-  format the run produces. It never alters a deterministic value.
+- **A labelled, AI-written "commissioner's take" between the weekly highlights
+  and the season-long challenges**, in console, markdown, email and sheets (JSON
+  keeps a top-level `ai_summary` key). Off by default, generated once per run and
+  shared by every format the run produces. It never alters a deterministic value.
 - **Fail-open by design:** an HTTP error, timeout, truncation or malformed
   response ships the full report with a one-line notice in the section's position
   and a `::warning::` under GitHub Actions. Configuration errors (enabled without

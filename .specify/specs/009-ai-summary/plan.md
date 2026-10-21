@@ -4,13 +4,13 @@
 > **Status**: Draft — revised after Gate 2 (plan HOLD)
 > **Created**: 2026-10-21
 > **Last Updated**: 2026-10-21
-> **Version**: 1.1
-> **Spec**: [spec.md](./spec.md) v0.8 (authority — this plan decides implementation only)
+> **Version**: 1.3
+> **Spec**: [spec.md](./spec.md) v0.13 (authority — this plan decides implementation only)
 > **Gate rulings**: [challenge-ledger.md](./challenge-ledger.md) (settled rows are settled; Gate 2 rows are precedent for Gate 3)
 
 ## Scope
 
-Add one optional section to the weekly report (`ff-tracker`), in all five formats, generated once per run from the report's own domain models, rendered last, and never able to stop the report. Nothing else changes: no new CLI, no new format, no new dependency, no change to `ff-championship` or `ff-season-recap`.
+Add one optional section to the weekly report (`ff-tracker`), in all five formats, generated once per run from the report's own domain models, rendered between the weekly highlights and the season-long challenges, and never able to stop the report. Nothing else changes: no new CLI, no new format, no new dependency, no change to `ff-championship` or `ff-season-recap`.
 
 **Out of scope** (spec "Not doing", unchanged): season recap and championship CLIs, other provider families, streaming/caching, retries beyond the single contract retry FR-003 allows, a user-authored system prompt, `weekly_games` in JSON, per-format opt-out, factual verification, format arguments for this feature.
 
@@ -218,9 +218,9 @@ The AC-001 prefix/suffix assertion is now a **pure insertion in the middle**: `o
 
 **Not changed**: the markdown table of contents is a fixed list (`markdown.py:89-102`), so the new `##` heading does not enter it. Adding it would change an existing section's content; FR-005 forbids that.
 
-### Decision 8: `prompt_sha` hashes the composed system prompt and the user prompt, 12 hex chars
+### Decision 8: `prompt_sha` hashes the composed system prompt, 12 hex chars
 
-`sha256(system_prompt + "\n\x00\n" + user_prompt).hexdigest()[:12]` — the fixed separator is `\n\x00\n`, the length matches the spec's example (`9f2c1ab4e7d0`), and `system_prompt` is the **composed** prompt (`build_system_prompt(user_prompt, league_names)`), because FR-008 hashes the prompt text and the league scope is now part of it. The hash therefore moves when the contract, the league set or the commissioner block changes — which is the point: an archived report's prompt+scope is identifiable from the hash alone.
+`sha256(system_prompt).hexdigest()[:12]` — the length matches the spec's example (`9f2c1ab4e7d0`), and `system_prompt` is the **composed** prompt from `build_system_prompt(user_prompt, league_names)`: the template, the league scope and, when set, the `### COMMISSIONER'S INSTRUCTIONS` block. Hashing the composed prompt once is the whole rule; appending `user_prompt` a second time (as an earlier draft did) is redundant because the block already contains it, and a second moving part with no information is a liability. The hash is stable for identical inputs and moves when the template, the league set or the user prompt changes, so an archived report's prompt and scope are identifiable from the hash alone.
 
 ---
 
@@ -798,3 +798,4 @@ None open. Decisions the spec leaves to the plan, recorded here so Gate 3 can ob
 | 1.1 | 2026-10-21 | AI Agent | Gate 2 revisions. Fail-open breadth narrowed: only `JSONDecodeError` is converted in `_parse_response`, every other rejection is an explicit check, and `test_generate_propagates_programming_errors` is a done-criterion. Digest adopted as a `TypedDict` document (total keys, `null` for unknown) with a golden recursive key-set test. Transport corrected to the `_urlopen(request, timeout) -> bytes` wrapper plus a `patch("urllib.request.urlopen")` test, because `urlopen` returns `HTTPResponse` and takes `data` second. Config load ordering stated: the loader calls `load_environment()` and runs after `create_config`, with a `.env`-only test. `reg_season_count` changed to `int \| None = None` so "unknown" is not a fabricated 14. Tasks 7 and 8 merged into one narrative task (13 total, renumbered) so the green-suite-per-task invariant holds. Cuts applied: the `--help` variable table reduces to the egress paragraph, `AI_SUMMARY_MODEL` leaves the workflow `env:`, the `AGENTS.md` paragraph is dropped. Console/championship placement rationale corrected (the report ends on the season-challenge table). Spec nit recorded: the configuration table still calls `AI_SUMMARY_TIMEOUT` a whole-call timeout |
 | 1.2 | 2026-10-21 | AI Agent | Gate 3 bookkeeping: the Article III boundary now records why the AI exception hierarchy derives from `Exception` rather than `FFTrackerError` (so a narrative failure cannot be rendered as a report error) and why transport failures, including mid-body `OSError`/`HTTPException`, are mapped inside the client; a new "Held without a governing FR" note records the non-default `User-Agent` as a hard requirement of the default endpoint, which no criterion covers. |
 | 1.3 | 2026-10-21 | AI Agent | Spec v0.12: the section moves from the report's end to between the weekly highlights and the season challenges in console, markdown, email and sheets (JSON unchanged), so Decision 7's placement table and Component 9 are restated and AC-001 becomes a mid-document insertion; `_generate` retries once for `AIContractError` only, reusing the same request, with `provenance.attempts` (1 or 2) recording it; the system prompt names the exact league count and the names, built from the digest at request time, so `prompt_sha` now hashes the composed prompt; AC-018…AC-022 added to the mapping and the performance note moved from "no retries" to "one identical retry". |
+| 1.4 | 2026-10-21 | AI Agent | Gate 3 delta: Decision 8 now hashes the composed prompt only (the commissioner block is already inside it, so appending the user prompt hashed it twice); the Scope line and the spec reference were corrected to v0.13 and the new placement; AC-018's mapping now covers playoff and championship modes plus the no-weekly-challenges case; the logging boundary is recorded as league names only, in the DEBUG prompt line, per FR-009 v0.13. |

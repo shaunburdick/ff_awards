@@ -226,7 +226,7 @@ class TestSystemPrompt:
 
         assert "exactly 1 league:" in one
         assert f'"{LEAGUE_B}"' not in one
-        assert prompt_sha(one, "") != prompt_sha(two, "")
+        assert prompt_sha(one) != prompt_sha(two)
 
     def test_scope_omitted_when_there_are_no_leagues(self) -> None:
         assert "League scope" not in build_system_prompt("", [])
@@ -240,14 +240,16 @@ class TestSystemPrompt:
 
     def test_prompt_sha_is_stable_and_sensitive(self) -> None:
         prompt = self._prompt(USER_PROMPT)
-        assert prompt_sha(prompt, USER_PROMPT) == prompt_sha(prompt, USER_PROMPT)
-        assert prompt_sha(prompt, USER_PROMPT) != prompt_sha(prompt, "")
-        assert prompt_sha(prompt, "") != prompt_sha(prompt, "Different tone.")
+        assert prompt_sha(prompt) == prompt_sha(prompt)
+        assert prompt_sha(prompt) != prompt_sha(build_system_prompt("", self.NAMES))
+        assert prompt_sha(build_system_prompt("", self.NAMES)) != prompt_sha(
+            build_system_prompt("Different tone.", self.NAMES)
+        )
 
     def test_prompt_sha_covers_the_scope(self) -> None:
         """The hash covers the composed prompt, so the names are part of it."""
-        assert prompt_sha(build_system_prompt("", [LEAGUE_A]), "") != prompt_sha(
-            build_system_prompt("", [LEAGUE_B]), ""
+        assert prompt_sha(build_system_prompt("", [LEAGUE_A])) != prompt_sha(
+            build_system_prompt("", [LEAGUE_B])
         )
 
     def test_prompt_sha_reaches_provenance(self) -> None:
@@ -256,7 +258,7 @@ class TestSystemPrompt:
 
         assert isinstance(result, AISummary)
         assert result.provenance.prompt_sha == prompt_sha(
-            build_system_prompt(USER_PROMPT, self.NAMES), USER_PROMPT
+            build_system_prompt(USER_PROMPT, self.NAMES)
         )
 
     def test_system_prompt_names_the_contract_and_the_caps(self) -> None:
@@ -665,6 +667,41 @@ class TestLogging:
         assert "Butt Fumble" not in joined
         assert "147.78" not in joined
         assert "DIGEST-MARKER" not in joined
+
+    def test_debug_prompt_carries_league_names_and_nothing_else(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Spec v0.13: league names may appear in the DEBUG prompt line, and only those."""
+        caplog.set_level(logging.DEBUG)
+        service, _ = _service(_response())
+
+        result = _generate(service)
+        assert isinstance(result, AISummary)
+
+        prompt_records = [r.getMessage() for r in caplog.records if SYSTEM_PROMPT in r.getMessage()]
+        assert len(prompt_records) == 1
+        assert LEAGUE_A in prompt_records[0]
+        assert LEAGUE_B in prompt_records[0]
+
+        joined = "\n".join(r.getMessage() for r in caplog.records)
+        assert "Butt Fumble" not in joined       # team name
+        assert "Owner " not in joined            # owner name
+        assert "147.78" not in joined            # score
+        assert "DIGEST-MARKER" not in joined     # digest marker
+        assert "sk-test" not in joined           # key
+
+    def test_warning_and_above_carry_no_league_name(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        service, _ = _service(error=AIHTTPError(status=500, host="opencode.ai", model="m"))
+
+        _generate(service)
+
+        joined = "\n".join(r.getMessage() for r in caplog.records)
+        assert "AI summary unavailable" in joined
+        assert LEAGUE_A not in joined
+        assert LEAGUE_B not in joined
 
     def test_warning_carries_only_the_reason(self, caplog: pytest.LogCaptureFixture) -> None:
         caplog.set_level(logging.WARNING)

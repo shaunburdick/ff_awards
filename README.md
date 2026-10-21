@@ -419,8 +419,9 @@ For private leagues, you need ESPN authentication cookies:
 
 ### AI Summary (Optional, `ff-tracker` Only)
 
-`ff-tracker` can append a short AI-written "commissioner's take" as the last
-section of the report, in every format. It is off by default, labelled
+`ff-tracker` can append a short AI-written "commissioner's take" between the
+weekly highlights and the season-long challenges, in every format that has a
+position (JSON keeps a top-level `ai_summary` key). It is off by default, labelled
 AI-generated wherever it appears, and can never change a deterministic value: if
 the narrative cannot be generated the report ships without it and says so.
 
