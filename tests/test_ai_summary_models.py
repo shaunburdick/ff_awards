@@ -34,7 +34,7 @@ def _league() -> AISummaryLeague:
 
 def _provenance() -> AIProvenance:
     return AIProvenance(
-        model="glm-5.3-flash",
+        model="deepseek-v4.1-flash",
         prompt_sha="9f2c1ab4e7d0",
         generated_at="2026-10-14T05:03:11Z",
     )
@@ -83,7 +83,7 @@ class TestAIProvenance:
 
     def test_records_model_and_hash(self) -> None:
         provenance = _provenance()
-        assert provenance.model == "glm-5.3-flash"
+        assert provenance.model == "deepseek-v4.1-flash"
         assert provenance.prompt_sha == "9f2c1ab4e7d0"
 
     def test_rejects_empty_model(self) -> None:
@@ -159,8 +159,8 @@ class TestAIErrorReasons:
     """FR-006 reason strings, built where the failure is detected."""
 
     def test_http_error_names_status_model_and_host_only(self) -> None:
-        error = AIHTTPError(status=410, host="opencode.ai", model="glm-5.3-flash")
-        assert error.reason == "HTTP 410 (model glm-5.3-flash at opencode.ai)"
+        error = AIHTTPError(status=410, host="opencode.ai", model="deepseek-v4.1-flash")
+        assert error.reason == "HTTP 410 (model deepseek-v4.1-flash at opencode.ai)"
         assert "OpenAI" not in error.reason  # host only, never a path segment
 
     def test_transport_error_names_host(self) -> None:

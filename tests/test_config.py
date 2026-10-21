@@ -16,6 +16,7 @@ import pytest
 from ff_tracker.config import (
     DEFAULT_AI_BASE_URL,
     DEFAULT_AI_MAX_PROMPT_CHARS,
+    DEFAULT_AI_MAX_TOKENS,
     DEFAULT_AI_MODEL,
     DEFAULT_AI_TIMEOUT,
     AISummaryConfig,
@@ -522,3 +523,85 @@ class TestAISummaryConfig:
         assert config.enabled is True
         assert config.api_key == "sk-from-dotenv"
         assert config.model == "dotenv-model"
+
+
+class TestAISummaryBudgetAndEffort:
+    """AI_SUMMARY_MAX_TOKENS and AI_SUMMARY_REASONING_EFFORT (spec v0.9)."""
+
+    _VARS = (
+        "AI_SUMMARY_ENABLED",
+        "AI_SUMMARY_API_KEY",
+        "AI_SUMMARY_BASE_URL",
+        "AI_SUMMARY_MODEL",
+        "AI_SUMMARY_TIMEOUT",
+        "AI_SUMMARY_MAX_TOKENS",
+        "AI_SUMMARY_REASONING_EFFORT",
+        "AI_SUMMARY_MAX_PROMPT_CHARS",
+        "AI_SUMMARY_USER_PROMPT",
+    )
+
+    @pytest.fixture(autouse=True)
+    def _clean_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for name in self._VARS:
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setattr("ff_tracker.config.load_environment", lambda: None)
+
+    def test_model_default_is_deepseek(self) -> None:
+        assert load_ai_summary_config().model == "deepseek-v4.1-flash"
+        assert DEFAULT_AI_MODEL == "deepseek-v4.1-flash"
+
+    def test_max_tokens_defaults_to_eight_thousand(self) -> None:
+        assert load_ai_summary_config().max_tokens == DEFAULT_AI_MAX_TOKENS == 8000
+
+    def test_max_tokens_is_read_from_the_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AI_SUMMARY_MAX_TOKENS", "1234")
+        assert load_ai_summary_config().max_tokens == 1234
+
+    @pytest.mark.parametrize("value", ["0", "-1", "abc", "1.5"])
+    def test_bad_max_tokens_raises_naming_the_variable(
+        self, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_MAX_TOKENS", value)
+        with pytest.raises(
+            ConfigurationError, match="AI_SUMMARY_MAX_TOKENS must be a positive integer"
+        ):
+            load_ai_summary_config()
+
+    def test_reasoning_effort_defaults_to_none(self) -> None:
+        assert load_ai_summary_config().reasoning_effort is None
+
+    @pytest.mark.parametrize("value", ["", "   "])
+    def test_blank_reasoning_effort_means_unset(
+        self, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_REASONING_EFFORT", value)
+        assert load_ai_summary_config().reasoning_effort is None
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [("low", "low"), ("LOW", "low"), ("Medium", "medium"), (" high ", "high")],
+    )
+    def test_reasoning_effort_is_normalised_to_lowercase(
+        self, monkeypatch: pytest.MonkeyPatch, value: str, expected: str
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_REASONING_EFFORT", value)
+        assert load_ai_summary_config().reasoning_effort == expected
+
+    def test_bad_reasoning_effort_lists_the_allowed_values(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_REASONING_EFFORT", "extreme")
+        with pytest.raises(ConfigurationError) as excinfo:
+            load_ai_summary_config()
+        message = str(excinfo.value)
+        assert "AI_SUMMARY_REASONING_EFFORT" in message
+        for allowed in ("low", "medium", "high"):
+            assert allowed in message
+
+    def test_direct_construction_normalises_and_rejects(self) -> None:
+        assert AISummaryConfig(reasoning_effort="LOW").reasoning_effort == "low"
+        assert AISummaryConfig(reasoning_effort="  ").reasoning_effort is None
+        with pytest.raises(ConfigurationError, match="AI_SUMMARY_REASONING_EFFORT"):
+            AISummaryConfig(reasoning_effort="ludicrous")
+        with pytest.raises(ConfigurationError, match="AI_SUMMARY_MAX_TOKENS"):
+            AISummaryConfig(max_tokens=0)

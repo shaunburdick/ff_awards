@@ -9,7 +9,7 @@ import re
 import pytest
 from ai_fakes import LEAGUE_A, LEAGUE_B, FakeAIClient, make_regular_divisions
 
-from ff_tracker.config import AISummaryConfig
+from ff_tracker.config import DEFAULT_AI_MAX_TOKENS, DEFAULT_AI_MODEL, AISummaryConfig
 from ff_tracker.exceptions import (
     AIContractError,
     AIHTTPError,
@@ -33,11 +33,18 @@ from ff_tracker.services.ai_summary_service import (
 USER_PROMPT = "Be dry. Never mention the commissioner's team."
 
 
-def _config(user_prompt: str = "") -> AISummaryConfig:
+def _config(
+    user_prompt: str = "",
+    *,
+    max_tokens: int = DEFAULT_AI_MAX_TOKENS,
+    reasoning_effort: str | None = None,
+) -> AISummaryConfig:
     return AISummaryConfig(
         enabled=True,
         api_key="sk-test",
-        model="glm-5.3-flash",
+        model=DEFAULT_AI_MODEL,
+        max_tokens=max_tokens,
+        reasoning_effort=reasoning_effort,
         user_prompt=user_prompt,
     )
 
@@ -70,9 +77,17 @@ def _response(
     return json.dumps(payload)
 
 
-def _service(response: str = "", *, user_prompt: str = "", error: AISummaryError | None = None):
+def _service(
+    response: str = "",
+    *,
+    user_prompt: str = "",
+    error: AISummaryError | None = None,
+    max_tokens: int = DEFAULT_AI_MAX_TOKENS,
+    reasoning_effort: str | None = None,
+):
     client = FakeAIClient(response=response, error=error)
-    return AISummaryService(_config(user_prompt), client), client
+    config = _config(user_prompt, max_tokens=max_tokens, reasoning_effort=reasoning_effort)
+    return AISummaryService(config, client), client
 
 
 def _generate(service: AISummaryService, divisions=None) -> object:
@@ -96,7 +111,7 @@ class TestHappyPath:
         assert result.headline == "Six weeks in and nobody has an answer"
         assert result.season_note.startswith("Halfway there")
         assert [league.league for league in result.leagues] == [LEAGUE_A, LEAGUE_B]
-        assert result.provenance.model == "glm-5.3-flash"
+        assert result.provenance.model == "deepseek-v4.1-flash"
         assert result.provenance.truncated is False
 
     def test_prompt_sha_is_twelve_hex_characters(self) -> None:
@@ -128,10 +143,26 @@ class TestHappyPath:
         assert digest["week"] == 6
         assert len(digest["leagues"]) == 2
 
-    def test_max_tokens_is_eight_thousand(self) -> None:
+    def test_max_tokens_defaults_to_eight_thousand(self) -> None:
         service, client = _service(_response())
         _generate(service)
-        assert client.requests[0].max_tokens == 8000
+        assert client.requests[0].max_tokens == DEFAULT_AI_MAX_TOKENS == 8000
+
+    def test_budget_and_effort_come_from_configuration(self) -> None:
+        """AC-010: a non-default budget and an upper-case effort reach the request."""
+        service, client = _service(
+            _response(), max_tokens=1234, reasoning_effort="LOW"
+        )
+        _generate(service)
+
+        request = client.requests[0]
+        assert request.max_tokens == 1234
+        assert request.reasoning_effort == "low"
+
+    def test_reasoning_effort_is_unset_by_default(self) -> None:
+        service, client = _service(_response())
+        _generate(service)
+        assert client.requests[0].reasoning_effort is None
 
 
 class TestSystemPrompt:
@@ -206,11 +237,11 @@ class TestFailureDegradation:
     """FR-006: provider failures become the notice, never an exception."""
 
     def test_http_error(self) -> None:
-        service, _ = _service(error=AIHTTPError(status=410, host="opencode.ai", model="glm-5.3-flash"))
+        service, _ = _service(error=AIHTTPError(status=410, host="opencode.ai", model="deepseek-v4.1-flash"))
         result = _generate(service)
 
         assert isinstance(result, AISummaryUnavailable)
-        assert result.reason == "HTTP 410 (model glm-5.3-flash at opencode.ai)"
+        assert result.reason == "HTTP 410 (model deepseek-v4.1-flash at opencode.ai)"
         assert result.notice.endswith("The report is unaffected.")
 
     def test_truncation(self) -> None:

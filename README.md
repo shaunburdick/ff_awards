@@ -434,10 +434,19 @@ AI_SUMMARY_API_KEY=your_opencode_api_key_here
 | `AI_SUMMARY_ENABLED` | `false` | Opt-in switch; a key alone does not enable it |
 | `AI_SUMMARY_API_KEY` | none | Bearer token, required when enabled, never printed |
 | `AI_SUMMARY_BASE_URL` | `https://opencode.ai/inference/openai/v1` | OpenAI-compatible endpoint root |
-| `AI_SUMMARY_MODEL` | `glm-5.3-flash` | Model id, reported in JSON provenance and the attribution line |
+| `AI_SUMMARY_MODEL` | `deepseek-v4.1-flash` | Model id, reported in JSON provenance and the attribution line |
 | `AI_SUMMARY_TIMEOUT` | `120` | Per-socket-read timeout in seconds |
+| `AI_SUMMARY_MAX_TOKENS` | `8000` | Sent as the request's `max_tokens`; too small a budget for the chosen model shows up as a truncation notice |
+| `AI_SUMMARY_REASONING_EFFORT` | unset | Optional `low\|medium\|high`; sent as `reasoning_effort` only when set, and an endpoint that ignores it is not an error |
 | `AI_SUMMARY_MAX_PROMPT_CHARS` | `8000` | Size cap for the instructions below |
 | `AI_SUMMARY_USER_PROMPT` | empty | Free-form instructions appended to the system prompt, sent verbatim |
+
+**Why `deepseek-v4.1-flash` is the default:** `glm-5.3-flash` spends the whole
+8000-token budget on reasoning for a three-league digest (8000/8000 tokens,
+`content: null`, `finish_reason: length`), while `deepseek-v4.1-flash` completes
+the same digest in about 2,057 reasoning tokens and roughly 9 seconds.
+`glm-5.3-flash` is still selectable through `AI_SUMMARY_MODEL`, at the cost of a
+much larger `AI_SUMMARY_MAX_TOKENS` or a `reasoning_effort` the endpoint honours.
 
 **What leaves the machine:** team names, owner names, points for, points against,
 scores and league names are sent to `AI_SUMMARY_BASE_URL`, together with

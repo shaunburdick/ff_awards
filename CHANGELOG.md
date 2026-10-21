@@ -24,6 +24,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   provenance (`model`, `prompt_sha`, `generated_at`, `truncated`), or
   `{"error": <notice>}` when generation failed. Absent when the feature is off.
 
+### Changed - AI Summary defaults and budget knobs
+- **Default model is now `deepseek-v4.1-flash`.** `glm-5.3-flash` spends the
+  whole 8000-token budget on reasoning for a real three-league digest
+  (8000/8000 tokens, `content: null`, `finish_reason: length`); the new default
+  completes the same digest in about 2,057 reasoning tokens and ~9 seconds.
+  `glm-5.3-flash` remains selectable through `AI_SUMMARY_MODEL`.
+- **`AI_SUMMARY_MAX_TOKENS`** (default `8000`) is sent as the request's
+  `max_tokens` instead of a hard-coded value; a non-positive or non-integer value
+  is a `ConfigurationError` naming the variable.
+- **`AI_SUMMARY_REASONING_EFFORT`** (`low|medium|high`, case-insensitive, unset by
+  default) sends `reasoning_effort` with the request; when unset or empty the key
+  is omitted entirely. A non-standard extension: an endpoint that ignores it is
+  not treated as a failure.
+
 ### Fixed - Weekly challenge facts
 - **Closest Game This Week names the game's winner.** The challenge took the
   first row of the closest matchup, so a team could win it by *losing* and the

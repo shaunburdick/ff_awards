@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from importlib.metadata import version
 from typing import Protocol
 
-from ..config import AISummaryConfig
+from ..config import AI_REASONING_EFFORTS, DEFAULT_AI_MAX_TOKENS, AISummaryConfig
 from ..exceptions import (
     AIContractError,
     AIHTTPError,
@@ -31,7 +31,6 @@ from ..exceptions import (
 
 logger = logging.getLogger(__name__)
 
-MAX_TOKENS = 8000
 CONTRACT_REASON = "response did not match the summary contract"
 # Cloudflare in front of the default endpoint rejects the stdlib default
 # (``Python-urllib/*``), so the client identifies itself.
@@ -44,7 +43,9 @@ class AIRequest:
 
     system_prompt: str
     user_message: str
-    max_tokens: int = MAX_TOKENS
+    max_tokens: int = DEFAULT_AI_MAX_TOKENS
+    # None means "omit the key": never sent as null or an empty string.
+    reasoning_effort: str | None = None
 
     def __post_init__(self) -> None:
         """Validate the request after construction."""
@@ -54,6 +55,14 @@ class AIRequest:
             raise DataValidationError("User message cannot be empty")
         if self.max_tokens <= 0:
             raise DataValidationError(f"Max tokens must be positive: {self.max_tokens}")
+        if (
+            self.reasoning_effort is not None
+            and self.reasoning_effort not in AI_REASONING_EFFORTS
+        ):
+            raise DataValidationError(
+                f"Reasoning effort must be one of "
+                f"{'|'.join(AI_REASONING_EFFORTS)}: {self.reasoning_effort}"
+            )
 
 
 class AIClient(Protocol):
@@ -153,8 +162,13 @@ class OpenAICompatibleClient:
         return f"{self._config.base_url.rstrip('/')}/chat/completions"
 
     def _body(self, request: AIRequest) -> bytes:
-        """Serialise the Chat Completions request body."""
-        payload = {
+        """
+        Serialise the Chat Completions request body.
+
+        ``reasoning_effort`` is a non-standard extension: it is sent only when
+        configured, and an endpoint that ignores it is not a failure.
+        """
+        payload: dict[str, object] = {
             "model": self._config.model,
             "messages": [
                 {"role": "system", "content": request.system_prompt},
@@ -162,6 +176,8 @@ class OpenAICompatibleClient:
             ],
             "max_tokens": request.max_tokens,
         }
+        if request.reasoning_effort is not None:
+            payload["reasoning_effort"] = request.reasoning_effort
         return json.dumps(payload).encode("utf-8")
 
     def _send(self, http_request: urllib.request.Request) -> bytes:
@@ -242,6 +258,14 @@ class OpenAICompatibleClient:
         usage_dict: dict[str, object] = usage
         prompt_tokens = usage_dict.get("prompt_tokens")
         completion_tokens = usage_dict.get("completion_tokens")
+        details = usage_dict.get("completion_tokens_details")
+        reasoning_tokens: object = None
+        if isinstance(details, dict):
+            details_dict: dict[str, object] = details
+            reasoning_tokens = details_dict.get("reasoning_tokens")
         logger.debug(
-            "AI summary tokens: prompt=%s completion=%s", prompt_tokens, completion_tokens
+            "AI summary tokens: prompt=%s completion=%s reasoning=%s",
+            prompt_tokens,
+            completion_tokens,
+            reasoning_tokens,
         )

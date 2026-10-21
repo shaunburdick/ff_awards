@@ -167,6 +167,8 @@ class AISummaryService:
         request = AIRequest(
             system_prompt=build_system_prompt(self._config.user_prompt),
             user_message=json.dumps(digest, ensure_ascii=False),
+            max_tokens=self._config.max_tokens,
+            reasoning_effort=self._config.reasoning_effort,
         )
         # DEBUG only: the prompt carries no report data, but Actions logs are
         # world-readable, so a local -vv run is the only place it belongs.

@@ -415,7 +415,7 @@ def make_narrative(
         ],
         season_note=season_note,
         provenance=AIProvenance(
-            model="glm-5.3-flash",
+            model="deepseek-v4.1-flash",
             prompt_sha="9f2c1ab4e7d0",
             generated_at="2026-10-14T05:03:11Z",
             truncated=truncated,

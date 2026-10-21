@@ -13,7 +13,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from ai_fakes import FakeTransport, envelope
 
-from ff_tracker.config import DEFAULT_AI_BASE_URL, AISummaryConfig
+from ff_tracker.config import (
+    DEFAULT_AI_BASE_URL,
+    DEFAULT_AI_MAX_TOKENS,
+    DEFAULT_AI_MODEL,
+    AISummaryConfig,
+)
 from ff_tracker.exceptions import (
     AIContractError,
     AIHTTPError,
@@ -22,7 +27,6 @@ from ff_tracker.exceptions import (
     AITruncationError,
 )
 from ff_tracker.services.ai_client import (
-    MAX_TOKENS,
     USER_AGENT,
     AIRequest,
     OpenAICompatibleClient,
@@ -37,7 +41,7 @@ def _config(
     *,
     api_key: str = API_KEY,
     base_url: str = DEFAULT_AI_BASE_URL,
-    model: str = "glm-5.3-flash",
+    model: str = DEFAULT_AI_MODEL,
     timeout: int = 120,
 ) -> AISummaryConfig:
     return AISummaryConfig(
@@ -71,14 +75,64 @@ class TestRequestShape:
         assert timeout == 120
 
         body = json.loads(request.data.decode("utf-8"))
-        assert body["model"] == "glm-5.3-flash"
-        assert body["max_tokens"] == MAX_TOKENS == 8000
+        assert body["model"] == DEFAULT_AI_MODEL
+        assert body["max_tokens"] == DEFAULT_AI_MAX_TOKENS == 8000
         assert body["messages"] == [
             {"role": "system", "content": "You are a commissioner."},
             {"role": "user", "content": '{"week": 6}'},
         ]
         assert "response_format" not in body
         assert "stream" not in body
+
+    def test_configured_max_tokens_is_sent_not_the_default(self) -> None:
+        """AC-010: the budget comes from configuration, not a constant."""
+        transport = FakeTransport(envelope(NARRATIVE))
+        client = OpenAICompatibleClient(_config(), transport)
+        request = AIRequest(system_prompt="sys", user_message="user", max_tokens=1234)
+
+        client.complete(request)
+
+        body = json.loads(transport.calls[0][0].data.decode("utf-8"))
+        assert body["max_tokens"] == 1234
+        assert body["max_tokens"] != DEFAULT_AI_MAX_TOKENS
+
+    def test_reasoning_effort_is_absent_when_unset(self) -> None:
+        transport = FakeTransport(envelope(NARRATIVE))
+        OpenAICompatibleClient(_config(), transport).complete(_request())
+
+        body = json.loads(transport.calls[0][0].data.decode("utf-8"))
+        assert "reasoning_effort" not in body
+
+    @pytest.mark.parametrize("effort", ["low", "medium", "high"])
+    def test_reasoning_effort_is_sent_when_configured(self, effort: str) -> None:
+        transport = FakeTransport(envelope(NARRATIVE))
+        request = AIRequest(
+            system_prompt="sys", user_message="user", reasoning_effort=effort
+        )
+        OpenAICompatibleClient(_config(), transport).complete(request)
+
+        body = json.loads(transport.calls[0][0].data.decode("utf-8"))
+        assert body["reasoning_effort"] == effort
+
+    def test_reasoning_effort_is_never_sent_as_null(self) -> None:
+        transport = FakeTransport(envelope(NARRATIVE))
+        OpenAICompatibleClient(_config(), transport).complete(
+            AIRequest(system_prompt="sys", user_message="user", reasoning_effort=None)
+        )
+
+        body = json.loads(transport.calls[0][0].data.decode("utf-8"))
+        # Absent, not null: the key must not exist at all.
+        assert "reasoning_effort" not in body
+
+    def test_ignored_reasoning_effort_is_not_a_failure(self) -> None:
+        """An endpoint that ignores the key still returns usable content."""
+        transport = FakeTransport(envelope(NARRATIVE))
+        request = AIRequest(
+            system_prompt="sys", user_message="user", reasoning_effort="high"
+        )
+        content = OpenAICompatibleClient(_config(), transport).complete(request)
+
+        assert content == NARRATIVE
 
     def test_model_override_is_sent_verbatim(self) -> None:
         transport = FakeTransport(envelope(NARRATIVE))
@@ -171,7 +225,7 @@ class TestFailureTaxonomy:
         client = OpenAICompatibleClient(_config(), FakeTransport(error=error))
         with pytest.raises(AIHTTPError) as excinfo:
             client.complete(_request())
-        assert excinfo.value.reason == "HTTP 410 (model glm-5.3-flash at opencode.ai)"
+        assert excinfo.value.reason == "HTTP 410 (model deepseek-v4.1-flash at opencode.ai)"
         assert "inference" not in excinfo.value.reason
 
     def test_transport_error(self) -> None:

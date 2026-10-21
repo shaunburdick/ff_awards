@@ -183,11 +183,16 @@ def detect_fantasy_year() -> int:
 
 
 DEFAULT_AI_BASE_URL = "https://opencode.ai/inference/openai/v1"
-DEFAULT_AI_MODEL = "glm-5.3-flash"
+# glm-5.3-flash spends the whole default budget on reasoning for a three-league
+# digest (8000/8000, content null); this model completes it in ~2000 reasoning
+# tokens. The old default remains selectable through AI_SUMMARY_MODEL.
+DEFAULT_AI_MODEL = "deepseek-v4.1-flash"
 DEFAULT_AI_TIMEOUT = 120
+DEFAULT_AI_MAX_TOKENS = 8000
 DEFAULT_AI_MAX_PROMPT_CHARS = 8000
 
 _AI_BOOL_VALUES = {"true", "1", "yes", "on", "false", "0", "no", "off"}
+AI_REASONING_EFFORTS = ("low", "medium", "high")
 
 
 @dataclass(frozen=True)
@@ -207,6 +212,9 @@ class AISummaryConfig:
     base_url: str = DEFAULT_AI_BASE_URL
     model: str = DEFAULT_AI_MODEL
     timeout: int = DEFAULT_AI_TIMEOUT
+    max_tokens: int = DEFAULT_AI_MAX_TOKENS
+    # None means "send no reasoning_effort key at all", never null or "".
+    reasoning_effort: str | None = None
     max_prompt_chars: int = DEFAULT_AI_MAX_PROMPT_CHARS
     user_prompt: str = ""
 
@@ -228,6 +236,22 @@ class AISummaryConfig:
             raise ConfigurationError(
                 f"AI_SUMMARY_TIMEOUT must be a positive integer, got: {self.timeout}"
             )
+
+        if self.max_tokens <= 0:
+            raise ConfigurationError(
+                f"AI_SUMMARY_MAX_TOKENS must be a positive integer, got: {self.max_tokens}"
+            )
+
+        if self.reasoning_effort is not None:
+            normalised = self.reasoning_effort.strip().lower()
+            if normalised and normalised not in AI_REASONING_EFFORTS:
+                raise ConfigurationError(
+                    "AI_SUMMARY_REASONING_EFFORT must be one of "
+                    f"{'|'.join(AI_REASONING_EFFORTS)}, got: '{self.reasoning_effort}'"
+                )
+            # Frozen, so normalise in place: one lowercase value, and empty
+            # means "no key" rather than an empty string.
+            object.__setattr__(self, "reasoning_effort", normalised or None)
 
         if self.max_prompt_chars <= 0:
             raise ConfigurationError(
@@ -291,6 +315,9 @@ def load_ai_summary_config() -> AISummaryConfig:
     timeout = _parse_positive_int(
         "AI_SUMMARY_TIMEOUT", os.getenv("AI_SUMMARY_TIMEOUT", ""), DEFAULT_AI_TIMEOUT
     )
+    max_tokens = _parse_positive_int(
+        "AI_SUMMARY_MAX_TOKENS", os.getenv("AI_SUMMARY_MAX_TOKENS", ""), DEFAULT_AI_MAX_TOKENS
+    )
     max_prompt_chars = _parse_positive_int(
         "AI_SUMMARY_MAX_PROMPT_CHARS",
         os.getenv("AI_SUMMARY_MAX_PROMPT_CHARS", ""),
@@ -299,6 +326,7 @@ def load_ai_summary_config() -> AISummaryConfig:
 
     base_url = os.getenv("AI_SUMMARY_BASE_URL", "").strip().rstrip("/") or DEFAULT_AI_BASE_URL
     model = os.getenv("AI_SUMMARY_MODEL", "").strip() or DEFAULT_AI_MODEL
+    reasoning_effort = os.getenv("AI_SUMMARY_REASONING_EFFORT", "").strip().lower() or None
     user_prompt = os.getenv("AI_SUMMARY_USER_PROMPT", "").replace("\r\n", "\n").strip()
 
     return AISummaryConfig(
@@ -307,6 +335,8 @@ def load_ai_summary_config() -> AISummaryConfig:
         base_url=base_url,
         model=model,
         timeout=timeout,
+        max_tokens=max_tokens,
+        reasoning_effort=reasoning_effort,
         max_prompt_chars=max_prompt_chars,
         user_prompt=user_prompt,
     )
