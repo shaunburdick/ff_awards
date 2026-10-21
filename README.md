@@ -465,13 +465,32 @@ the same digest in about 2,057 reasoning tokens and roughly 9 seconds.
 `glm-5.3-flash` is still selectable through `AI_SUMMARY_MODEL`, at the cost of a
 much larger `AI_SUMMARY_MAX_TOKENS` or a `reasoning_effort` the endpoint honours.
 
+**Configuration in GitHub Actions.** The weekly workflow reads every optional
+setting from repository **variables** (Settings → Secrets and variables →
+Actions → Variables), so changing the model, budget or prompt is a settings edit
+rather than a YAML commit. The prompt may be a variable or a secret; `vars` wins
+when both are set. Variables are **not masked in logs** while secrets are, so a
+prompt the league would not publish belongs in the secret.
+
+```bash
+# Every optional setting is a repository variable, e.g.
+gh variable set AI_SUMMARY_MODEL --body "deepseek-v4.1-flash"
+gh variable set AI_SUMMARY_MAX_TOKENS --body "8000"
+
+# The prompt: a variable (readable in settings), or a secret (masked in logs)
+gh variable set AI_SUMMARY_USER_PROMPT --body "$(cat prompt.txt)"
+gh secret  set AI_SUMMARY_USER_PROMPT --body "$(cat prompt.txt)"
+```
+
+A blank or unset variable means "use the default", which is what an unset
+repository variable renders as; a malformed non-blank value (a non-numeric
+timeout, an unknown reasoning effort, a URL without a scheme) is a configuration
+error that fails the run while the feature is enabled — it never degrades to a
+report without the section.
+
 **What leaves the machine:** team names, owner names, points for, points against,
 scores and league names are sent to `AI_SUMMARY_BASE_URL`, together with
-`AI_SUMMARY_USER_PROMPT`. Never put credentials in the prompt. The weekly
-workflow keeps the prompt as a committed `AI_SUMMARY_USER_PROMPT` block scalar, so
-it is reviewable in the repository; anything the league would not publish belongs
-in a secret rather than the workflow or a repository variable — repository
-variables are visible in settings.
+`AI_SUMMARY_USER_PROMPT`. Never put credentials in the prompt.
 
 **Failure behaviour:** an HTTP error, a timeout, a truncated or malformed
 response produces the normal report, a one-line notice where the section would

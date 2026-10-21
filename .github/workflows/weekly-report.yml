@@ -40,11 +40,20 @@ env:
   # there and would silently disable the feature), so the expression renders the
   # literal true/false here and the .env step below reads it.
   AI_SUMMARY_ENABLED: ${{ secrets.AI_SUMMARY_API_KEY != '' }}
-  # The commissioner's standing instructions, committed so an archived report can
-  # be reproduced together with prompt_sha. Keep every comment ABOVE this key:
-  # anything inside the block scalar is literal prompt text, is sent to the
-  # provider, and changes prompt_sha.
-  AI_SUMMARY_USER_PROMPT: |
+  # Optional settings come from repository variables, so they are changed in
+  # Settings -> Secrets and variables -> Actions -> Variables, not in this file.
+  # An unset variable renders as an empty string, and the loader reads blank as
+  # "use the default" - no shell guard is needed for any of these.
+  AI_SUMMARY_BASE_URL: ${{ vars.AI_SUMMARY_BASE_URL }}
+  AI_SUMMARY_MODEL: ${{ vars.AI_SUMMARY_MODEL }}
+  AI_SUMMARY_TIMEOUT: ${{ vars.AI_SUMMARY_TIMEOUT }}
+  AI_SUMMARY_MAX_TOKENS: ${{ vars.AI_SUMMARY_MAX_TOKENS }}
+  AI_SUMMARY_REASONING_EFFORT: ${{ vars.AI_SUMMARY_REASONING_EFFORT }}
+  AI_SUMMARY_MAX_PROMPT_CHARS: ${{ vars.AI_SUMMARY_MAX_PROMPT_CHARS }}
+  # The prompt may be a repository variable or a secret; the first non-empty
+  # value wins. Variables are not masked in logs, so a prompt that must never be
+  # published belongs in the secret. Keep every comment above the key.
+  AI_SUMMARY_USER_PROMPT: ${{ vars.AI_SUMMARY_USER_PROMPT || secrets.AI_SUMMARY_USER_PROMPT }}
 
 jobs:
   generate-report:

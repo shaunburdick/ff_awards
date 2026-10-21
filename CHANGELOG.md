@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - AI Summary settings come from repository variables
+- **The optional AI settings are read from GitHub repository variables**
+  (`AI_SUMMARY_BASE_URL`, `MODEL`, `TIMEOUT`, `MAX_TOKENS`,
+  `REASONING_EFFORT`, `MAX_PROMPT_CHARS`, `USER_PROMPT`), so they are changed in
+  repository settings instead of the workflow YAML; an unset variable renders
+  empty and means "use the default". The prompt may live in a variable or a
+  secret (`vars` wins), and a prompt that must not be published belongs in the
+  secret because variables are not masked in logs. The committed
+  `AI_SUMMARY_USER_PROMPT` block scalar is gone — the consequence is that the
+  prompt is no longer in git, so an archived report's narration can be
+  reproduced only from the variable or secret value together with `prompt_sha`.
+
 ## [3.5.0] - 2026-10-21 (AI Summary)
 
 ### Added - AI Summary (optional, `ff-tracker` only)
