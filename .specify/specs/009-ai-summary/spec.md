@@ -4,7 +4,7 @@
 > **Status**: Draft — revised after Gate 1
 > **Created**: 2026-10-21
 > **Last Updated**: 2026-10-21
-> **Version**: 0.6
+> **Version**: 0.7
 
 ## Overview
 
@@ -118,12 +118,7 @@ JSON `ai_summary` object:
   "headline": "string",
   "season_note": "string",
   "leagues": [{ "league": "string", "paragraphs": ["string"], "bullets": ["string"] }],
-  "provenance": {
-    "model": "glm-5.3-flash",
-    "prompt_sha": "9f2c1ab4e7d0",
-    "generated_at": "2026-10-14T05:03:11Z",
-    "truncated": false
-  }
+  "provenance": { "model": "glm-5.3-flash", "prompt_sha": "9f2c1ab4e7d0", "generated_at": "2026-10-14T05:03:11Z", "truncated": false }
 }
 ```
 
@@ -148,7 +143,8 @@ Configuration errors are not narrative failures and are not degraded:
 - `AI_SUMMARY_ENABLED` true with `AI_SUMMARY_API_KEY` missing or empty → `ConfigurationError` naming `AI_SUMMARY_API_KEY`, exit 1, no report, no HTTP call.
 - `AI_SUMMARY_ENABLED` set to any value not in `true|1|yes|on|false|0|no|off` (case-insensitive) → `ConfigurationError`.
 - `AI_SUMMARY_TIMEOUT` not a positive integer → `ConfigurationError`.
-- `AI_SUMMARY_USER_PROMPT` longer than 8000 characters → `ConfigurationError` naming the variable, its actual length and the limit.
+- `AI_SUMMARY_MAX_PROMPT_CHARS` not a positive integer → `ConfigurationError` naming the variable.
+- `AI_SUMMARY_USER_PROMPT` longer than `AI_SUMMARY_MAX_PROMPT_CHARS` → `ConfigurationError` naming the variable, its actual length and the configured limit.
 - Misspelled or missing provider settings therefore fail loudly once, instead of quietly degrading every scheduled run.
 - Because that failure produces no report, the weekly workflow sets `AI_SUMMARY_ENABLED=true` only when `secrets.AI_SUMMARY_API_KEY` is non-empty, and omits it otherwise. The base URL needs no guard because it has a default. The guard is an `env:` expression yielding the literal `true`/`false` (e.g. `AI_SUMMARY_ENABLED: ${{ secrets.AI_SUMMARY_API_KEY != '' }}`) consumed by the step that writes `.env`. It cannot be an `if:` condition: `secrets` is not available in `jobs.<job_id>.if` or `steps.<job_id>.if`, so such a condition evaluates without the secret and silently disables the feature. No workflow sets the flag unconditionally.
 
@@ -156,7 +152,7 @@ Configuration errors are not narrative failures and are not degraded:
 
 ### FR-008 — Provenance and determinism
 
-- JSON records `provenance.model`, `provenance.prompt_sha`, `provenance.generated_at` (ISO 8601 UTC) and `provenance.truncated`. `prompt_sha` is a hash over the system prompt text **and** `AI_SUMMARY_USER_PROMPT` (FR-010), in that order with a fixed separator, computed at generation time — so editing the user prompt changes it. The limitation stated plainly: the user prompt itself is not archived, so an archived report can be reproduced only if that value was retained; committing it as a workflow `env:` block scalar is the recommended way to keep it reviewable.
+- JSON records `provenance.model`, `provenance.prompt_sha`, `provenance.generated_at` (ISO 8601 UTC) and `provenance.truncated`. `prompt_sha` is a hash over the system prompt text **and** `AI_SUMMARY_USER_PROMPT` (FR-010), in that order with a fixed separator, computed at generation time — so editing the user prompt changes it. The limitation stated plainly: the user prompt itself is not archived, so an archived CI report can be reproduced only from the value committed as a workflow `env:` block scalar, together with `prompt_sha`. A local `-vv` run can reconstruct the exact system prompt (FR-009); an archived CI report cannot, and logging is not a substitute for the committed value.
 - console, sheets, email and markdown carry the model id in the attribution line. They do not carry `prompt_sha`.
 - The narrative is not deterministic: two runs over identical data may differ in wording and emphasis, and no requirement compares two live generations.
 - For identical inputs and identical narrative outcome, every deterministic section is byte-identical, and is identical to a run with the feature off. The report's facts never depend on the narrative.
@@ -165,14 +161,16 @@ Configuration errors are not narrative failures and are not degraded:
 
 - The API key never appears in any output, artifact, error message, notice, warning command or log line, including when the provider echoes it back in an error body or header.
 - The key is supplied only through `AI_SUMMARY_API_KEY` (environment or `.env`, same loading as `ESPN_S2`/`SWID`). There is no CLI flag and no `--format-arg` for it — format arguments are for presentation and must not carry credentials.
-- The digest, the request body and the response body are never logged at any level, including `-vv`. Only the model, HTTP status, latency and token counts may be logged.
+- **Never logged at any level** — INFO, DEBUG, error messages, notices or warning commands: the API key, the request body (the digest, which carries team names, owner names, points for and against, and league IDs), and the response body. Only the model, HTTP status, latency and token counts may be logged.
+- **Logged at DEBUG only:** the system prompt — the template plus the resolved `### COMMISSIONER'S INSTRUCTIONS` block (FR-010). It carries no report data. It is never logged at INFO, WARNING or ERROR, and never appears in an error message, notice or warning command.
+- Why the split matters: this repository is public and GitHub Actions logs are world-readable, so that DEBUG line is for a local `-vv` run — do not enable verbose logging in CI. For CI the reviewable record is the `AI_SUMMARY_USER_PROMPT` value committed as a block scalar in the workflow's `env:` (FR-008); logging is not a substitute for it.
 - Team names, owner names and scores leave the machine and are sent to `AI_SUMMARY_BASE_URL`. `AI_SUMMARY_USER_PROMPT` (FR-010) is sent verbatim to the provider, so it must never contain credentials; and because a repository *variable* is visible in repository settings, anything the league would not publish belongs in a secret. `ff-tracker --help` states this under the feature's configuration section.
 
 ### FR-010 — User prompt
 
 - `AI_SUMMARY_USER_PROMPT` is optional and defaults to empty. It is free-form — tone, nicknames, running jokes, facts to mention, things never to say — with no required structure. It is appended to the system prompt as a clearly delimited block: `### COMMISSIONER'S INSTRUCTIONS` on its own line, then the value, sent verbatim inside that block.
 - Reading rules: the value is used exactly as supplied; leading and trailing whitespace is stripped and internal newlines are preserved; CRLF is normalised to LF. An empty or whitespace-only value means "no extra instructions" and is not an error — the block is then omitted rather than sent empty.
-- Size cap: 8000 characters, measured after the whitespace strip. Linux permits roughly 128 KB per environment variable and GitHub caps a secret at 48 KB, so this limit exists to keep prompt size and cost bounded, not to respect a platform limit. Exceeding it is a `ConfigurationError` naming the variable, the actual length and the limit.
+- Size cap: `AI_SUMMARY_MAX_PROMPT_CHARS` characters (default 8000), measured after the whitespace strip. Exceeding it is a `ConfigurationError` naming the variable, the actual length and the configured limit — never a hard-coded number. The default bounds prompt size and cost rather than a platform: Linux permits roughly 128 KB per environment variable and GitHub caps a secret at 48 KB.
 - **Precedence:** the user prompt shapes tone and content only, and is ignored wherever it would contradict the JSON contract, the caps and normalisation (FR-004), or the "no invented facts" rule (FR-004).
 - The user prompt is trusted input authored by the commissioner and is not sanitised: the JSON contract and normalisation run after generation and are the actual guardrail. Nothing in this feature validates the factual accuracy of the prose, including anything the user prompt asks it to say.
 - It is never echoed into the report; `prompt_sha` (FR-008) is the only trace of it.
@@ -188,7 +186,8 @@ Configuration errors are not narrative failures and are not degraded:
 | `AI_SUMMARY_BASE_URL` | no | `https://opencode.ai/inference/openai/v1` | OpenAI-compatible endpoint root; `/chat/completions` is appended. An empty or whitespace-only value falls back to the default rather than erroring. |
 | `AI_SUMMARY_MODEL` | no | `glm-5.3-flash` | Model id, reported verbatim in errors and provenance. |
 | `AI_SUMMARY_TIMEOUT` | no | `120` | Whole-call timeout in seconds. |
-| `AI_SUMMARY_USER_PROMPT` | no | empty | Free-form commissioner instructions appended to the system prompt (FR-010); stripped, CRLF-normalised, maximum 8000 characters. |
+| `AI_SUMMARY_MAX_PROMPT_CHARS` | no | `8000` | Positive integer bounding `AI_SUMMARY_USER_PROMPT`; a cost guard, not a platform limit — Linux allows roughly 128 KB per variable and GitHub caps a secret at 48 KB. |
+| `AI_SUMMARY_USER_PROMPT` | no | empty | Free-form commissioner instructions appended to the system prompt (FR-010); stripped, CRLF-normalised, bounded by `AI_SUMMARY_MAX_PROMPT_CHARS`. |
 
 These are loaded the same way as existing settings (`load_environment` / `.env`); `AI_SUMMARY_USER_PROMPT` can be set as a GitHub Actions `env:` block scalar, so it is committed and reviewable without any runtime file, and `.env` accepts a quoted multi-line value. Enabling the feature needs only a key: the endpoint default matches the model default. A default endpoint we do not control can change upstream, and the failure is visible — notice plus `::warning::` — rather than silent, which is why the default is acceptable now. The default base URL and the model id belong in `.env.example` and the README's configuration section: a plan requirement, not a code comment.
 
@@ -226,7 +225,7 @@ Tested offline with a fake client that records requests and returns canned respo
 - **AC-003** Multi-league run: exactly one call, regardless of 1, 3 or 10 leagues, and exactly one call in `--output-dir` mode with five formats; the same narrative appears in all five files.
 - **AC-004** Each failure path in FR-006 — HTTP 4xx/5xx, transport error, timeout, `finish_reason=length`, contract mismatch, league-count mismatch — produces: the complete deterministic section set, exit code 0, one notice line in the section's position, no empty heading, no `::warning::` when `GITHUB_ACTIONS` is unset, and exactly one `::warning::` line when it is `true`.
 - **AC-005** A fake error body never appears in stdout, stderr, the notice, the warning, or any file written to `--output-dir`; the API key appears nowhere; and the configured endpoint appears, if at all, as its host only — never its path or query.
-- **AC-006** No log line emitted by the summary service or by any other code this feature adds contains a team name, owner name, league ID, API key, prompt text or response body; a unique marker planted in the digest never appears in a `-vv` run over three leagues. Existing logging in modules this feature does not touch is out of scope for this criterion.
+- **AC-006** At default verbosity, a three-league run emits no API key, team name, owner name, league ID, request body, response body or system prompt. A `-vv` run emits the system prompt — the template plus the user-prompt block when one is set — and still none of the prohibited items: no key, no team or owner name, no league ID, no request or response body; a unique marker planted in the digest never appears. Existing logging in modules this feature does not touch is out of scope.
 - **AC-007** `finish_reason: "length"` with complete, parseable content is still treated as FR-006's truncation failure — the content is not rendered.
 - **AC-008** League matching follows FR-004's total order: (i) entries reordered, or differing only in case and surrounding whitespace, map by name; (ii) with equal counts and no full name match — including one stray entry or one duplicated entry — every section renders by position under our own league names, and no response-supplied league name appears as a heading; (iii) with differing counts and no full name match, the FR-006 contract failure is reported with the count-mismatch reason and nothing is rendered.
 - **AC-009** Missing key, bad `AI_SUMMARY_ENABLED` value, and non-numeric or zero `AI_SUMMARY_TIMEOUT` each raise `ConfigurationError` naming the variable, exit 1, record zero calls, and write no report.
@@ -237,7 +236,7 @@ Tested offline with a fake client that records requests and returns canned respo
 - **AC-014** When the first paragraph alone exceeds 120 words it truncates at the last word boundary at or before 120 with `…` appended, and every other paragraph is dropped.
 - **AC-015** Bullets beyond the third are dropped rather than merged into a paragraph, paragraphs beyond the third are dropped, and `provenance.truncated` is `true` when anything was dropped or shortened and absent or `false` when nothing was.
 - **AC-016** The user prompt reaches the request body inside the `### COMMISSIONER'S INSTRUCTIONS` block; changing it changes `prompt_sha`; and a user prompt instructing the model to add fields, exceed the caps, return non-JSON or invent a fact does not alter the output shape after normalisation.
-- **AC-017** A value over 8000 characters raises `ConfigurationError` naming the variable, the actual length and the limit, records zero calls and writes no report; an unset, empty or whitespace-only value is accepted and sends no instructions block.
+- **AC-017** With `AI_SUMMARY_MAX_PROMPT_CHARS` set to a value other than 8000 (say 100), a longer `AI_SUMMARY_USER_PROMPT` raises `ConfigurationError` naming the variable, the actual length and that configured limit, records zero calls and writes no report; a non-positive or non-integer limit is a `ConfigurationError` naming it; an unset, empty or whitespace-only prompt is accepted and sends no instructions block, and the default 8000 applies when the limit is unset.
 
 ### Workflow configuration check (static; inspects the YAML, not runtime behaviour)
 
@@ -306,3 +305,4 @@ None open.
 | 0.4 | 2026-10-21 | AI Agent | Owner changes: `AI_SUMMARY_BASE_URL` gains the `https://opencode.ai/inference/openai/v1` default (empty/whitespace falls back), the missing-base-URL branch and its guard half are gone, and key-only enablement is stated with the uncontrolled-endpoint tradeoff; length caps are enforced by deterministic normalisation after league matching, with `provenance.truncated` and the sentence-boundary rule; new FR-010 adds a committed lore file with a 4000-character cap, a neutral packaged default, contract-over-lore precedence, lore egress in FR-009, `prompt_sha` covering prompt plus lore, and wheel-inclusion verification; AC-013…AC-018 added; the lore exclusion is removed from Out of Scope; Edge Case 2 restated because capped prose is no longer "rendered as delivered" |
 | 0.5 | 2026-10-21 | AI Agent | Normalisation replaced with structure-first rules that need no sentence detection (initials such as `J.J. Smith` broke the abbreviation list): drop bullets, drop paragraphs, drop trailing paragraphs to fit 120 words, truncate only a first paragraph that alone exceeds it, then headline and `season_note` at word boundaries; the `season_note` two-sentence rule and the abbreviation/URL/number/emoji clauses are gone. The contract now requires at least one non-empty paragraph per league, so `"paragraphs": []` fails and the "normalises to nothing" failure clause is deleted. Failure reasons name the endpoint host only; AC-005, AC-010 (base-URL fallback) and AC-013 (survivors plus determinism) strengthened; the old AC-014 deleted and AC-015…AC-017 renumbered; AC-017 gains the packaged-default path; FR-008 states the two traceability limits; the floor is stated as prompt guidance that is deliberately not validated; a narrow user-authored-system-prompt exclusion returns; the lore template opens with a header saying it is committed and sent to the provider |
 | 0.6 | 2026-10-21 | AI Agent | The lore file is replaced by `AI_SUMMARY_USER_PROMPT`, an optional free-form env-var string appended as a `### COMMISSIONER'S INSTRUCTIONS` block; `AI_SUMMARY_LORE_FILE`, the packaged default, the wheel-inclusion requirement, the missing-path error and the neutral-template rule are removed and nothing is read from disk. Cap is 8000 characters with the variable, length and limit in the error; strip/CRLF rules and the empty-value no-op are stated; precedence, the trusted-input note and the non-verification statement sit in FR-010. FR-008 records that the user prompt is not archived and recommends a committed `env:` block scalar; FR-009 covers user-prompt egress and variable visibility; AC-016/AC-017 are restated for the variable; the exclusion now covers the system prompt template only |
+| 0.7 | 2026-10-21 | AI Agent | Logging is tiered: the key, the request body and the response body are never logged at any level, while the system prompt may be logged at DEBUG only, with the public-repo/Actions-log hazard and the committed `env:` block scalar as the CI record stated in FR-009; FR-008 and AC-006 match. `AI_SUMMARY_MAX_PROMPT_CHARS` (default 8000, positive integer) makes the user-prompt limit configurable, with the error naming the configured limit; FR-007 lists it; AC-017 uses a non-default limit so the test proves the value is read |
