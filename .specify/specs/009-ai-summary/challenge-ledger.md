@@ -1,6 +1,6 @@
 # Challenge Ledger — 009 AI Summary
 
-> Gate 1 (spec) · `spec.md` v0.9 (this commit) · Constitution v1.0.0, no conflict.
+> Gate 1 (spec) · `spec.md` v0.10 (this commit) · Constitution v1.0.0, no conflict.
 > Owner decisions of 2026-10-21 are precedent: fail-fast when enabled-but-unconfigured with a
 > workflow guard; league matching by name with positional fallback; failure notice at the bottom.
 > They are not reopened. The v0.4 owner changes (endpoint default, enforced length, committed lore
@@ -93,3 +93,15 @@ Minor: FR-002's no-matchups sentence restored; the "existing mode predicate" wor
 **CARRIED (blocking)**: AC-006's client half still has no test (Task 6 gains the logging rule, not the assertion); AC-012's mode-agreement clause is still argued structurally instead of tested.
 
 **Verdict**: HOLD — three edits (two bullets in `tasks.md`, one prose fix in plan Component 5). No re-planning required.
+
+---
+
+## Gate 3 — implementation review (spec v0.10)
+
+> Three places where spec 009 contradicted the code or itself. All three are text edits; no requirement, cap, criterion or settled row was reopened. Verdict: the spec side is closed here; the code-side items below are the implementer's.
+
+| Finding | Status |
+|---|---|
+| FR-007 validated `AI_SUMMARY_TIMEOUT`, `AI_SUMMARY_MAX_TOKENS` and `AI_SUMMARY_MAX_PROMPT_CHARS` unconditionally, contradicting FR-001 (off means unchanged output) — one stale `.env` value exited 1 with no report | **CLOSED by spec v0.10** — every FR-007 bullet is scoped to `AI_SUMMARY_ENABLED` true, and any other malformed `AI_SUMMARY_*` value is ignored while the feature is off; a malformed value of the flag itself stays an error, since an unreadable flag cannot be read as off. Code side (implementer): parse and validate the AI configuration behind the enable check. |
+| FR-009 said the request body carries league IDs, which FR-002, the digest builder and the README all deny | **CLOSED by spec v0.10** — the phrase is deleted; the request body now reads team names, owner names, and points for and against. No code change implied. |
+| AC-010 implied one test double observes every value | **CLOSED by spec v0.10** — the criterion names the test doubles and the layer each value belongs to: construction sees model, base URL, timeout and bearer token; the request sees `max_tokens` and `reasoning_effort`. Every assertion is unchanged; the existing two-seam tests already satisfy it. |
