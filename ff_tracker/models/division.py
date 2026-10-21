@@ -44,6 +44,9 @@ class DivisionData:
     weekly_games: list[WeeklyGameResult] = field(default_factory=_empty_weekly_games)
     weekly_players: list[WeeklyPlayerStats] = field(default_factory=_empty_weekly_players)
     playoff_bracket: PlayoffBracket | None = None
+    # None means unknown (fixtures, data paths without league settings); the
+    # ESPN builder always passes the league's real value.
+    reg_season_count: int | None = None
 
     def __post_init__(self) -> None:
         """Validate division data after construction."""
@@ -73,6 +76,11 @@ class DivisionData:
                 raise DataValidationError(
                     f"Game has division '{game.division}' but should be '{self.name}'"
                 )
+
+        if self.reg_season_count is not None and not 1 <= self.reg_season_count <= 18:
+            raise DataValidationError(
+                f"Regular season count must be between 1 and 18: {self.reg_season_count}"
+            )
 
     @property
     def team_count(self) -> int:

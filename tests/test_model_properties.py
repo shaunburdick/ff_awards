@@ -7,6 +7,8 @@ for all data models to boost coverage to 85%+.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from ff_tracker.exceptions import DataValidationError
@@ -1639,3 +1641,39 @@ class TestDivisionDataValidation:
                 weekly_players=[],
                 playoff_bracket=None,
             )
+
+
+class TestDivisionDataRegSeasonCount:
+    """Test the regular-season length field added for the AI digest."""
+
+    @staticmethod
+    def _base() -> DivisionData:
+        owner = Owner(display_name="Alice", first_name="Alice", last_name="Smith", id="alice123")
+        team = TeamStats(
+            name="Team A",
+            owner=owner,
+            points_for=1200.0,
+            points_against=900.0,
+            wins=10,
+            losses=3,
+            division="League A",
+        )
+        return DivisionData(league_id=123456, name="League A", teams=[team], games=[])
+
+    def test_defaults_to_none_meaning_unknown(self) -> None:
+        """A fixture without league settings records unknown, not 14."""
+        assert self._base().reg_season_count is None
+
+    def test_accepts_a_real_league_value(self) -> None:
+        base = self._base()
+        assert replace(base, reg_season_count=14).reg_season_count == 14
+        assert replace(base, reg_season_count=1).reg_season_count == 1
+        assert replace(base, reg_season_count=18).reg_season_count == 18
+
+    def test_rejects_zero(self) -> None:
+        with pytest.raises(DataValidationError, match="Regular season count must be between"):
+            replace(self._base(), reg_season_count=0)
+
+    def test_rejects_nineteen(self) -> None:
+        with pytest.raises(DataValidationError, match="Regular season count must be between"):
+            replace(self._base(), reg_season_count=19)
