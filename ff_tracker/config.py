@@ -7,8 +7,9 @@ Handles environment variables, league IDs, and ESPN authentication.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 
@@ -59,11 +60,29 @@ class FFTrackerConfig:
                 raise ConfigurationError(f"Week must be between 1 and 18, got: {self.week}")
 
 
-def load_environment() -> None:
-    """Load environment variables from .env file if it exists."""
-    env_file = Path.cwd() / ".env"
-    if env_file.exists():
-        load_dotenv(env_file)
+def load_environment(env_file: str | Path | None = None) -> None:
+    """
+    Load environment variables from a dotenv file.
+
+    Args:
+        env_file: An explicit path to load. ``None`` keeps the default: ``.env``
+            in the working directory, loaded only if it exists. An explicit path
+            that does not exist is an error — a silent fallback would leave the
+            caller believing it read a file it never opened.
+
+    Raises:
+        ConfigurationError: If an explicitly given path does not exist.
+    """
+    if env_file is None:
+        default_file = Path.cwd() / ".env"
+        if default_file.exists():
+            load_dotenv(default_file)
+        return
+
+    explicit_file = Path(env_file)
+    if not explicit_file.exists():
+        raise ConfigurationError(f"Environment file not found: {explicit_file}")
+    load_dotenv(explicit_file)
 
 
 def parse_league_ids_from_env() -> list[int]:
@@ -125,6 +144,7 @@ def create_config(
     private: bool = False,
     use_env: bool = False,
     week: int | None = None,
+    env_file: str | Path | None = None,
 ) -> FFTrackerConfig:
     """
     Create configuration object from various sources.
@@ -135,6 +155,8 @@ def create_config(
         private: Whether to use private league authentication
         use_env: Whether to load league IDs from environment
         week: Optional week override (1-18) for historical/testing purposes
+        env_file: Optional path to a dotenv file instead of ``.env`` in the
+            working directory; a missing explicit path is a ConfigurationError
 
     Returns:
         Configured FFTrackerConfig object
@@ -143,7 +165,7 @@ def create_config(
         ConfigurationError: If configuration is invalid or incomplete
     """
     # Load environment if needed
-    load_environment()
+    load_environment(env_file)
 
     # Determine league IDs
     if use_env:
@@ -180,3 +202,181 @@ def detect_fantasy_year() -> int:
 
     now = datetime.datetime.now()
     return now.year if now.month >= 8 else now.year - 1
+
+
+DEFAULT_AI_BASE_URL = "https://opencode.ai/inference/openai/v1"
+# glm-5.3-flash spends the whole default budget on reasoning for a three-league
+# digest (8000/8000, content null); this model completes it in ~2000 reasoning
+# tokens. The old default remains selectable through AI_SUMMARY_MODEL.
+DEFAULT_AI_MODEL = "deepseek-v4.1-flash"
+DEFAULT_AI_TIMEOUT = 120
+DEFAULT_AI_MAX_TOKENS = 8000
+DEFAULT_AI_MAX_PROMPT_CHARS = 8000
+
+_AI_BOOL_VALUES = {"true", "1", "yes", "on", "false", "0", "no", "off"}
+AI_REASONING_EFFORTS = ("low", "medium", "high")
+
+
+@dataclass(frozen=True)
+class AISummaryConfig:
+    """
+    Optional AI narrative settings, loaded beside ``FFTrackerConfig``.
+
+    They are not part of ``FFTrackerConfig`` on purpose: ``create_config``
+    serves three CLIs and the feature covers ``ff-tracker`` only, so a malformed
+    ``AI_SUMMARY_*`` variable must not break the championship or season-recap
+    scripts.
+    """
+
+    enabled: bool = False
+    # Never in a repr or a traceback: this value must not reach a log line.
+    api_key: str = field(default="", repr=False)
+    base_url: str = DEFAULT_AI_BASE_URL
+    model: str = DEFAULT_AI_MODEL
+    timeout: int = DEFAULT_AI_TIMEOUT
+    max_tokens: int = DEFAULT_AI_MAX_TOKENS
+    # None means "send no reasoning_effort key at all", never null or "".
+    reasoning_effort: str | None = None
+    max_prompt_chars: int = DEFAULT_AI_MAX_PROMPT_CHARS
+    user_prompt: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate the settings; configuration errors are not degraded."""
+        if self.enabled and not self.api_key.strip():
+            raise ConfigurationError(
+                "AI_SUMMARY_API_KEY is required when AI_SUMMARY_ENABLED is true. "
+                "Set the key, or unset AI_SUMMARY_ENABLED to ship the report without a narrative."
+            )
+
+        if not self.base_url.strip():
+            raise ConfigurationError("AI_SUMMARY_BASE_URL cannot be empty")
+
+        parts = urlsplit(self.base_url)
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            raise ConfigurationError(
+                "AI_SUMMARY_BASE_URL must be an http(s) URL with a host, "
+                f"got: '{self.base_url}'"
+            )
+
+        if not self.model.strip():
+            raise ConfigurationError("AI_SUMMARY_MODEL cannot be empty")
+
+        if self.timeout <= 0:
+            raise ConfigurationError(
+                f"AI_SUMMARY_TIMEOUT must be a positive integer, got: {self.timeout}"
+            )
+
+        if self.max_tokens <= 0:
+            raise ConfigurationError(
+                f"AI_SUMMARY_MAX_TOKENS must be a positive integer, got: {self.max_tokens}"
+            )
+
+        if self.reasoning_effort is not None:
+            normalised = self.reasoning_effort.strip().lower()
+            if normalised and normalised not in AI_REASONING_EFFORTS:
+                raise ConfigurationError(
+                    "AI_SUMMARY_REASONING_EFFORT must be one of "
+                    f"{'|'.join(AI_REASONING_EFFORTS)}, got: '{self.reasoning_effort}'"
+                )
+            # Frozen, so normalise in place: one lowercase value, and empty
+            # means "no key" rather than an empty string.
+            object.__setattr__(self, "reasoning_effort", normalised or None)
+
+        if self.max_prompt_chars <= 0:
+            raise ConfigurationError(
+                "AI_SUMMARY_MAX_PROMPT_CHARS must be a positive integer, "
+                f"got: {self.max_prompt_chars}"
+            )
+
+        if len(self.user_prompt) > self.max_prompt_chars:
+            raise ConfigurationError(
+                f"AI_SUMMARY_USER_PROMPT is {len(self.user_prompt)} characters, "
+                f"longer than AI_SUMMARY_MAX_PROMPT_CHARS={self.max_prompt_chars}"
+            )
+
+
+def _parse_ai_bool(value: str) -> bool:
+    """Parse AI_SUMMARY_ENABLED, accepting only the documented eight values."""
+    normalised = value.strip().lower()
+    if normalised not in _AI_BOOL_VALUES:
+        raise ConfigurationError(
+            "AI_SUMMARY_ENABLED must be one of true/1/yes/on/false/0/no/off, "
+            f"got: '{value}'"
+        )
+    return normalised in {"true", "1", "yes", "on"}
+
+
+def _parse_positive_int(name: str, value: str, default: int) -> int:
+    """Parse a positive-integer variable, naming itself on failure."""
+    if not value.strip():
+        return default
+    try:
+        parsed = int(value)
+    except ValueError as e:
+        raise ConfigurationError(f"{name} must be a positive integer, got: '{value}'") from e
+    if parsed <= 0:
+        raise ConfigurationError(f"{name} must be a positive integer, got: '{value}'")
+    return parsed
+
+
+def load_ai_summary_config(env_file: str | Path | None = None) -> AISummaryConfig:
+    """
+    Load the AI narrative settings from the environment (or ``.env``).
+
+    ``load_environment`` normally runs inside ``create_config``; it is called
+    here too, with the same ``env_file``, so both loaders read one file rather
+    than two. A ``.env``-only setup works no matter which loader runs first.
+    ``load_dotenv`` never overrides an already-set variable, so a workflow
+    ``env:`` value wins over ``.env`` either way.
+
+    Returns:
+        Validated settings; ``enabled`` is false unless explicitly switched on.
+        While the feature is off only ``AI_SUMMARY_ENABLED`` is read, so no
+        other AI variable can deny a report by being malformed.
+
+    Raises:
+        ConfigurationError: If ``AI_SUMMARY_ENABLED`` is unreadable, or the
+            feature is enabled and a setting is malformed: a missing key, a bad
+            base URL, a non-positive budget or timeout, an unknown reasoning
+            effort, or an oversized user prompt.
+    """
+    load_environment(env_file)
+
+    enabled_raw = os.getenv("AI_SUMMARY_ENABLED", "")
+    if not enabled_raw.strip():
+        # Nothing else is read: with the feature off, no AI variable can deny a
+        # report by being malformed. Only the flag itself is validated.
+        return AISummaryConfig()
+    if not _parse_ai_bool(enabled_raw):
+        return AISummaryConfig()
+
+    enabled = True
+
+    timeout = _parse_positive_int(
+        "AI_SUMMARY_TIMEOUT", os.getenv("AI_SUMMARY_TIMEOUT", ""), DEFAULT_AI_TIMEOUT
+    )
+    max_tokens = _parse_positive_int(
+        "AI_SUMMARY_MAX_TOKENS", os.getenv("AI_SUMMARY_MAX_TOKENS", ""), DEFAULT_AI_MAX_TOKENS
+    )
+    max_prompt_chars = _parse_positive_int(
+        "AI_SUMMARY_MAX_PROMPT_CHARS",
+        os.getenv("AI_SUMMARY_MAX_PROMPT_CHARS", ""),
+        DEFAULT_AI_MAX_PROMPT_CHARS,
+    )
+
+    base_url = os.getenv("AI_SUMMARY_BASE_URL", "").strip().rstrip("/") or DEFAULT_AI_BASE_URL
+    model = os.getenv("AI_SUMMARY_MODEL", "").strip() or DEFAULT_AI_MODEL
+    reasoning_effort = os.getenv("AI_SUMMARY_REASONING_EFFORT", "").strip().lower() or None
+    user_prompt = os.getenv("AI_SUMMARY_USER_PROMPT", "").replace("\r\n", "\n").strip()
+
+    return AISummaryConfig(
+        enabled=enabled,
+        api_key=os.getenv("AI_SUMMARY_API_KEY", ""),
+        base_url=base_url,
+        model=model,
+        timeout=timeout,
+        max_tokens=max_tokens,
+        reasoning_effort=reasoning_effort,
+        max_prompt_chars=max_prompt_chars,
+        user_prompt=user_prompt,
+    )

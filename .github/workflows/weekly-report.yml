@@ -36,6 +36,15 @@ on:
 
 env:
   PYTHONUNBUFFERED: 1
+  # Key-only guard. `secrets` cannot be referenced in `if:` (it evaluates empty
+  # there and would silently disable the feature), so the expression renders the
+  # literal true/false here and the .env step below reads it.
+  AI_SUMMARY_ENABLED: ${{ secrets.AI_SUMMARY_API_KEY != '' }}
+  # The commissioner's standing instructions, committed so an archived report can
+  # be reproduced together with prompt_sha. Keep every comment ABOVE this key:
+  # anything inside the block scalar is literal prompt text, is sent to the
+  # provider, and changes prompt_sha.
+  AI_SUMMARY_USER_PROMPT: |
 
 jobs:
   generate-report:
@@ -66,6 +75,12 @@ jobs:
         fi
         if [ -n "${{ secrets.ESPN_S2 }}" ]; then
           echo "ESPN_S2=${{ secrets.ESPN_S2 }}" >> .env
+        fi
+        # Only when the key exists, so a checkout without it ships a normal
+        # report with the feature off instead of failing on a missing key.
+        if [ "$AI_SUMMARY_ENABLED" = "true" ]; then
+          echo "AI_SUMMARY_ENABLED=true" >> .env
+          echo "AI_SUMMARY_API_KEY=${{ secrets.AI_SUMMARY_API_KEY }}" >> .env
         fi
 
     - name: Generate fantasy football report

@@ -136,6 +136,13 @@ Environment Variables:
     )
 
     parser.add_argument(
+        "--env-file",
+        type=Path,
+        default=None,
+        help="Path to environment file (default: .env in the working directory)",
+    )
+
+    parser.add_argument(
         "--output-dir",
         type=Path,
         help="Directory to write all output formats. When specified, generates all formats automatically.",
@@ -425,6 +432,7 @@ def main() -> int:
             private=args.private,
             use_env=args.env,
             week=args.week,
+            env_file=args.env_file,
         )
 
         logger.debug(f"Championship Week script starting for {len(config.league_ids)} leagues")

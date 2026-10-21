@@ -7,12 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-10-21 (AI Summary)
+
+### Added - AI Summary (optional, `ff-tracker` only)
+- **A labelled, AI-written "commissioner's take" between the weekly highlights
+  and the season-long challenges**, in console, markdown, email and sheets (JSON
+  keeps a top-level `ai_summary` key). Off by default, generated once per run and
+  shared by every format the run produces. It never alters a deterministic value.
+- **Fail-open by design:** an HTTP error, timeout, truncation or malformed
+  response ships the full report with a one-line notice in the section's position
+  and a `::warning::` under GitHub Actions. Configuration errors (enabled without
+  a key, a bad timeout, an oversized prompt) still fail fast with exit 1.
+- **New settings:** `AI_SUMMARY_ENABLED`, `AI_SUMMARY_API_KEY`,
+  `AI_SUMMARY_BASE_URL`, `AI_SUMMARY_MODEL`, `AI_SUMMARY_TIMEOUT`,
+  `AI_SUMMARY_MAX_TOKENS`, `AI_SUMMARY_REASONING_EFFORT`,
+  `AI_SUMMARY_MAX_PROMPT_CHARS`, `AI_SUMMARY_USER_PROMPT` - see `.env.example`
+  and the README. The weekly workflow enables the feature only when the key
+  secret is present.
+- **JSON gains a top-level `ai_summary`** object with the narrative and its
+  provenance (`model`, `prompt_sha`, `generated_at`, `truncated`), or
+  `{"error": <notice>}` when generation failed. Absent when the feature is off.
+
+### Changed - AI Summary defaults and budget knobs
+- **Default model is now `deepseek-v4.1-flash`.** `glm-5.3-flash` spends the
+  whole 8000-token budget on reasoning for a real three-league digest
+  (8000/8000 tokens, `content: null`, `finish_reason: length`); the new default
+  completes the same digest in about 2,057 reasoning tokens and ~9 seconds.
+  `glm-5.3-flash` remains selectable through `AI_SUMMARY_MODEL`.
+- **`AI_SUMMARY_MAX_TOKENS`** (default `8000`) is sent as the request's
+  `max_tokens` instead of a hard-coded value; a non-positive or non-integer value
+  is a `ConfigurationError` naming the variable.
+- **`AI_SUMMARY_REASONING_EFFORT`** (`low|medium|high`, case-insensitive, unset by
+  default) sends `reasoning_effort` with the request; when unset or empty the key
+  is omitted entirely. A non-standard extension: an endpoint that ignores it is
+  not treated as a failure.
+
 ### Changed (breaking for JSON consumers)
 - **JSON `playoff_status` names the current position, not an outcome.** The
   field now publishes `in_playoff_position` or `outside_playoff_position`.
   `qualified`/`eliminated` claimed a season outcome the field never computed -
   a 3-3 team ranked 5th in week 6 read as "eliminated". Consumers matching on
   the old strings must update.
+
+### Fixed - `--env-file` is honoured
+- **`--env-file` actually selects the file now.** The flag was advertised and
+  ignored: the loaders always read `.env` from the working directory. It is
+  plumbed through `load_environment`, `create_config` and the AI settings loader,
+  so one file supplies `LEAGUE_IDS`, the ESPN cookies and `AI_SUMMARY_*` alike,
+  and a path that was given but does not exist is a `ConfigurationError` naming
+  it instead of a silent fallback. `ff-championship` and `ff-season-recap` accept
+  the same flag.
 
 ### Fixed - Weekly challenge facts
 - **Closest Game This Week names the game's winner.** The challenge took the

@@ -102,3 +102,62 @@ class SeasonIncompleteError(FFTrackerError):
         self.current_week = current_week
         self.championship_week = championship_week
         super().__init__(message)
+
+
+class AISummaryError(Exception):
+    """
+    Base class for narrative failures that degrade rather than stop the run.
+
+    Deliberately **not** a subclass of ``FFTrackerError``: a cosmetic failure
+    must never be mistaken for a fail-fast error, and if one of these ever
+    escapes ``AISummaryService.generate`` it should surface as an unexpected
+    error, not as ``Error:`` plus exit 1.
+
+    ``reason`` is the FR-006 phrase rendered in the notice, the Actions warning
+    and the JSON ``ai_summary.error`` value. It names the endpoint host at most,
+    never a path, the API key or a response body.
+    """
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(reason)
+
+
+class AIHTTPError(AISummaryError):
+    """The provider answered with a non-2xx status."""
+
+    def __init__(self, status: int, host: str, model: str) -> None:
+        self.status = status
+        self.host = host
+        self.model = model
+        super().__init__(f"HTTP {status} (model {model} at {host})")
+
+
+class AITransportError(AISummaryError):
+    """The request never reached the provider (DNS, TLS, connection reset)."""
+
+    def __init__(self, host: str) -> None:
+        self.host = host
+        super().__init__(f"connection failed ({host})")
+
+
+class AITimeoutError(AISummaryError):
+    """A socket read exceeded AI_SUMMARY_TIMEOUT."""
+
+    def __init__(self, seconds: int) -> None:
+        self.seconds = seconds
+        super().__init__(f"timed out after {seconds}s")
+
+
+class AITruncationError(AISummaryError):
+    """The provider stopped at the token limit (finish_reason=length)."""
+
+    def __init__(self) -> None:
+        super().__init__("finish_reason=length")
+
+
+class AIContractError(AISummaryError):
+    """The response was JSON but not the shape or league set the contract requires."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)

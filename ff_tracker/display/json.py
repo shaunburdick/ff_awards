@@ -3,7 +3,15 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 
-from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, Owner, WeeklyChallenge
+from ..models import (
+    AISummaryResult,
+    AISummaryUnavailable,
+    ChallengeResult,
+    ChampionshipLeaderboard,
+    DivisionData,
+    Owner,
+    WeeklyChallenge,
+)
 from ..models.championship import ChampionshipRoster
 from .base import BaseFormatter
 
@@ -48,6 +56,7 @@ class JsonFormatter(BaseFormatter):
         current_week: int | None = None,
         championship: ChampionshipLeaderboard | None = None,
         championship_rosters: Sequence[ChampionshipRoster] | None = None,
+        ai_summary: AISummaryResult | None = None,
     ) -> str:
         """Format results as JSON string."""
         # Get format arguments
@@ -152,9 +161,38 @@ class JsonFormatter(BaseFormatter):
                 standings["note"] = "Final regular season standings - week 14"
             data["standings"] = standings
 
+        # AI narrative last: absent when the feature is off, a notice when it failed
+        if ai_summary is not None:
+            data["ai_summary"] = self._serialize_ai_summary(ai_summary)
+
         # Python's json module with optional pretty printing
         indent = 2 if pretty else None
         return json.dumps(data, indent=indent, ensure_ascii=False)
+
+    def _serialize_ai_summary(self, ai_summary: AISummaryResult) -> dict[str, object]:
+        """Serialize the narrative or its notice; the notice text is the error value."""
+        if isinstance(ai_summary, AISummaryUnavailable):
+            return {"error": ai_summary.notice}
+
+        return {
+            "headline": ai_summary.headline,
+            "season_note": ai_summary.season_note,
+            "leagues": [
+                {
+                    "league": league.league,
+                    "paragraphs": list(league.paragraphs),
+                    "bullets": list(league.bullets),
+                }
+                for league in ai_summary.leagues
+            ],
+            "provenance": {
+                "model": ai_summary.provenance.model,
+                "prompt_sha": ai_summary.provenance.prompt_sha,
+                "generated_at": ai_summary.provenance.generated_at,
+                "truncated": ai_summary.provenance.truncated,
+                "attempts": ai_summary.provenance.attempts,
+            },
+        }
 
     def _serialize_weekly_highlight(self, challenge: WeeklyChallenge) -> dict[str, object]:
         """Serialize one weekly challenge, keeping team and player fields apart."""

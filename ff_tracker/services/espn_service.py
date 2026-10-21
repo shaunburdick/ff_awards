@@ -1293,6 +1293,7 @@ class ESPNService:
             weekly_games=weekly_games,
             weekly_players=weekly_players,
             playoff_bracket=playoff_bracket,
+            reg_season_count=league.settings.reg_season_count,
         )
 
     def load_all_divisions(self) -> list[DivisionData]:

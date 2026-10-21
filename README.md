@@ -396,6 +396,22 @@ There are three ways to provide league IDs:
    uv run ff-tracker 123456
    ```
 
+### Alternate Environment File
+
+All three CLIs (`ff-tracker`, `ff-championship`, `ff-season-recap`) accept
+`--env-file PATH`. By default they read `.env` from the working directory; the
+flag points them at a different file, which is useful for testing against a
+throwaway set of leagues or keeping several multi-league setups side by side.
+The file supplies everything an environment does — `LEAGUE_IDS`, the ESPN
+cookies, and any `AI_SUMMARY_*` settings — and both the report configuration and
+the AI settings read that same file. A path you pass explicitly must exist: a
+missing one is an error naming the path, rather than a silent fallback to the
+repo's `.env`.
+
+```bash
+uv run ff-tracker --env --env-file ./staging.env
+```
+
 ### ESPN Authentication (Private Leagues Only)
 
 For private leagues, you need ESPN authentication cookies:
@@ -416,6 +432,58 @@ For private leagues, you need ESPN authentication cookies:
    ```bash
    uv run ff-tracker 123456 --private
    ```
+
+### AI Summary (Optional, `ff-tracker` Only)
+
+`ff-tracker` can append a short AI-written "commissioner's take" between the
+weekly highlights and the season-long challenges, in every format that has a
+position (JSON keeps a top-level `ai_summary` key). It is off by default, labelled
+AI-generated wherever it appears, and can never change a deterministic value: if
+the narrative cannot be generated the report ships without it and says so.
+
+```env
+AI_SUMMARY_ENABLED=true
+AI_SUMMARY_API_KEY=your_opencode_api_key_here
+```
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AI_SUMMARY_ENABLED` | `false` | Opt-in switch; a key alone does not enable it |
+| `AI_SUMMARY_API_KEY` | none | Bearer token, required when enabled, never printed |
+| `AI_SUMMARY_BASE_URL` | `https://opencode.ai/inference/openai/v1` | OpenAI-compatible endpoint root |
+| `AI_SUMMARY_MODEL` | `deepseek-v4.1-flash` | Model id, reported in JSON provenance and the attribution line |
+| `AI_SUMMARY_TIMEOUT` | `120` | Per-socket-read timeout in seconds |
+| `AI_SUMMARY_MAX_TOKENS` | `8000` | Sent as the request's `max_tokens`; too small a budget for the chosen model shows up as a truncation notice |
+| `AI_SUMMARY_REASONING_EFFORT` | unset | Optional `low\|medium\|high`; sent as `reasoning_effort` only when set, and an endpoint that ignores it is not an error |
+| `AI_SUMMARY_MAX_PROMPT_CHARS` | `8000` | Size cap for the instructions below |
+| `AI_SUMMARY_USER_PROMPT` | empty | Free-form instructions appended to the system prompt, sent verbatim |
+
+**Why `deepseek-v4.1-flash` is the default:** `glm-5.3-flash` spends the whole
+8000-token budget on reasoning for a three-league digest (8000/8000 tokens,
+`content: null`, `finish_reason: length`), while `deepseek-v4.1-flash` completes
+the same digest in about 2,057 reasoning tokens and roughly 9 seconds.
+`glm-5.3-flash` is still selectable through `AI_SUMMARY_MODEL`, at the cost of a
+much larger `AI_SUMMARY_MAX_TOKENS` or a `reasoning_effort` the endpoint honours.
+
+**What leaves the machine:** team names, owner names, points for, points against,
+scores and league names are sent to `AI_SUMMARY_BASE_URL`, together with
+`AI_SUMMARY_USER_PROMPT`. Never put credentials in the prompt. The weekly
+workflow keeps the prompt as a committed `AI_SUMMARY_USER_PROMPT` block scalar, so
+it is reviewable in the repository; anything the league would not publish belongs
+in a secret rather than the workflow or a repository variable — repository
+variables are visible in settings.
+
+**Failure behaviour:** an HTTP error, a timeout, a truncated or malformed
+response produces the normal report, a one-line notice where the section would
+have been, exit code 0, and a `::warning::` in GitHub Actions. A *configuration*
+error **while the feature is enabled** (a missing key, a malformed timeout or
+budget, a bad base URL, an oversized prompt) fails the run instead, before any
+report is written; the same variables are ignored while the feature is off, so a
+stale value cannot deny a report. The weekly workflow sets
+`AI_SUMMARY_ENABLED` only when the key secret exists, so a checkout without the
+key simply gets a report with the feature off.
+
+`ff-championship` and `ff-season-recap` ignore these variables entirely.
 
 ## Sample Output
 

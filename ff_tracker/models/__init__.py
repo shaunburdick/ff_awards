@@ -7,6 +7,13 @@ and dataclasses for representing fantasy football data.
 
 from __future__ import annotations
 
+from .ai_summary import (
+    AIProvenance,
+    AISummary,
+    AISummaryLeague,
+    AISummaryResult,
+    AISummaryUnavailable,
+)
 from .base import Validatable
 from .challenge import ChallengeResult
 from .championship import (
@@ -39,6 +46,11 @@ from .weekly_challenge import WeeklyChallenge
 
 __all__ = [
     "Validatable",
+    "AIProvenance",
+    "AISummary",
+    "AISummaryLeague",
+    "AISummaryResult",
+    "AISummaryUnavailable",
     "Owner",
     "GameResult",
     "TeamStats",
