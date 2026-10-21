@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - AI Summary (optional, `ff-tracker` only)
+- **A labelled, AI-written "commissioner's take" as the report's last section**
+  in all five formats, off by default, generated once per run and shared by every
+  format the run produces. It never alters a deterministic value.
+- **Fail-open by design:** an HTTP error, timeout, truncation or malformed
+  response ships the full report with a one-line notice in the section's position
+  and a `::warning::` under GitHub Actions. Configuration errors (enabled without
+  a key, a bad timeout, an oversized prompt) still fail fast with exit 1.
+- **New settings:** `AI_SUMMARY_ENABLED`, `AI_SUMMARY_API_KEY`,
+  `AI_SUMMARY_BASE_URL`, `AI_SUMMARY_MODEL`, `AI_SUMMARY_TIMEOUT`,
+  `AI_SUMMARY_MAX_PROMPT_CHARS`, `AI_SUMMARY_USER_PROMPT` - see `.env.example`
+  and the README. The weekly workflow enables the feature only when the key
+  secret is present.
+- **JSON gains a top-level `ai_summary`** object with the narrative and its
+  provenance (`model`, `prompt_sha`, `generated_at`, `truncated`), or
+  `{"error": <notice>}` when generation failed. Absent when the feature is off.
+
 ### Fixed - Weekly challenge facts
 - **Closest Game This Week names the game's winner.** The challenge took the
   first row of the closest matchup, so a team could win it by *losing* and the

@@ -417,6 +417,44 @@ For private leagues, you need ESPN authentication cookies:
    uv run ff-tracker 123456 --private
    ```
 
+### AI Summary (Optional, `ff-tracker` Only)
+
+`ff-tracker` can append a short AI-written "commissioner's take" as the last
+section of the report, in every format. It is off by default, labelled
+AI-generated wherever it appears, and can never change a deterministic value: if
+the narrative cannot be generated the report ships without it and says so.
+
+```env
+AI_SUMMARY_ENABLED=true
+AI_SUMMARY_API_KEY=your_opencode_api_key_here
+```
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AI_SUMMARY_ENABLED` | `false` | Opt-in switch; a key alone does not enable it |
+| `AI_SUMMARY_API_KEY` | none | Bearer token, required when enabled, never printed |
+| `AI_SUMMARY_BASE_URL` | `https://opencode.ai/inference/openai/v1` | OpenAI-compatible endpoint root |
+| `AI_SUMMARY_MODEL` | `glm-5.3-flash` | Model id, reported in JSON provenance and the attribution line |
+| `AI_SUMMARY_TIMEOUT` | `120` | Per-socket-read timeout in seconds |
+| `AI_SUMMARY_MAX_PROMPT_CHARS` | `8000` | Size cap for the instructions below |
+| `AI_SUMMARY_USER_PROMPT` | empty | Free-form instructions appended to the system prompt, sent verbatim |
+
+**What leaves the machine:** team names, owner names, points for, points against,
+scores and league names are sent to `AI_SUMMARY_BASE_URL`, together with
+`AI_SUMMARY_USER_PROMPT`. Never put credentials in the prompt. A repository
+*variable* is visible in repository settings, so anything the league would not
+publish belongs in a secret.
+
+**Failure behaviour:** an HTTP error, a timeout, a truncated or malformed
+response produces the normal report, a one-line notice where the section would
+have been, exit code 0, and a `::warning::` in GitHub Actions. A *configuration*
+error (enabled without a key, a malformed timeout, an oversized prompt) fails
+the run instead, before any report is written. The weekly workflow sets
+`AI_SUMMARY_ENABLED` only when the key secret exists, so a checkout without the
+key simply gets a report with the feature off.
+
+`ff-championship` and `ff-season-recap` ignore these variables entirely.
+
 ## Sample Output
 
 ### Console Output
