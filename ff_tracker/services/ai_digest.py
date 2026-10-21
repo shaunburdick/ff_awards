@@ -22,6 +22,12 @@ MODE_PLAYOFFS = "playoffs"
 MODE_CHAMPIONSHIP = "championship"
 
 NO_MATCHUPS_NOTE = "No matchups this week"
+# The field names a position, not a fate: at week 6 of 14 every team is still
+# alive, and the model has paraphrased a bare status into an outcome before.
+STANDINGS_NOTE = (
+    "playoff_status is the current position against the top-four cutoff only; "
+    "it is not a final outcome."
+)
 
 
 class AIStandingsRow(TypedDict):
@@ -33,7 +39,8 @@ class AIStandingsRow(TypedDict):
     record: str
     points_for: float
     points_against: float
-    playoff_status: str  # "qualified" | "eliminated", the JSON formatter's wording
+    # Current top-four cutoff position, nothing more: see STANDINGS_NOTE.
+    playoff_status: str  # "in_playoff_position" | "outside_playoff_position"
 
 
 class AIMatchupRow(TypedDict):
@@ -114,6 +121,7 @@ class AILeagueDigest(TypedDict):
     week: int | None
     weeks_remaining: int | None
     standings: list[AIStandingsRow]
+    standings_note: str | None
     matchups: list[AIMatchupRow]
     matchups_note: str | None
     weekly_challenges: list[AIWeeklyChallenge]
@@ -205,6 +213,7 @@ def _league_digest(
         week=current_week,
         weeks_remaining=_weeks_remaining(division, current_week),
         standings=standings,
+        standings_note=STANDINGS_NOTE if standings else None,
         matchups=matchups,
         matchups_note=matchups_note,
         weekly_challenges=_weekly_challenge_rows(
@@ -231,7 +240,11 @@ def _standings_rows(division: DivisionData) -> list[AIStandingsRow]:
             record=f"{team.wins}-{team.losses}",
             points_for=team.points_for,
             points_against=team.points_against,
-            playoff_status="qualified" if team.in_playoff_position else "eliminated",
+            playoff_status=(
+                "in_playoff_position"
+                if team.in_playoff_position
+                else "outside_playoff_position"
+            ),
         )
         for index, team in enumerate(ordered, 1)
     ]

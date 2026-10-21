@@ -46,6 +46,7 @@ EXPECTED_KEYS: dict[str, set[str]] = {
         "week",
         "weeks_remaining",
         "standings",
+        "standings_note",
         "matchups",
         "matchups_note",
         "weekly_challenges",
@@ -132,8 +133,16 @@ class TestRegularSeasonDigest:
         assert [row["rank"] for row in rows] == [1, 2]
         assert rows[0]["team"] == "Butt Fumble"  # 6 wins beats 2
         assert rows[0]["record"] == "6-0"
-        assert rows[1]["playoff_status"] == "eliminated"
-        assert rows[0]["playoff_status"] == "qualified"
+        assert rows[1]["playoff_status"] == "outside_playoff_position"
+        assert rows[0]["playoff_status"] == "in_playoff_position"
+
+    def test_standings_note_explains_the_status_field(self) -> None:
+        """The model has paraphrased a bare status into an outcome; the note is the guard."""
+        league = _digest(make_regular_divisions())["leagues"][0]
+
+        assert league["standings_note"] is not None
+        assert league["standings_note"].startswith("playoff_status is the current position")
+        assert "not a final outcome" in league["standings_note"]
 
     def test_matchups_carry_both_sides_and_the_mirror_true_diff(self) -> None:
         league = _digest(make_regular_divisions())["leagues"][0]
@@ -251,6 +260,7 @@ class TestPlayoffDigest:
     def test_standings_remain_visible_in_playoffs(self) -> None:
         league = _digest(make_playoff_divisions(), current_week=15)["leagues"][0]
         assert len(league["standings"]) == 2
+        assert league["standings_note"] is not None
 
     def test_matchups_are_suppressed_in_playoffs(self) -> None:
         """FR-002: the bracket is the playoff mode's matchup section."""
@@ -302,6 +312,7 @@ class TestChampionshipDigest:
             make_championship_divisions(), current_week=17, championship=make_championship()
         )["leagues"][0]
         assert league["standings"] == []
+        assert league["standings_note"] is None
         assert league["matchups"] == []
         assert league["matchups_note"] is None
 
