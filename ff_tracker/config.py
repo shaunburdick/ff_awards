@@ -60,11 +60,29 @@ class FFTrackerConfig:
                 raise ConfigurationError(f"Week must be between 1 and 18, got: {self.week}")
 
 
-def load_environment() -> None:
-    """Load environment variables from .env file if it exists."""
-    env_file = Path.cwd() / ".env"
-    if env_file.exists():
-        load_dotenv(env_file)
+def load_environment(env_file: str | Path | None = None) -> None:
+    """
+    Load environment variables from a dotenv file.
+
+    Args:
+        env_file: An explicit path to load. ``None`` keeps the default: ``.env``
+            in the working directory, loaded only if it exists. An explicit path
+            that does not exist is an error — a silent fallback would leave the
+            caller believing it read a file it never opened.
+
+    Raises:
+        ConfigurationError: If an explicitly given path does not exist.
+    """
+    if env_file is None:
+        default_file = Path.cwd() / ".env"
+        if default_file.exists():
+            load_dotenv(default_file)
+        return
+
+    explicit_file = Path(env_file)
+    if not explicit_file.exists():
+        raise ConfigurationError(f"Environment file not found: {explicit_file}")
+    load_dotenv(explicit_file)
 
 
 def parse_league_ids_from_env() -> list[int]:
@@ -126,6 +144,7 @@ def create_config(
     private: bool = False,
     use_env: bool = False,
     week: int | None = None,
+    env_file: str | Path | None = None,
 ) -> FFTrackerConfig:
     """
     Create configuration object from various sources.
@@ -136,6 +155,8 @@ def create_config(
         private: Whether to use private league authentication
         use_env: Whether to load league IDs from environment
         week: Optional week override (1-18) for historical/testing purposes
+        env_file: Optional path to a dotenv file instead of ``.env`` in the
+            working directory; a missing explicit path is a ConfigurationError
 
     Returns:
         Configured FFTrackerConfig object
@@ -144,7 +165,7 @@ def create_config(
         ConfigurationError: If configuration is invalid or incomplete
     """
     # Load environment if needed
-    load_environment()
+    load_environment(env_file)
 
     # Determine league IDs
     if use_env:
@@ -298,12 +319,13 @@ def _parse_positive_int(name: str, value: str, default: int) -> int:
     return parsed
 
 
-def load_ai_summary_config() -> AISummaryConfig:
+def load_ai_summary_config(env_file: str | Path | None = None) -> AISummaryConfig:
     """
     Load the AI narrative settings from the environment (or ``.env``).
 
     ``load_environment`` normally runs inside ``create_config``; it is called
-    here too so a ``.env``-only setup works no matter which loader runs first.
+    here too, with the same ``env_file``, so both loaders read one file rather
+    than two. A ``.env``-only setup works no matter which loader runs first.
     ``load_dotenv`` never overrides an already-set variable, so a workflow
     ``env:`` value wins over ``.env`` either way.
 
@@ -318,7 +340,7 @@ def load_ai_summary_config() -> AISummaryConfig:
             base URL, a non-positive budget or timeout, an unknown reasoning
             effort, or an oversized user prompt.
     """
-    load_environment()
+    load_environment(env_file)
 
     enabled_raw = os.getenv("AI_SUMMARY_ENABLED", "")
     if not enabled_raw.strip():

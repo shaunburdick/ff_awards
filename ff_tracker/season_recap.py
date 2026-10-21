@@ -162,6 +162,13 @@ Examples:
     )
 
     parser.add_argument(
+        "--env-file",
+        type=Path,
+        default=None,
+        help="Path to environment file (default: .env in the working directory)",
+    )
+
+    parser.add_argument(
         "--output-dir",
         type=Path,
         help="Directory to write all output formats. When specified, generates all formats automatically.",
@@ -215,6 +222,7 @@ def main() -> int:
                 use_env=True,
                 year=args.year,
                 private=args.private,
+                env_file=args.env_file,
             )
         else:
             # Parse league IDs from command line (single or comma-separated)
@@ -224,6 +232,7 @@ def main() -> int:
                 year=args.year,
                 private=args.private,
                 use_env=False,
+                env_file=args.env_file,
             )
 
         logger.info(

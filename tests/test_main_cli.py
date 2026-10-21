@@ -112,11 +112,11 @@ class TestArgumentParsing:
         args = parser.parse_args(["123456", "--env-file", ".env.test"])
         assert args.env_file == Path(".env.test")
 
-    def test_parser_env_file_default_is_dotenv(self) -> None:
-        """Test that default env-file is .env."""
+    def test_parser_env_file_defaults_to_none(self) -> None:
+        """No --env-file means the working-directory .env, which need not exist."""
         parser = create_parser()
         args = parser.parse_args(["123456"])
-        assert args.env_file == Path(".env")
+        assert args.env_file is None
 
     def test_parser_has_verbose_flag(self) -> None:
         """Test that parser includes --verbose flag."""

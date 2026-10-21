@@ -396,6 +396,22 @@ There are three ways to provide league IDs:
    uv run ff-tracker 123456
    ```
 
+### Alternate Environment File
+
+All three CLIs (`ff-tracker`, `ff-championship`, `ff-season-recap`) accept
+`--env-file PATH`. By default they read `.env` from the working directory; the
+flag points them at a different file, which is useful for testing against a
+throwaway set of leagues or keeping several multi-league setups side by side.
+The file supplies everything an environment does — `LEAGUE_IDS`, the ESPN
+cookies, and any `AI_SUMMARY_*` settings — and both the report configuration and
+the AI settings read that same file. A path you pass explicitly must exist: a
+missing one is an error naming the path, rather than a silent fallback to the
+repo's `.env`.
+
+```bash
+uv run ff-tracker --env --env-file ./staging.env
+```
+
 ### ESPN Authentication (Private Leagues Only)
 
 For private leagues, you need ESPN authentication cookies:

@@ -383,7 +383,7 @@ class TestAISummaryConfig:
         """Clear every AI variable and stop the repo's .env leaking in."""
         for name in self._VARS:
             monkeypatch.delenv(name, raising=False)
-        monkeypatch.setattr("ff_tracker.config.load_environment", lambda: None)
+        monkeypatch.setattr("ff_tracker.config.load_environment", lambda *args, **kwargs: None)
 
     @pytest.fixture
     def enabled_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -593,7 +593,7 @@ class TestAISummaryBudgetAndEffort:
     def _clean_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         for name in self._VARS:
             monkeypatch.delenv(name, raising=False)
-        monkeypatch.setattr("ff_tracker.config.load_environment", lambda: None)
+        monkeypatch.setattr("ff_tracker.config.load_environment", lambda *args, **kwargs: None)
 
     @pytest.fixture
     def enabled_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -660,3 +660,100 @@ class TestAISummaryBudgetAndEffort:
             AISummaryConfig(reasoning_effort="ludicrous")
         with pytest.raises(ConfigurationError, match="AI_SUMMARY_MAX_TOKENS"):
             AISummaryConfig(max_tokens=0)
+
+
+class TestEnvFile:
+    """--env-file: an explicit path is loaded, and a missing one is an error."""
+
+    _VARS = (
+        "LEAGUE_IDS",
+        "ESPN_SWID",
+        "ESPN_S2",
+        "AI_SUMMARY_ENABLED",
+        "AI_SUMMARY_API_KEY",
+        "AI_SUMMARY_MODEL",
+        "AI_SUMMARY_BASE_URL",
+        "AI_SUMMARY_TIMEOUT",
+        "AI_SUMMARY_MAX_TOKENS",
+        "AI_SUMMARY_REASONING_EFFORT",
+        "AI_SUMMARY_MAX_PROMPT_CHARS",
+        "AI_SUMMARY_USER_PROMPT",
+    )
+
+    @pytest.fixture(autouse=True)
+    def _clean_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for name in self._VARS:
+            monkeypatch.delenv(name, raising=False)
+
+    def test_explicit_file_supplies_league_ids(self, tmp_path: Path) -> None:
+        """The functional claim: --env-file is the file that is read."""
+        alt = tmp_path / "alt.env"
+        alt.write_text("LEAGUE_IDS=111111,222222\n", encoding="utf-8")
+
+        config = create_config(use_env=True, year=2024, env_file=alt)
+
+        assert config.league_ids == [111111, 222222]
+
+    def test_repo_dotenv_is_not_read_when_an_explicit_file_is_given(
+        self, tmp_path: Path
+    ) -> None:
+        alt = tmp_path / "alt.env"
+        alt.write_text("LEAGUE_IDS=333333\n", encoding="utf-8")
+
+        config = create_config(use_env=True, year=2024, env_file=alt)
+
+        assert config.league_ids == [333333]
+
+    def test_explicit_file_supplies_espn_credentials(self, tmp_path: Path) -> None:
+        alt = tmp_path / "alt.env"
+        alt.write_text(
+            "LEAGUE_IDS=444444\nESPN_SWID=swid-from-file\nESPN_S2=s2-from-file\n",
+            encoding="utf-8",
+        )
+
+        config = create_config(use_env=True, year=2024, private=True, env_file=alt)
+
+        assert config.espn_credentials is not None
+        assert config.espn_credentials.swid == "swid-from-file"
+        assert config.espn_credentials.s2 == "s2-from-file"
+
+    def test_ai_settings_come_from_the_same_file(self, tmp_path: Path) -> None:
+        """Both loaders read one file: no second, different .env."""
+        alt = tmp_path / "alt.env"
+        alt.write_text(
+            "LEAGUE_IDS=555555\n"
+            "AI_SUMMARY_ENABLED=true\n"
+            "AI_SUMMARY_API_KEY=sk-from-alt\n"
+            "AI_SUMMARY_MODEL=model-from-alt\n",
+            encoding="utf-8",
+        )
+
+        create_config(use_env=True, year=2024, env_file=alt)
+        ai_config = load_ai_summary_config(alt)
+
+        assert ai_config.enabled is True
+        assert ai_config.api_key == "sk-from-alt"
+        assert ai_config.model == "model-from-alt"
+
+    def test_missing_explicit_file_raises_naming_it(self, tmp_path: Path) -> None:
+        missing = tmp_path / "nope.env"
+
+        with pytest.raises(ConfigurationError, match="Environment file not found"):
+            create_config(use_env=True, year=2024, env_file=missing)
+
+        with pytest.raises(ConfigurationError, match=str(missing)):
+            load_environment(missing)
+
+    def test_default_behaviour_is_unchanged_without_a_flag(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No --env-file: .env in the working directory, loaded only if present."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("LEAGUE_IDS", raising=False)
+
+        load_environment()  # no file, no error — the old behaviour
+        assert "LEAGUE_IDS" not in os.environ
+
+        (tmp_path / ".env").write_text("LEAGUE_IDS=666666\n", encoding="utf-8")
+        load_environment()
+        assert os.environ.get("LEAGUE_IDS") == "666666"

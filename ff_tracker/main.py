@@ -168,8 +168,8 @@ Examples:
     parser.add_argument(
         "--env-file",
         type=Path,
-        default=Path(".env"),
-        help="Path to environment file (default: .env)",
+        default=None,
+        help="Path to environment file (default: .env in the working directory)",
     )
 
     parser.add_argument(
@@ -238,7 +238,11 @@ def main() -> int:
         if args.env:
             # Load multiple leagues from environment
             config = create_config(
-                use_env=True, year=args.year, private=args.private, week=args.week
+                use_env=True,
+                year=args.year,
+                private=args.private,
+                week=args.week,
+                env_file=args.env_file,
             )
         else:
             # Parse league IDs from command line (single or comma-separated)
@@ -249,11 +253,12 @@ def main() -> int:
                 private=args.private,
                 use_env=False,
                 week=args.week,
+                env_file=args.env_file,
             )
 
-        # AI narrative settings sit beside the report config; loaded after
-        # create_config() so .env is already in the environment.
-        ai_config = load_ai_summary_config()
+        # AI narrative settings sit beside the report config; the same env file
+        # is passed so both loaders read one file, not two.
+        ai_config = load_ai_summary_config(args.env_file)
 
         # Initialize services
         espn_service = ESPNService(config)
