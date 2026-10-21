@@ -4,7 +4,7 @@
 > **Status**: Draft — revised after Gate 1
 > **Created**: 2026-10-21
 > **Last Updated**: 2026-10-21
-> **Version**: 0.3
+> **Version**: 0.4
 
 ## Overview
 
@@ -79,9 +79,23 @@ Response shape:
   3. Otherwise — the counts differ and (1) did not resolve — the response is a contract failure: the section is not rendered, wholly or partially.
 - Response order is expected to follow the digest order: (1) does not depend on it, and (2) is defined by it.
 - Voice: a commissioner addressing the league — direct, dry, allowed to be wry, no invented statistics and no claims about players or teams absent from the digest.
-- Length expectation: roughly 60–120 words per league (150–400 words for a three-league report), 1–3 paragraphs and at most 3 bullets per league, `headline` at most 15 words, `season_note` 1–2 sentences. Length is a prompt instruction, not a validation gate: an over-long response renders as delivered and is not truncated or rejected.
 - The section is labelled in every format as AI-generated. It is never presented as fact-checked or as a league record. No requirement verifies that its claims are true; only the shape and league matching are validated.
 - The narrative may not be used to compute, alter or replace any deterministic value.
+
+**Length caps, enforced after the contract checks:** `headline` ≤ 15 words; per league ≤ 3 paragraphs, ≤ 3 bullets, and ≤ 120 words across its paragraphs (bullets count only against the ≤ 3 bullet cap, not against the 120 words); `season_note` ≤ 2 sentences and ≤ 40 words.
+
+**Validation order, fixed:** contract shape → league matching (the total order above) → length normalisation → render. Normalisation is deterministic and total — the same response normalises to the same output every time — and it never turns a valid response into a contract failure, with one stated exception: a paragraph that normalises to nothing is a contract failure (an empty paragraph was already invalid) and follows FR-006.
+
+**Normalisation, in this order:**
+
+1. Drop bullets after the third, then paragraphs after the third, in response order.
+2. If a league's paragraphs total more than 120 words, walk them in order and truncate the paragraph where the running total crosses 120 down to the remaining budget: at the last complete sentence boundary at or before the budget, or — when that paragraph has no sentence boundary — at the last word boundary, appending `…`. Drop every paragraph after it.
+3. Truncate an over-long `headline` at a word boundary with `…`; cut `season_note` to its first two sentences, then truncate at a word boundary with `…` if it is still over 40 words.
+4. A sentence boundary is `[.!?]` followed by whitespace and then a capital letter or an opening quote, with a defensive abbreviation list (`Mr.`, `Mrs.`, `Ms.`, `Dr.`, `St.`, `Jr.`, `Sr.`, `vs.`, `etc.`, `e.g.`, `i.e.`, `No.`, `Fig.`) treated as non-terminal. A period inside a number (`3.5`), inside a URL, or inside an emoji sequence is not a boundary. No NLP library and no locale assumptions.
+
+A 120-word paragraph cap alongside a 120-word league cap would be internally inconsistent, so the word cap is the league total and paragraphs truncate against the remaining league budget. The earlier "60–120 words per league" guidance was the same number and is now the rule.
+
+`provenance.truncated` is `true` when normalisation dropped or shortened anything for this report, and absent or `false` otherwise.
 
 ### FR-005 — Rendering
 
@@ -105,7 +119,8 @@ JSON `ai_summary` object:
   "provenance": {
     "model": "glm-5.3-flash",
     "prompt_sha": "9f2c1ab4e7d0",
-    "generated_at": "2026-10-14T05:03:11Z"
+    "generated_at": "2026-10-14T05:03:11Z",
+    "truncated": false
   }
 }
 ```
@@ -115,7 +130,7 @@ JSON `ai_summary` object:
 
 ### FR-006 — Failure policy: the report always ships
 
-Any failure while obtaining or validating the narrative produces the same result: the deterministic report is rendered and written as normal, the section is omitted, the run exits 0, and the failure is visible in two places:
+Any failure while obtaining, matching, validating or normalising the narrative produces the same result: the deterministic report is rendered and written as normal, the section is omitted, the run exits 0, and the failure is visible in two places:
 
 1. a one-line notice in the output, in the section's position at the bottom, in the format's own style: `AI summary unavailable: <reason>. The report is unaffected.` In JSON the notice is the value of `ai_summary.error`. The notice stays where the section would have been — it is not hoisted into the header, because nothing about the deterministic report changed.
 2. when `GITHUB_ACTIONS` is `true`, a workflow command on stdout: `::warning::AI summary unavailable: <reason>.` — outside Actions no workflow command is emitted, so console output stays clean. This warning is the visibility backstop that a bottom-of-report notice needs.
@@ -129,17 +144,18 @@ This is a deliberate, documented exception to Article III (see Constitution Devi
 Configuration errors are not narrative failures and are not degraded:
 
 - `AI_SUMMARY_ENABLED` true with `AI_SUMMARY_API_KEY` missing or empty → `ConfigurationError` naming `AI_SUMMARY_API_KEY`, exit 1, no report, no HTTP call.
-- The same for a missing or empty `AI_SUMMARY_BASE_URL`.
 - `AI_SUMMARY_ENABLED` set to any value not in `true|1|yes|on|false|0|no|off` (case-insensitive) → `ConfigurationError`.
 - `AI_SUMMARY_TIMEOUT` not a positive integer → `ConfigurationError`.
+- `AI_SUMMARY_LORE_FILE` set to a path that does not exist → `ConfigurationError` naming the path.
+- `AI_SUMMARY_LORE_FILE` content longer than 4000 characters → `ConfigurationError` naming the file and the limit.
 - Misspelled or missing provider settings therefore fail loudly once, instead of quietly degrading every scheduled run.
-- Because that failure produces no report, the weekly workflow sets `AI_SUMMARY_ENABLED=true` only when **both** `secrets.AI_SUMMARY_API_KEY` and `vars.AI_SUMMARY_BASE_URL` are non-empty, and omits it otherwise. Guarding the key alone is not enough: the base URL has no default, so a key with no base URL reaches the missing-base-URL branch above and is the same CI trap one variable over. `AI_SUMMARY_BASE_URL` is a repository **variable**, not a secret — a URL is not a credential, an operator must be able to verify it in the repository settings, and hiding it buys nothing. The guard is an `env:` expression yielding the literal `true`/`false` (e.g. `AI_SUMMARY_ENABLED: ${{ secrets.AI_SUMMARY_API_KEY != '' && vars.AI_SUMMARY_BASE_URL != '' }}`) consumed by the step that writes `.env`. It cannot be an `if:` condition: `secrets` is not available in `jobs.<job_id>.if` or `steps.<job_id>.if`, so such a condition evaluates without the secret and silently disables the feature. No workflow sets the flag unconditionally.
+- Because that failure produces no report, the weekly workflow sets `AI_SUMMARY_ENABLED=true` only when `secrets.AI_SUMMARY_API_KEY` is non-empty, and omits it otherwise. The base URL needs no guard because it has a default. The guard is an `env:` expression yielding the literal `true`/`false` (e.g. `AI_SUMMARY_ENABLED: ${{ secrets.AI_SUMMARY_API_KEY != '' }}`) consumed by the step that writes `.env`. It cannot be an `if:` condition: `secrets` is not available in `jobs.<job_id>.if` or `steps.<job_id>.if`, so such a condition evaluates without the secret and silently disables the feature. No workflow sets the flag unconditionally.
 
-**Tradeoff, stated plainly:** a fork or a rotated credential leaves the flag on with no key or no base URL, and with the flag on that means no report at all — not a report without a narrative. Without the workflow guard, a missing secret would silently stop the weekly report, which is the one outcome this feature must not cause. With the guard, a checkout missing either value produces a normal report with the feature off, and gets no AI section until an operator supplies both. The guard is therefore a requirement, not workflow polish.
+**Tradeoff, stated plainly:** a fork or a rotated credential leaves the flag on with no key, and with the flag on that means no report at all — not a report without a narrative. Without the workflow guard, a missing secret would silently stop the weekly report, which is the one outcome this feature must not cause. With the guard, a checkout without the key produces a normal report with the feature off, and gets no AI section until an operator supplies the key. The guard is therefore a requirement, not workflow polish.
 
 ### FR-008 — Provenance and determinism
 
-- JSON records `provenance.model`, `provenance.prompt_sha` and `provenance.generated_at` (ISO 8601 UTC). `prompt_sha` is a hash of the prompt text, computed from the prompt at generation time, so it cannot drift from the prompt by hand-editing; an archived report can be traced to the model and prompt that produced it.
+- JSON records `provenance.model`, `provenance.prompt_sha`, `provenance.generated_at` (ISO 8601 UTC) and `provenance.truncated`. `prompt_sha` is a hash over the system prompt text **and** the lore content (FR-010), in that order with a fixed separator, computed at generation time — so neither the prompt nor the lore can drift from provenance by hand-editing, and editing the lore changes it. An archived report can be traced to the model, prompt and lore that produced it.
 - console, sheets, email and markdown carry the model id in the attribution line. They do not carry `prompt_sha`.
 - The narrative is not deterministic: two runs over identical data may differ in wording and emphasis, and no requirement compares two live generations.
 - For identical inputs and identical narrative outcome, every deterministic section is byte-identical, and is identical to a run with the feature off. The report's facts never depend on the narrative.
@@ -149,7 +165,14 @@ Configuration errors are not narrative failures and are not degraded:
 - The API key never appears in any output, artifact, error message, notice, warning command or log line, including when the provider echoes it back in an error body or header.
 - The key is supplied only through `AI_SUMMARY_API_KEY` (environment or `.env`, same loading as `ESPN_S2`/`SWID`). There is no CLI flag and no `--format-arg` for it — format arguments are for presentation and must not carry credentials.
 - The digest, the request body and the response body are never logged at any level, including `-vv`. Only the model, HTTP status, latency and token counts may be logged.
-- Team names, owner names and scores leave the machine and are sent to `AI_SUMMARY_BASE_URL`. `ff-tracker --help` states this under the feature's configuration section.
+- Team names, owner names and scores leave the machine and are sent to `AI_SUMMARY_BASE_URL`. The lore file (FR-010) is sent to the provider as part of the system prompt too, so it must never contain credentials or anything the league would not publish. `ff-tracker --help` states this under the feature's configuration section.
+
+### FR-010 — Lore file
+
+- `AI_SUMMARY_LORE_FILE` selects the lore file; unset uses the template shipped in the package at `ff_tracker/prompts/ai_summary_lore.md`. The shipped default is a neutral template — tone rules and placeholder guidance only, with no real league, team or owner names — so the package default is nobody's league. A custom path that does not exist and a file over 4000 characters are configuration errors (FR-007), so they fail fast before any call; the same applies when the packaged default is missing, named as that path.
+- Content: tone, nicknames, running jokes, who to needle, what never to say.
+- It is appended to the system prompt and **never overrides the JSON contract, the caps and normalisation (FR-004), or the "no invented facts" rule (FR-004)**. Where the lore and the contract disagree, the contract wins: the lore shapes tone only, and a lore instruction to add or rename a field, exceed a cap, return non-JSON, or invent a fact is ignored.
+- The same prompt and lore produce the same `prompt_sha` (FR-008); the lore text is not recorded anywhere else, and it is never echoed into the report.
 
 ---
 
@@ -159,11 +182,14 @@ Configuration errors are not narrative failures and are not degraded:
 |---|---|---|---|
 | `AI_SUMMARY_ENABLED` | no | `false` | Opt-in switch. Off means no call, no section, no notice. |
 | `AI_SUMMARY_API_KEY` | when enabled | none | Bearer token; never printed. |
-| `AI_SUMMARY_BASE_URL` | when enabled | none | OpenAI-compatible endpoint root; `/chat/completions` is appended. No default in code: the endpoint used in the spike goes in `.env.example` and the README's configuration section. |
+| `AI_SUMMARY_BASE_URL` | no | `https://opencode.ai/inference/openai/v1` | OpenAI-compatible endpoint root; `/chat/completions` is appended. An empty or whitespace-only value falls back to the default rather than erroring. |
 | `AI_SUMMARY_MODEL` | no | `glm-5.3-flash` | Model id, reported verbatim in errors and provenance. |
 | `AI_SUMMARY_TIMEOUT` | no | `120` | Whole-call timeout in seconds. |
+| `AI_SUMMARY_LORE_FILE` | no | the packaged `ff_tracker/prompts/ai_summary_lore.md` | Appended to the system prompt (FR-010); maximum 4000 characters. |
 
 These are loaded the same way as existing settings (`load_environment` / `.env`).
+
+Enabling the feature needs only a key: the endpoint default matches the model default. A default endpoint we do not control can change upstream, and the failure is visible — notice plus `::warning::` — rather than silent, which is why the default is acceptable now. The default base URL and the model id belong in `.env.example` and the README's configuration section: a plan requirement, not a code comment.
 
 ---
 
@@ -172,6 +198,7 @@ These are loaded the same way as existing settings (`load_environment` / `.env`)
 ### Input
 
 - The weekly report's existing data: `list[DivisionData]`, `list[ChallengeResult]`, `list[WeeklyChallenge] | None`, `current_week`, optional `ChampionshipLeaderboard`, as already assembled in `main.py`.
+- The lore file selected by `AI_SUMMARY_LORE_FILE`, or the packaged default (FR-010).
 - Feature configuration from the table above.
 
 ### Model additions this feature requires
@@ -180,7 +207,11 @@ These are loaded the same way as existing settings (`load_environment` / `.env`)
 
 ### Prompt
 
-- The prompt text is a module-level constant in the summary service under `ff_tracker/services/`, so a prompt edit is a single reviewable diff and `prompt_sha` is computed from that constant.
+- The prompt text is a module-level constant in the summary service under `ff_tracker/services/`, so a prompt edit is a single reviewable diff and `prompt_sha` is computed from that constant plus the lore content.
+
+### Packaged prompt file
+
+- The default lore file ships at `ff_tracker/prompts/ai_summary_lore.md`. `pyproject.toml` declares `packages = ["ff_tracker"]`; the plan must verify the `.md` file is inside the built wheel (build it and inspect the contents) rather than assume the build backend includes it — an installed wheel whose default file is missing would raise the FR-007 missing-path `ConfigurationError`.
 
 ### Output
 
@@ -201,14 +232,20 @@ Tested offline with a fake client that records requests and returns canned respo
 - **AC-006** No log line emitted by the summary service or by any other code this feature adds contains a team name, owner name, league ID, API key, prompt text or response body; a unique marker planted in the digest never appears in a `-vv` run over three leagues. Existing logging in modules this feature does not touch is out of scope for this criterion.
 - **AC-007** `finish_reason: "length"` with complete, parseable content is still treated as FR-006's truncation failure — the content is not rendered.
 - **AC-008** League matching follows FR-004's total order: (i) entries reordered, or differing only in case and surrounding whitespace, map by name; (ii) with equal counts and no full name match — including one stray entry or one duplicated entry — every section renders by position under our own league names, and no response-supplied league name appears as a heading; (iii) with differing counts and no full name match, the FR-006 contract failure is reported with the count-mismatch reason and nothing is rendered.
-- **AC-009** Missing key, missing base URL, bad `AI_SUMMARY_ENABLED` value, and non-numeric or zero `AI_SUMMARY_TIMEOUT` each raise `ConfigurationError` naming the variable, exit 1, record zero calls, and write no report.
+- **AC-009** Missing key, bad `AI_SUMMARY_ENABLED` value, and non-numeric or zero `AI_SUMMARY_TIMEOUT` each raise `ConfigurationError` naming the variable, exit 1, record zero calls, and write no report.
 - **AC-010** The fake client records the model, base URL, timeout, `max_tokens: 8000` and bearer token from each configuration; changing `AI_SUMMARY_MODEL` changes the value sent and the value in provenance and the attribution line.
 - **AC-011** A paragraph containing a tab, newline, `"`, `<`, `&` and emoji renders as one sheet row and one console line, is HTML-escaped in email, and does not break TSV column counts.
 - **AC-012** Edge-case inputs — single league, a league with no matchups this week, Week 15 playoff mode, Week 17 championship mode, and a digest with no player data — each produce a valid request and a rendered section; the digest sent in Weeks 15–16 carries bracket matchups and the 7 player highlights, and in Week 17 the championship leaderboard, matching what the formatters display; the mode the digest derives agrees with the mode each of the five formatters renders for the same inputs.
+- **AC-013** An overlong fake response — four paragraphs, one of 200 words, four bullets, a 20-word headline and a three-sentence 60-word `season_note` — normalises to the caps: headline ≤ 15 words, ≤ 3 paragraphs, ≤ 3 bullets, ≤ 120 words per league, `season_note` ≤ 2 sentences and ≤ 40 words.
+- **AC-014** Two runs over the same overlong fake response produce byte-identical output and the same `provenance.truncated` value.
+- **AC-015** A response whose paragraph has no sentence boundary normalises to a word-boundary truncation ending in `…`, and a paragraph with boundaries is cut at the last boundary before the budget.
+- **AC-016** Bullets beyond the third are dropped rather than merged into a paragraph, paragraphs beyond the third are dropped, and `provenance.truncated` is `true` when anything was dropped or shortened and absent or `false` when nothing was.
+- **AC-017** The lore content reaches the request body; editing the lore changes `prompt_sha`; and the packaged default lore file contains no team, owner or league name used by the test fixtures.
+- **AC-018** A custom `AI_SUMMARY_LORE_FILE` path that does not exist, and a lore file over 4000 characters, each raise `ConfigurationError` naming the path — with the limit named in the oversize case — record zero calls, and write no report.
 
 ### Workflow configuration check (static; inspects the YAML, not runtime behaviour)
 
-- **WC-001** `.github/workflows/weekly-report.yml` sets `AI_SUMMARY_ENABLED` through an `env:` expression that references both `secrets.AI_SUMMARY_API_KEY` and `vars.AI_SUMMARY_BASE_URL`; the step that writes `.env` appends the three `AI_SUMMARY_*` values only when that value is `true`; and no `if:` condition in the file references `AI_SUMMARY_ENABLED`.
+- **WC-001** `.github/workflows/weekly-report.yml` sets `AI_SUMMARY_ENABLED` through an `env:` expression that references `secrets.AI_SUMMARY_API_KEY`; the step that writes `.env` appends the `AI_SUMMARY_*` values only when that value is `true`; and no `if:` condition in the file references `AI_SUMMARY_ENABLED`.
 
 Verified manually against a live provider, once, with a real three-league week:
 
@@ -222,13 +259,13 @@ Verified manually against a live provider, once, with a real three-league week:
 ## Edge Cases
 
 1. **Provider returns well-formed JSON for the wrong week or season** — shape and league matching pass; there is no further verification (see Not doing). The report's deterministic sections remain the source of truth.
-2. **Very long prose** — rendered as delivered, flattened in TSV, truncated only if a format already truncates (e.g. table cell widths).
+2. **Very long prose** — normalised to the FR-004 caps before render, then flattened to one TSV row; a single unbroken token wider than a table cell is still truncated by that format, as it is for any cell.
 
 ---
 
 ## Constitution Deviations
 
-**Article III (Fail-Fast Error Handling).** This feature violates the "no partial data tolerance" clause on purpose: an AI narrative failure degrades the report instead of failing it. Reasoning: the narrative is cosmetic, the report carries the league's weekly facts, and the report runs on a weekly schedule where a failed proxy, model retirement or HTTP 410 would otherwise deny the league its report entirely. The exception is bounded — it applies only to obtaining and validating the narrative; ESPN data failures, configuration errors and every other failure path still fail fast, and the omission is never silent (notice plus Actions warning). This exemption must be recorded in the plan's Complexity Tracking.
+**Article III (Fail-Fast Error Handling).** This feature violates the "no partial data tolerance" clause on purpose: an AI narrative failure degrades the report instead of failing it. Reasoning: the narrative is cosmetic, the report carries the league's weekly facts, and the report runs on a weekly schedule where a failed proxy, model retirement or HTTP 410 would otherwise deny the league its report entirely. The exception is bounded — it applies only to obtaining, matching and normalising the narrative; ESPN data failures, configuration errors (including the lore-file errors in FR-007) and every other failure path still fail fast, and the omission is never silent (notice plus Actions warning). Length normalisation never fails the run: a paragraph that normalises to nothing is an FR-006 narrative failure, so the report still ships. This exemption must be recorded in the plan's Complexity Tracking.
 
 **Article X (Performance).** The 5-second typical run applies to the deterministic report with the feature off. With the feature on, the run additionally waits for provider latency (7.7–34.4 s per call in the spike), bounded by `AI_SUMMARY_TIMEOUT`. Callers that care about schedule duration leave the feature off.
 
@@ -239,18 +276,17 @@ Verified manually against a live provider, once, with a real three-league week:
 - The season recap (`ff-season-recap`) and championship (`ff-championship`) CLIs.
 - Anthropic, Gemini or any provider API family other than OpenAI-compatible Chat Completions; provider SDKs.
 - Streaming, retries, caching, or a second attempt with a fallback model.
-- A user-authored prompt, tone or league-lore file.
 - Adding `weekly_games` to the JSON formatter (the digest is the AI payload, not a new public shape).
 - Changing, reordering or reformatting any existing deterministic section.
 - Per-format or per-league opt-out: when the feature is on, all five formats get the section.
-- Fact-checking the prose beyond the contract in FR-004 and league matching.
+- Fact-checking the prose beyond the contract, league matching and caps in FR-004, and beyond the lore precedence rule in FR-010.
 - Any `--format-arg` for this feature; credentials and provider settings are environment only.
 
 ---
 
 ## Open Questions
 
-None open. The earlier question about an `AI_SUMMARY_BASE_URL` default is resolved: no default in code, and the spike's endpoint is documented in `.env.example` and the README's configuration section instead.
+None open.
 
 ---
 
@@ -270,3 +306,4 @@ None open. The earlier question about an `AI_SUMMARY_BASE_URL` default is resolv
 | 0.1 | 2026-10-21 | AI Agent | Initial draft from the product owner's decisions and the week-6 spike evidence |
 | 0.2 | 2026-10-21 | AI Agent | Gate 1 revisions: digest fields matched to model reality (playoff-position boolean, mirror-row true diff, `reg_season_count` as a model addition); one mode rule replaces the playoff contradiction; no digest/body logging plus a `-vv` criterion; `prompt_version` replaced by `prompt_sha` with the prompt located in the service; league matching gains a positional fallback; workflow conditionally sets the enable flag with the tradeoff stated; unexecutable byte-identical criteria replaced; failure-mode table, edge cases 1–5, the old byte-identical AC and Open Question 2 cut (ACs renumbered); duplicated spike numbers reduced to where they drive requirements |
 | 0.3 | 2026-10-21 | AI Agent | Re-review revisions: the workflow guard covers key **and** base URL, names the `env:` expression and states that `if:` cannot express it (`vars` chosen for the URL with the reason); the workflow assertion moved out of AC-009 into a static WC-001; league matching stated as a total order with AC-008 and FR-006's reasons aligned (duplicates and strays at equal counts render; only count mismatches fail); the no-matchups digest sentence restored; the mode rule now says the digest carries a local sixth copy and must agree with the formatters; AC-006 scoped to this feature's own logging with a digest marker |
+| 0.4 | 2026-10-21 | AI Agent | Owner changes: `AI_SUMMARY_BASE_URL` gains the `https://opencode.ai/inference/openai/v1` default (empty/whitespace falls back), the missing-base-URL branch and its guard half are gone, and key-only enablement is stated with the uncontrolled-endpoint tradeoff; length caps are enforced by deterministic normalisation after league matching, with `provenance.truncated` and the sentence-boundary rule; new FR-010 adds a committed lore file with a 4000-character cap, a neutral packaged default, contract-over-lore precedence, lore egress in FR-009, `prompt_sha` covering prompt plus lore, and wheel-inclusion verification; AC-013…AC-018 added; the lore exclusion is removed from Out of Scope; Edge Case 2 restated because capped prose is no longer "rendered as delivered" |

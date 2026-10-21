@@ -1,11 +1,10 @@
 # Challenge Ledger — 009 AI Summary
 
-> Gate 1 (spec) · `spec.md` v0.3 (this commit) · Constitution v1.0.0, no conflict.
+> Gate 1 (spec) · `spec.md` v0.4 (this commit) · Constitution v1.0.0, no conflict.
 > Owner decisions of 2026-10-21 are precedent: fail-fast when enabled-but-unconfigured with a
 > workflow guard; league matching by name with positional fallback; failure notice at the bottom.
-> They are not reopened.
-> Verdict: HOLD at Gate 1 (three closure findings, one clause each); all re-review findings closed
-> in v0.3 — no ruling reopened.
+> They are not reopened. The v0.4 owner changes (endpoint default, enforced length, committed lore
+> file) are recorded below as owner changes, not as challenges to earlier rulings.
 
 ## Rulings (v2 — after the owner's decisions)
 
@@ -22,8 +21,11 @@
 | Digest / request / response never logged | CLOSED — FR-009 clause plus AC-006. AC-006 now asserts only code this feature owns (summary service and any new code: no team name, owner name, league ID, key, prompt text or response body) plus a digest-marker check; existing logging in untouched modules (`espn_service.py`) is explicitly out of scope. | — |
 | AC-001 testability; AC-010 | CLOSED — AC-001 is a same-test prefix/suffix comparison with JSON parsed minus `ai_summary`; AC-010 deleted and ACs renumbered with no stale references. | — |
 | Spike numbers doing requirement work | CLOSED — word counts, "roughly 7 KB" and the reasoning-token ranges are gone; `max_tokens: 8000` keeps one line of justification as a request parameter. | — |
-| Open Question 1: base URL default | RESOLVED — no default in code; spike endpoint documented in `.env.example` and the README. | — |
-| Open Question 2: placement | DELETED — not a question; already decided in FR-005. | — |
+| Open Question 1: base URL default | REVERSED in v0.4 by the owner: `AI_SUMMARY_BASE_URL` now defaults to `https://opencode.ai/inference/openai/v1` with the uncontrolled-endpoint tradeoff stated; the missing-base-URL branch is gone and the workflow guard is key-only. | — |
+| Open Question 2: placement | DELETED — not a question; already decided in FR-005. |
+| v0.4 owner change: endpoint default, key-only enablement | OWNER CHANGE — reverses the earlier no-default ruling. Empty or whitespace falls back to the default; FR-007 keeps fail-fast for a missing key and for malformed `AI_SUMMARY_ENABLED`/`AI_SUMMARY_TIMEOUT`; WC-001 and the guard reference only `secrets.AI_SUMMARY_API_KEY`; `vars` is no longer used; the default and model id are a `.env.example`/README plan requirement. | — |
+| v0.4 owner change: length enforced by normalisation | OWNER CHANGE — reverses "a prompt instruction, not a validation gate". Fixed order: contract shape → league matching → normalisation → render. Caps: headline ≤ 15 words; ≤ 3 paragraphs, ≤ 3 bullets, ≤ 120 words per league; `season_note` ≤ 2 sentences/≤ 40 words. The 120-word paragraph reading was internally inconsistent with the 120-word league cap, so the word cap is the league total and paragraphs truncate against the remaining budget; sentence boundaries per the stated rule; `…` for word-boundary cuts; `provenance.truncated`. | — |
+| v0.4 owner change: committed lore file (FR-010) | OWNER CHANGE — reverses the "user-authored prompt, tone or league-lore file" exclusion. `AI_SUMMARY_LORE_FILE` (default packaged `ff_tracker/prompts/ai_summary_lore.md`), 4000-character cap, neutral shipped template with no real names, appended to the system prompt and never overriding the contract/caps/no-invented-facts rule, lore egress declared in FR-009, `prompt_sha` covers prompt plus lore, wheel inclusion to be verified by the plan. | — | — |
 
 ## Cuts confirmed
 
