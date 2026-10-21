@@ -7,7 +7,7 @@ Handles environment variables, league IDs, and ESPN authentication.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -180,3 +180,133 @@ def detect_fantasy_year() -> int:
 
     now = datetime.datetime.now()
     return now.year if now.month >= 8 else now.year - 1
+
+
+DEFAULT_AI_BASE_URL = "https://opencode.ai/inference/openai/v1"
+DEFAULT_AI_MODEL = "glm-5.3-flash"
+DEFAULT_AI_TIMEOUT = 120
+DEFAULT_AI_MAX_PROMPT_CHARS = 8000
+
+_AI_BOOL_VALUES = {"true", "1", "yes", "on", "false", "0", "no", "off"}
+
+
+@dataclass(frozen=True)
+class AISummaryConfig:
+    """
+    Optional AI narrative settings, loaded beside ``FFTrackerConfig``.
+
+    They are not part of ``FFTrackerConfig`` on purpose: ``create_config``
+    serves three CLIs and the feature covers ``ff-tracker`` only, so a malformed
+    ``AI_SUMMARY_*`` variable must not break the championship or season-recap
+    scripts.
+    """
+
+    enabled: bool = False
+    # Never in a repr or a traceback: this value must not reach a log line.
+    api_key: str = field(default="", repr=False)
+    base_url: str = DEFAULT_AI_BASE_URL
+    model: str = DEFAULT_AI_MODEL
+    timeout: int = DEFAULT_AI_TIMEOUT
+    max_prompt_chars: int = DEFAULT_AI_MAX_PROMPT_CHARS
+    user_prompt: str = ""
+
+    def __post_init__(self) -> None:
+        """Validate the settings; configuration errors are not degraded."""
+        if self.enabled and not self.api_key.strip():
+            raise ConfigurationError(
+                "AI_SUMMARY_API_KEY is required when AI_SUMMARY_ENABLED is true. "
+                "Set the key, or unset AI_SUMMARY_ENABLED to ship the report without a narrative."
+            )
+
+        if not self.base_url.strip():
+            raise ConfigurationError("AI_SUMMARY_BASE_URL cannot be empty")
+
+        if not self.model.strip():
+            raise ConfigurationError("AI_SUMMARY_MODEL cannot be empty")
+
+        if self.timeout <= 0:
+            raise ConfigurationError(
+                f"AI_SUMMARY_TIMEOUT must be a positive integer, got: {self.timeout}"
+            )
+
+        if self.max_prompt_chars <= 0:
+            raise ConfigurationError(
+                "AI_SUMMARY_MAX_PROMPT_CHARS must be a positive integer, "
+                f"got: {self.max_prompt_chars}"
+            )
+
+        if len(self.user_prompt) > self.max_prompt_chars:
+            raise ConfigurationError(
+                f"AI_SUMMARY_USER_PROMPT is {len(self.user_prompt)} characters, "
+                f"longer than AI_SUMMARY_MAX_PROMPT_CHARS={self.max_prompt_chars}"
+            )
+
+
+def _parse_ai_bool(value: str) -> bool:
+    """Parse AI_SUMMARY_ENABLED, accepting only the documented eight values."""
+    normalised = value.strip().lower()
+    if normalised not in _AI_BOOL_VALUES:
+        raise ConfigurationError(
+            "AI_SUMMARY_ENABLED must be one of true/1/yes/on/false/0/no/off, "
+            f"got: '{value}'"
+        )
+    return normalised in {"true", "1", "yes", "on"}
+
+
+def _parse_positive_int(name: str, value: str, default: int) -> int:
+    """Parse a positive-integer variable, naming itself on failure."""
+    if not value.strip():
+        return default
+    try:
+        parsed = int(value)
+    except ValueError as e:
+        raise ConfigurationError(f"{name} must be a positive integer, got: '{value}'") from e
+    if parsed <= 0:
+        raise ConfigurationError(f"{name} must be a positive integer, got: '{value}'")
+    return parsed
+
+
+def load_ai_summary_config() -> AISummaryConfig:
+    """
+    Load the AI narrative settings from the environment (or ``.env``).
+
+    ``load_environment`` normally runs inside ``create_config``; it is called
+    here too so a ``.env``-only setup works no matter which loader runs first.
+    ``load_dotenv`` never overrides an already-set variable, so a workflow
+    ``env:`` value wins over ``.env`` either way.
+
+    Returns:
+        Validated settings; ``enabled`` is false unless explicitly switched on.
+
+    Raises:
+        ConfigurationError: If the feature is enabled without a key, or a
+            numeric/boolean setting is malformed, or the user prompt is over
+            its configured size limit.
+    """
+    load_environment()
+
+    enabled_raw = os.getenv("AI_SUMMARY_ENABLED", "")
+    enabled = _parse_ai_bool(enabled_raw) if enabled_raw.strip() else False
+
+    timeout = _parse_positive_int(
+        "AI_SUMMARY_TIMEOUT", os.getenv("AI_SUMMARY_TIMEOUT", ""), DEFAULT_AI_TIMEOUT
+    )
+    max_prompt_chars = _parse_positive_int(
+        "AI_SUMMARY_MAX_PROMPT_CHARS",
+        os.getenv("AI_SUMMARY_MAX_PROMPT_CHARS", ""),
+        DEFAULT_AI_MAX_PROMPT_CHARS,
+    )
+
+    base_url = os.getenv("AI_SUMMARY_BASE_URL", "").strip().rstrip("/") or DEFAULT_AI_BASE_URL
+    model = os.getenv("AI_SUMMARY_MODEL", "").strip() or DEFAULT_AI_MODEL
+    user_prompt = os.getenv("AI_SUMMARY_USER_PROMPT", "").replace("\r\n", "\n").strip()
+
+    return AISummaryConfig(
+        enabled=enabled,
+        api_key=os.getenv("AI_SUMMARY_API_KEY", ""),
+        base_url=base_url,
+        model=model,
+        timeout=timeout,
+        max_prompt_chars=max_prompt_chars,
+        user_prompt=user_prompt,
+    )

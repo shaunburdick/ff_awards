@@ -14,10 +14,16 @@ from unittest.mock import patch
 import pytest
 
 from ff_tracker.config import (
+    DEFAULT_AI_BASE_URL,
+    DEFAULT_AI_MAX_PROMPT_CHARS,
+    DEFAULT_AI_MODEL,
+    DEFAULT_AI_TIMEOUT,
+    AISummaryConfig,
     ESPNCredentials,
     FFTrackerConfig,
     create_config,
     detect_fantasy_year,
+    load_ai_summary_config,
     load_environment,
     load_espn_credentials,
     parse_league_ids_from_env,
@@ -354,3 +360,165 @@ class TestCreateConfig:
         """Test that create_config validates week through FFTrackerConfig."""
         with pytest.raises(ConfigurationError, match="Week must be between 1 and 18"):
             create_config(league_ids=[123456], year=2024, private=False, week=20)
+
+
+class TestAISummaryConfig:
+    """AI narrative configuration: FR-007 and FR-010."""
+
+    _VARS = (
+        "AI_SUMMARY_ENABLED",
+        "AI_SUMMARY_API_KEY",
+        "AI_SUMMARY_BASE_URL",
+        "AI_SUMMARY_MODEL",
+        "AI_SUMMARY_TIMEOUT",
+        "AI_SUMMARY_MAX_PROMPT_CHARS",
+        "AI_SUMMARY_USER_PROMPT",
+    )
+
+    @pytest.fixture(autouse=True)
+    def _clean_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Clear every AI variable and stop the repo's .env leaking in."""
+        for name in self._VARS:
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setattr("ff_tracker.config.load_environment", lambda: None)
+
+    def test_defaults_when_nothing_is_set(self) -> None:
+        config = load_ai_summary_config()
+        assert config.enabled is False
+        assert config.api_key == ""
+        assert config.base_url == DEFAULT_AI_BASE_URL
+        assert config.model == DEFAULT_AI_MODEL
+        assert config.timeout == DEFAULT_AI_TIMEOUT
+        assert config.max_prompt_chars == DEFAULT_AI_MAX_PROMPT_CHARS
+        assert config.user_prompt == ""
+
+    @pytest.mark.parametrize("value", ["true", "1", "yes", "on", "TRUE", " Yes "])
+    def test_enabled_accepts_the_true_spellings(
+        self, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_ENABLED", value)
+        monkeypatch.setenv("AI_SUMMARY_API_KEY", "sk-test")
+        assert load_ai_summary_config().enabled is True
+
+    @pytest.mark.parametrize("value", ["false", "0", "no", "off", "OFF"])
+    def test_enabled_accepts_the_false_spellings(
+        self, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_ENABLED", value)
+        assert load_ai_summary_config().enabled is False
+
+    def test_bad_enabled_value_raises_naming_the_variable(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_ENABLED", "maybe")
+        with pytest.raises(ConfigurationError, match="AI_SUMMARY_ENABLED must be one of"):
+            load_ai_summary_config()
+
+    def test_enabled_without_key_raises_naming_the_variable(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_ENABLED", "true")
+        with pytest.raises(ConfigurationError, match="AI_SUMMARY_API_KEY is required"):
+            load_ai_summary_config()
+
+    def test_enabled_with_whitespace_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AI_SUMMARY_ENABLED", "true")
+        monkeypatch.setenv("AI_SUMMARY_API_KEY", "   ")
+        with pytest.raises(ConfigurationError, match="AI_SUMMARY_API_KEY is required"):
+            load_ai_summary_config()
+
+    def test_a_key_alone_does_not_enable_the_feature(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_API_KEY", "sk-test")
+        assert load_ai_summary_config().enabled is False
+
+    @pytest.mark.parametrize("value", ["0", "-5", "abc", "1.5"])
+    def test_bad_timeout_raises_naming_the_variable(
+        self, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_TIMEOUT", value)
+        with pytest.raises(ConfigurationError, match="AI_SUMMARY_TIMEOUT must be a positive integer"):
+            load_ai_summary_config()
+
+    @pytest.mark.parametrize("value", ["0", "-1", "lots"])
+    def test_bad_prompt_limit_raises_naming_the_variable(
+        self, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_MAX_PROMPT_CHARS", value)
+        with pytest.raises(
+            ConfigurationError, match="AI_SUMMARY_MAX_PROMPT_CHARS must be a positive integer"
+        ):
+            load_ai_summary_config()
+
+    def test_oversized_prompt_names_length_and_configured_limit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_MAX_PROMPT_CHARS", "100")
+        monkeypatch.setenv("AI_SUMMARY_USER_PROMPT", "x" * 101)
+        with pytest.raises(ConfigurationError) as excinfo:
+            load_ai_summary_config()
+        message = str(excinfo.value)
+        assert "AI_SUMMARY_USER_PROMPT" in message
+        assert "101" in message
+        assert "100" in message
+
+    def test_prompt_at_the_limit_is_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AI_SUMMARY_MAX_PROMPT_CHARS", "100")
+        monkeypatch.setenv("AI_SUMMARY_USER_PROMPT", "x" * 100)
+        assert len(load_ai_summary_config().user_prompt) == 100
+
+    @pytest.mark.parametrize("value", ["", "   ", "\n\t "])
+    def test_empty_prompt_is_a_no_op(self, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+        monkeypatch.setenv("AI_SUMMARY_USER_PROMPT", value)
+        assert load_ai_summary_config().user_prompt == ""
+
+    def test_prompt_is_stripped_and_crlf_normalised(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_USER_PROMPT", "  Be dry.\r\nNo emoji.  ")
+        assert load_ai_summary_config().user_prompt == "Be dry.\nNo emoji."
+
+    @pytest.mark.parametrize("value", ["", "   "])
+    def test_blank_base_url_falls_back_to_the_default(
+        self, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_BASE_URL", value)
+        assert load_ai_summary_config().base_url == DEFAULT_AI_BASE_URL
+
+    def test_explicit_base_url_overrides_and_loses_trailing_slash(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_BASE_URL", "https://proxy.example/v1/")
+        assert load_ai_summary_config().base_url == "https://proxy.example/v1"
+
+    def test_api_key_is_not_in_the_repr(self) -> None:
+        config = AISummaryConfig(enabled=True, api_key="sk-secret-value")
+        assert "sk-secret-value" not in repr(config)
+
+    def test_dotenv_only_configuration_enables_the_feature(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """A .env-only setup works with create_config left unpatched (Gate 2)."""
+        monkeypatch.setattr("ff_tracker.config.load_environment", load_environment)
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".env").write_text(
+            "LEAGUE_IDS=123456\n"
+            "AI_SUMMARY_ENABLED=true\n"
+            "AI_SUMMARY_API_KEY=sk-from-dotenv\n"
+            "AI_SUMMARY_MODEL=dotenv-model\n",
+            encoding="utf-8",
+        )
+
+        # load_dotenv writes os.environ directly, outside monkeypatch's control.
+        snapshot = dict(os.environ)
+        try:
+            create_config(league_ids=[123456], year=2024, private=False)
+            config = load_ai_summary_config()
+        finally:
+            os.environ.clear()
+            os.environ.update(snapshot)
+
+        assert config.enabled is True
+        assert config.api_key == "sk-from-dotenv"
+        assert config.model == "dotenv-model"
