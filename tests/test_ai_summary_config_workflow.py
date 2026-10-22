@@ -123,10 +123,11 @@ class TestOptionalSettings:
         for key, expression in VARIABLE_KEYS.items():
             assert env.get(key) == expression, f"{key} is not forwarded from its variable"
 
-    def test_prompt_reads_the_variable_then_the_secret(self) -> None:
+    def test_prompt_reads_the_input_then_variable_then_secret(self) -> None:
         prompt = _report_step_env()[PROMPT_KEY]
         assert prompt == (
-            "${{ vars.AI_SUMMARY_USER_PROMPT || secrets.AI_SUMMARY_USER_PROMPT }}"
+            "${{ inputs.ai_summary_prompt || vars.AI_SUMMARY_USER_PROMPT"
+            " || secrets.AI_SUMMARY_USER_PROMPT }}"
         )
         assert "vars.AI_SUMMARY_USER_PROMPT" in prompt
         assert "secrets.AI_SUMMARY_USER_PROMPT" in prompt
@@ -148,3 +149,34 @@ class TestOptionalSettings:
         for key in (*VARIABLE_KEYS, PROMPT_KEY):
             index = next(i for i, line in enumerate(lines) if line.strip().startswith(f"{key}:"))
             assert not lines[index].strip().startswith(f"{key}: #"), f"{key} has an inline comment"
+
+
+class TestDispatchInput:
+    """The one-run prompt input, with input -> variable -> secret precedence."""
+
+    def _inputs(self) -> dict[str, Any]:
+        # PyYAML reads the key `on` as the boolean True (YAML 1.1), so look for
+        # either spelling rather than assuming one.
+        document = _workflow()
+        dispatch = document.get("on") or document.get(True)
+        assert isinstance(dispatch, dict)
+        values = dispatch["workflow_dispatch"]["inputs"]
+        assert isinstance(values, dict)
+        return values
+
+    def test_input_exists_and_is_an_optional_string(self) -> None:
+        prompt = self._inputs()["ai_summary_prompt"]
+        assert prompt["type"] == "string"
+        assert prompt["required"] is False
+        assert "One-run AI summary instructions" in prompt["description"]
+
+    def test_report_step_prefers_input_then_variable_then_secret(self) -> None:
+        prompt = _report_step_env()[PROMPT_KEY]
+        assert prompt == (
+            "${{ inputs.ai_summary_prompt || vars.AI_SUMMARY_USER_PROMPT"
+            " || secrets.AI_SUMMARY_USER_PROMPT }}"
+        )
+
+    def test_input_is_referenced_only_in_that_expression(self) -> None:
+        raw = WORKFLOW.read_text(encoding="utf-8")
+        assert raw.count("inputs.ai_summary_prompt") == 1

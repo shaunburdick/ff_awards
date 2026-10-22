@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Email team-name highlighting
+- **Team names inside the email's AI section are wrapped in a coloured span**, so
+  each manager can find their own team in the prose. Matching is case-insensitive
+  and keeps the model's casing, longest name first so a prefix cannot win, whole
+  names only, with every segment HTML-escaped so apostrophes and markup
+  characters still render as text. The colour comes from the new
+  `email.ai_team_color` format argument (default `#0b57d0`); the other four
+  formats and the failure notice are unchanged.
+
+### Added - One-run AI prompt input
+- **The weekly workflow's manual run accepts an `ai_summary_prompt` input** for
+  that run's narrative instructions, with precedence
+  `inputs.ai_summary_prompt` → `vars.AI_SUMMARY_USER_PROMPT` →
+  `secrets.AI_SUMMARY_USER_PROMPT` → empty. An empty input falls through to the
+  standing prompt rather than clearing it; dispatch inputs are single-line and
+  visible in the run's inputs, so a multi-line or confidential prompt belongs in
+  the variable or the secret.
+
 ### Changed - AI Summary settings come from repository variables
 - **The optional AI settings are read from GitHub repository variables**
   (`AI_SUMMARY_BASE_URL`, `MODEL`, `TIMEOUT`, `MAX_TOKENS`,

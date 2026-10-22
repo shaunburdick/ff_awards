@@ -33,6 +33,10 @@ on:
         description: 'Optional note for this week (e.g., "Season ends Week 14! Playoffs start Week 15!")'
         required: false
         type: string
+      ai_summary_prompt:
+        description: 'One-run AI summary instructions (overrides the repository variable/secret; single line; leave empty to use the standing prompt)'
+        required: false
+        type: string
 
 env:
   PYTHONUNBUFFERED: 1
@@ -92,11 +96,13 @@ jobs:
       id: generate-report
       # The prompt is scoped to this step: it is the only consumer, and keeping it
       # out of the workflow-level env means checkout, setup-python, setup-uv and the
-      # .env writer never see a secret the prompt may hold. A repository variable
-      # wins over the secret; an unset variable falls through, a whitespace-only one
-      # would not. Keep every comment above the key.
+      # .env writer never see a secret the prompt may hold. Precedence is the one-run
+      # dispatch input, then the repository variable, then the secret. Each empty
+      # value falls through to the next rather than clearing it, and dispatch string
+      # inputs are single-line, so a multi-line standing prompt belongs in the
+      # variable or the secret. Keep every comment above the key.
       env:
-        AI_SUMMARY_USER_PROMPT: ${{ vars.AI_SUMMARY_USER_PROMPT || secrets.AI_SUMMARY_USER_PROMPT }}
+        AI_SUMMARY_USER_PROMPT: ${{ inputs.ai_summary_prompt || vars.AI_SUMMARY_USER_PROMPT || secrets.AI_SUMMARY_USER_PROMPT }}
       run: |
         # Hardcoded note for this week (set to empty string to disable)
         # Example: HARDCODED_NOTE="Playoffs start next week! 🏆"
