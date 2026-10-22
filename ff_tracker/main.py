@@ -151,6 +151,7 @@ Common Arguments:
 Email-Specific:
   email.accent_color=HEX    Hex color for highlights (default: #ffc107)
   email.max_teams=N         Max teams in overall standings (default: 0 = all)
+  email.ai_team_color=HEX  Colour for team names in the AI summary (default: #0b57d0)
 
 Markdown-Specific:
   markdown.include_toc=BOOL Include table of contents (default: false)
@@ -161,6 +162,7 @@ JSON-Specific:
 Examples:
   --format-arg note="Season ends Week 14!"
   --format-arg email.accent_color="#ff0000"
+  --format-arg email.ai_team_color="#0b57d0"
   --format-arg json.pretty="false"
         """,
     )

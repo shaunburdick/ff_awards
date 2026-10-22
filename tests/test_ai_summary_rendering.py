@@ -639,6 +639,40 @@ class TestEmailTeamHighlighting:
 
         assert 'style="font-weight:700;color:#0b57d0"' in on
 
+    def test_stylesheet_rule_is_valid_css(self) -> None:
+        """The rule is real CSS, not the doubled braces of an f-string escape."""
+        on = self._render(["Butt Fumble"], ["Butt Fumble won."])
+
+        assert ".ai-team {\n            font-weight: 700;\n        }" in on
+        assert "{{" not in on
+        assert "}}" not in on
+
+    def test_stylesheet_rule_is_absent_on_the_off_path(self) -> None:
+        """Feature off: no rule and no span, so AC-001's reference stays clean."""
+        divisions = [make_division(LEAGUE_A, teams=[make_team("Butt Fumble")])]
+        off = EmailFormatter(year=2026).format_output(
+            divisions, [make_season_challenge()], [], None, None, None, None
+        )
+
+        assert ".ai-team" not in off
+        assert "ai-team" not in off
+
+    def test_stylesheet_rule_is_absent_on_the_notice_path(self) -> None:
+        divisions = [make_division(LEAGUE_A, teams=[make_team("Butt Fumble")])]
+        notice = EmailFormatter(year=2026).format_output(
+            divisions,
+            [make_season_challenge()],
+            [],
+            None,
+            None,
+            None,
+            AISummaryUnavailable(reason="timed out after 120s"),
+        )
+
+        assert ".ai-team" not in notice
+        assert "{{" not in notice
+        assert "}}" not in notice
+
     def test_notice_path_has_no_spans(self) -> None:
         divisions = [make_division(LEAGUE_A, teams=[make_team("Butt Fumble")])]
         on = EmailFormatter(year=2026).format_output(
