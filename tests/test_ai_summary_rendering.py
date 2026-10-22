@@ -131,6 +131,12 @@ def _both(
     return off, on
 
 
+def _ai_team_rule(html: str) -> str:
+    """The `.ai-team` selector block from the email's stylesheet."""
+    start = html.index(".ai-team {")
+    return html[start : html.index("}", start) + 1]
+
+
 class TestFeatureOffIsUnchanged:
     """AC-001: with no narrative the output is exactly today's output."""
 
@@ -572,10 +578,9 @@ class TestEmailTeamHighlighting:
     def test_team_name_is_wrapped_and_casing_preserved(self) -> None:
         on = self._render(["Butt Fumble"], ["BUTT FUMBLE won ugly."])
 
-        assert (
-            '<span class="ai-team" style="font-weight:700;color:#0b57d0">BUTT FUMBLE</span>'
-            " won ugly."
-        ) in on
+        span = '<span class="ai-team">BUTT FUMBLE</span>'
+        assert span + " won ugly." in on
+        assert "style=" not in span
 
     def test_apostrophes_and_trailing_space_are_handled(self) -> None:
         # "I don't consent" carries a trailing space in the fixture data.
@@ -585,10 +590,8 @@ class TestEmailTeamHighlighting:
         )
 
         assert (
-            '<span class="ai-team" style="font-weight:700;color:#0b57d0">'
-            "Drew&#x27;s Daring Team</span> lost to "
-            '<span class="ai-team" style="font-weight:700;color:#0b57d0">'
-            "I don&#x27;t consent</span>."
+            '<span class="ai-team">Drew&#x27;s Daring Team</span> lost to '
+            '<span class="ai-team">I don&#x27;t consent</span>.'
         ) in on
 
     def test_longest_name_wins(self) -> None:
@@ -598,7 +601,7 @@ class TestEmailTeamHighlighting:
         )
 
         assert '>McConkey Kong Two</span> beat' in on
-        assert '<span class="ai-team" style="font-weight:700;color:#0b57d0">McConkey Kong</span>.' in on
+        assert '<span class="ai-team">McConkey Kong</span>.' in on
 
     def test_name_inside_a_longer_word_is_not_wrapped(self) -> None:
         on = self._render(["Butt Fumble"], ["Butt Fumbles everywhere."])
@@ -624,26 +627,27 @@ class TestEmailTeamHighlighting:
         assert "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;" in on
         assert "<script>" not in on
 
-    def test_colour_argument_changes_the_inline_style(self) -> None:
+    def test_colour_argument_changes_the_rule(self) -> None:
         on = self._render(
             ["Butt Fumble"],
             ["Butt Fumble won."],
             format_args={"ai_team_color": "#ff0000"},
         )
 
-        assert 'style="font-weight:700;color:#ff0000"' in on
+        assert "color: #ff0000;" in _ai_team_rule(on)
         assert 'class="ai-team"' in on
+        assert 'style="font-weight:700;color:#ff0000"' not in on
 
     def test_default_colour_is_the_documented_one(self) -> None:
         on = self._render(["Butt Fumble"], ["Butt Fumble won."])
 
-        assert 'style="font-weight:700;color:#0b57d0"' in on
+        assert "color: #0b57d0;" in _ai_team_rule(on)
 
     def test_stylesheet_rule_is_valid_css(self) -> None:
-        """The rule is real CSS, not the doubled braces of an f-string escape."""
+        """The rule is real CSS carrying the whole appearance, not the doubled braces."""
         on = self._render(["Butt Fumble"], ["Butt Fumble won."])
 
-        assert ".ai-team {\n            font-weight: 700;\n        }" in on
+        assert ".ai-team {\n            color: #0b57d0;\n            font-weight: 700;\n        }" in on
         assert "{{" not in on
         assert "}}" not in on
 

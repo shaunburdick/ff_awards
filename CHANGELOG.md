@@ -8,13 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added - Email team-name highlighting
-- **Team names inside the email's AI section are wrapped in a coloured span**, so
-  each manager can find their own team in the prose. Matching is case-insensitive
-  and keeps the model's casing, longest name first so a prefix cannot win, whole
-  names only, with every segment HTML-escaped so apostrophes and markup
-  characters still render as text. The colour comes from the new
-  `email.ai_team_color` format argument (default `#0b57d0`); the other four
-  formats and the failure notice are unchanged.
+- **Team names inside the email's AI section are wrapped in a highlighted span**,
+  so each manager can find their own team in the prose. Matching is
+  case-insensitive and keeps the model's casing, longest name first so a prefix
+  cannot win, whole names only, with every segment HTML-escaped so apostrophes
+  and markup characters still render as text. The span carries only
+  `class="ai-team"`; its weight and colour live in the email's stylesheet rule,
+  so the colour comes from the new `email.ai_team_color` format
+  argument (default `#0b57d0`); the other four formats and the failure notice are
+  unchanged.
 
 ### Added - One-run AI prompt input
 - **The weekly workflow's manual run accepts an `ai_summary_prompt` input** for
