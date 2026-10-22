@@ -601,6 +601,61 @@ class TestAISummaryBudgetAndEffort:
         monkeypatch.setenv("AI_SUMMARY_ENABLED", "true")
         monkeypatch.setenv("AI_SUMMARY_API_KEY", "sk-test")
 
+    @pytest.mark.parametrize(
+        ("variable", "expected"),
+        [
+            ("AI_SUMMARY_TIMEOUT", DEFAULT_AI_TIMEOUT),
+            ("AI_SUMMARY_MAX_TOKENS", DEFAULT_AI_MAX_TOKENS),
+            ("AI_SUMMARY_MAX_PROMPT_CHARS", DEFAULT_AI_MAX_PROMPT_CHARS),
+            ("AI_SUMMARY_MODEL", DEFAULT_AI_MODEL),
+            ("AI_SUMMARY_BASE_URL", DEFAULT_AI_BASE_URL),
+            ("AI_SUMMARY_REASONING_EFFORT", None),
+        ],
+    )
+    def test_a_blank_variable_means_the_default(
+        self,
+        enabled_env: None,
+        monkeypatch: pytest.MonkeyPatch,
+        variable: str,
+        expected: object,
+    ) -> None:
+        """An unset repository variable renders empty; blank must not be an error."""
+        monkeypatch.setenv(variable, "")
+        config = load_ai_summary_config()
+
+        resolved: dict[str, object] = {
+            "AI_SUMMARY_TIMEOUT": config.timeout,
+            "AI_SUMMARY_MAX_TOKENS": config.max_tokens,
+            "AI_SUMMARY_MAX_PROMPT_CHARS": config.max_prompt_chars,
+            "AI_SUMMARY_MODEL": config.model,
+            "AI_SUMMARY_BASE_URL": config.base_url,
+            "AI_SUMMARY_REASONING_EFFORT": config.reasoning_effort,
+        }
+        assert resolved[variable] == expected
+
+    def test_all_optional_variables_blank_together(
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The workflow's own shape: every optional variable unset at once."""
+        for name in (
+            "AI_SUMMARY_TIMEOUT",
+            "AI_SUMMARY_MAX_TOKENS",
+            "AI_SUMMARY_MAX_PROMPT_CHARS",
+            "AI_SUMMARY_MODEL",
+            "AI_SUMMARY_BASE_URL",
+            "AI_SUMMARY_REASONING_EFFORT",
+        ):
+            monkeypatch.setenv(name, "")
+
+        config = load_ai_summary_config()
+
+        assert config.timeout == DEFAULT_AI_TIMEOUT
+        assert config.max_tokens == DEFAULT_AI_MAX_TOKENS
+        assert config.max_prompt_chars == DEFAULT_AI_MAX_PROMPT_CHARS
+        assert config.model == DEFAULT_AI_MODEL
+        assert config.base_url == DEFAULT_AI_BASE_URL
+        assert config.reasoning_effort is None
+
     def test_model_default_is_deepseek(self) -> None:
         assert load_ai_summary_config().model == "deepseek-v4.1-flash"
         assert DEFAULT_AI_MODEL == "deepseek-v4.1-flash"

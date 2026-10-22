@@ -3,11 +3,61 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "weekly-report.yml"
 
-GUARD = 'AI_SUMMARY_ENABLED: ${{ secrets.AI_SUMMARY_API_KEY != \'\' }}'
-PROMPT_KEY = "AI_SUMMARY_USER_PROMPT: |"
+ENV_EXPRESSION = "${{ secrets.AI_SUMMARY_API_KEY != '' }}"
+
+# Every optional setting, and the exact expression each one must carry.
+VARIABLE_KEYS = {
+    "AI_SUMMARY_BASE_URL": "${{ vars.AI_SUMMARY_BASE_URL }}",
+    "AI_SUMMARY_MODEL": "${{ vars.AI_SUMMARY_MODEL }}",
+    "AI_SUMMARY_TIMEOUT": "${{ vars.AI_SUMMARY_TIMEOUT }}",
+    "AI_SUMMARY_MAX_TOKENS": "${{ vars.AI_SUMMARY_MAX_TOKENS }}",
+    "AI_SUMMARY_REASONING_EFFORT": "${{ vars.AI_SUMMARY_REASONING_EFFORT }}",
+    "AI_SUMMARY_MAX_PROMPT_CHARS": "${{ vars.AI_SUMMARY_MAX_PROMPT_CHARS }}",
+}
+
+PROMPT_KEY = "AI_SUMMARY_USER_PROMPT"
+
+
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """A loader that refuses duplicate mapping keys instead of silently keeping the last."""
+
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict[Any, Any]:
+        mapping: dict[Any, Any] = {}
+        for key_node, value_node in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in mapping:
+                raise ValueError(f"duplicate key in YAML: {key}")
+            mapping[key] = self.construct_object(value_node, deep=deep)
+        return mapping
+
+
+def _workflow() -> dict[str, Any]:
+    """Parse the workflow, failing on duplicate keys."""
+    with WORKFLOW.open(encoding="utf-8") as handle:
+        document = yaml.load(handle, Loader=_UniqueKeyLoader)
+    assert isinstance(document, dict)
+    return document
+
+
+def _env() -> dict[str, Any]:
+    env = _workflow()["env"]
+    assert isinstance(env, dict)
+    return env
+
+
+def _report_step_env() -> dict[str, Any]:
+    """The prompt lives on the report step, its only consumer."""
+    steps = _workflow()["jobs"]["generate-report"]["steps"]
+    step = next(step for step in steps if step.get("id") == "generate-report")
+    env = step.get("env") or {}
+    assert isinstance(env, dict)
+    return env
 
 
 def _lines() -> list[str]:
@@ -18,7 +68,12 @@ class TestWorkflowGuard:
     """FR-007 and WC-001: the flag is an env expression, never an if."""
 
     def test_guard_is_an_env_expression_on_the_key(self) -> None:
-        assert any(line.strip() == GUARD for line in _lines())
+        assert _env()["AI_SUMMARY_ENABLED"] == ENV_EXPRESSION
+
+    def test_flag_is_never_set_unconditionally(self) -> None:
+        enabled = _env()["AI_SUMMARY_ENABLED"]
+        assert enabled == ENV_EXPRESSION
+        assert enabled not in ("true", "false", "")
 
     def test_no_if_condition_mentions_the_flag(self) -> None:
         offenders = [
@@ -60,28 +115,36 @@ class TestWorkflowGuard:
         assert "AI_SUMMARY_API_KEY=" in after_guard_body
 
 
-class TestWorkflowPrompt:
-    """FR-008: the committed prompt is a block scalar with comments above it."""
+class TestOptionalSettings:
+    """The optional settings come from repository variables, parsed from the YAML."""
 
-    def test_prompt_is_a_committed_block_scalar(self) -> None:
-        assert any(line.strip() == PROMPT_KEY for line in _lines())
+    def test_every_optional_setting_is_forwarded_from_a_variable(self) -> None:
+        env = _env()
+        for key, expression in VARIABLE_KEYS.items():
+            assert env.get(key) == expression, f"{key} is not forwarded from its variable"
 
-    def test_comment_sits_above_the_key_not_inside_the_block(self) -> None:
-        lines = _lines()
-        key_index = next(
-            index for index, line in enumerate(lines) if line.strip() == PROMPT_KEY
+    def test_prompt_reads_the_variable_then_the_secret(self) -> None:
+        prompt = _report_step_env()[PROMPT_KEY]
+        assert prompt == (
+            "${{ vars.AI_SUMMARY_USER_PROMPT || secrets.AI_SUMMARY_USER_PROMPT }}"
         )
+        assert "vars.AI_SUMMARY_USER_PROMPT" in prompt
+        assert "secrets.AI_SUMMARY_USER_PROMPT" in prompt
 
-        preceding = [line for line in lines[:key_index] if line.strip()]
-        assert preceding[-1].strip().startswith("#"), "the explanation belongs above the key"
+    def test_prompt_is_scoped_to_the_report_step(self) -> None:
+        """A prompt held in a secret must not reach checkout or the setup steps."""
+        assert PROMPT_KEY not in _env()
+        assert PROMPT_KEY in _report_step_env()
 
-        index = key_index + 1
-        while index < len(lines) and (not lines[index].strip() or lines[index].startswith("    ")):
-            assert not lines[index].strip().startswith("#"), (
-                "comments inside a block scalar become prompt text"
-            )
-            index += 1
+    def test_no_block_scalar_remains_for_the_prompt(self) -> None:
+        raw = WORKFLOW.read_text(encoding="utf-8")
+        assert f"{PROMPT_KEY}: |" not in raw
+        prompt = _report_step_env()[PROMPT_KEY]
+        assert isinstance(prompt, str)
+        assert prompt.startswith("${{")
 
-    def test_model_is_not_pinned_in_the_workflow(self) -> None:
-        """The model comes from the code default or repository settings, not here."""
-        assert "AI_SUMMARY_MODEL" not in WORKFLOW.read_text(encoding="utf-8")
+    def test_comments_sit_above_the_keys(self) -> None:
+        lines = _lines()
+        for key in (*VARIABLE_KEYS, PROMPT_KEY):
+            index = next(i for i, line in enumerate(lines) if line.strip().startswith(f"{key}:"))
+            assert not lines[index].strip().startswith(f"{key}: #"), f"{key} has an inline comment"
