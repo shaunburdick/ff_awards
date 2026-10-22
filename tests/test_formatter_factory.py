@@ -24,7 +24,7 @@ from ff_tracker.display import (
 class TestFormatterFactory:
     """Tests for create_formatter factory function."""
 
-    def test_create_console_formatter(self):
+    def test_create_console_formatter(self) -> None:
         """Test creating console formatter."""
         formatter = create_formatter("console", 2024)
 
@@ -32,35 +32,35 @@ class TestFormatterFactory:
         assert formatter.year == 2024
         assert formatter.format_args == {}
 
-    def test_create_sheets_formatter(self):
+    def test_create_sheets_formatter(self) -> None:
         """Test creating sheets formatter."""
         formatter = create_formatter("sheets", 2024)
 
         assert isinstance(formatter, SheetsFormatter)
         assert formatter.year == 2024
 
-    def test_create_email_formatter(self):
+    def test_create_email_formatter(self) -> None:
         """Test creating email formatter."""
         formatter = create_formatter("email", 2024)
 
         assert isinstance(formatter, EmailFormatter)
         assert formatter.year == 2024
 
-    def test_create_json_formatter(self):
+    def test_create_json_formatter(self) -> None:
         """Test creating JSON formatter."""
         formatter = create_formatter("json", 2024)
 
         assert isinstance(formatter, JsonFormatter)
         assert formatter.year == 2024
 
-    def test_create_markdown_formatter(self):
+    def test_create_markdown_formatter(self) -> None:
         """Test creating markdown formatter."""
         formatter = create_formatter("markdown", 2024)
 
         assert isinstance(formatter, MarkdownFormatter)
         assert formatter.year == 2024
 
-    def test_create_formatter_with_args(self):
+    def test_create_formatter_with_args(self) -> None:
         """Test creating formatter with format arguments."""
         format_args = {"note": "Test note", "accent_color": "#ff0000"}
         formatter = create_formatter("email", 2024, format_args)
@@ -68,12 +68,12 @@ class TestFormatterFactory:
         assert isinstance(formatter, EmailFormatter)
         assert formatter.format_args == format_args
 
-    def test_create_formatter_invalid_name(self):
+    def test_create_formatter_invalid_name(self) -> None:
         """Test error handling for invalid formatter name."""
         with pytest.raises(ValueError, match="Unknown format.*invalid"):
             create_formatter("invalid", 2024)
 
-    def test_create_formatter_error_message_includes_valid_formats(self):
+    def test_create_formatter_error_message_includes_valid_formats(self) -> None:
         """Test that error message lists valid formats."""
         with pytest.raises(ValueError) as exc_info:
             create_formatter("bad_format", 2024)
@@ -89,7 +89,7 @@ class TestFormatterFactory:
 class TestGetAvailableFormats:
     """Tests for get_available_formats function."""
 
-    def test_get_available_formats(self):
+    def test_get_available_formats(self) -> None:
         """Test getting list of available formatter names."""
         formats = get_available_formats()
 
@@ -105,13 +105,13 @@ class TestGetAvailableFormats:
 class TestReportMode:
     """Tests for ReportMode enum."""
 
-    def test_report_mode_values(self):
+    def test_report_mode_values(self) -> None:
         """Test ReportMode enum values."""
         assert ReportMode.REGULAR.value == "regular"
         assert ReportMode.PLAYOFF.value == "playoff"
         assert ReportMode.CHAMPIONSHIP.value == "championship"
 
-    def test_report_mode_enum_members(self):
+    def test_report_mode_enum_members(self) -> None:
         """Test all expected modes are present."""
         modes = list(ReportMode)
         assert len(modes) == 3
@@ -123,7 +123,7 @@ class TestReportMode:
 class TestReportContext:
     """Tests for ReportContext dataclass."""
 
-    def test_report_context_regular_mode(self):
+    def test_report_context_regular_mode(self) -> None:
         """Test creating context for regular season report."""
         context = ReportContext(
             mode=ReportMode.REGULAR,
@@ -140,7 +140,7 @@ class TestReportContext:
         assert context.is_playoff_mode() is False
         assert context.is_championship_mode() is False
 
-    def test_report_context_playoff_mode(self):
+    def test_report_context_playoff_mode(self) -> None:
         """Test creating context for playoff report."""
         context = ReportContext(
             mode=ReportMode.PLAYOFF,
@@ -153,7 +153,7 @@ class TestReportContext:
         assert context.is_playoff_mode() is True
         assert context.is_championship_mode() is False
 
-    def test_report_context_championship_mode(self):
+    def test_report_context_championship_mode(self) -> None:
         """Test creating context for championship report."""
         context = ReportContext(
             mode=ReportMode.CHAMPIONSHIP,
@@ -166,7 +166,7 @@ class TestReportContext:
         assert context.is_playoff_mode() is False
         assert context.is_championship_mode() is True
 
-    def test_report_context_has_weekly_challenges(self):
+    def test_report_context_has_weekly_challenges(self) -> None:
         """Test checking for weekly challenges data."""
         # No weekly challenges
         context1 = ReportContext(
@@ -195,7 +195,7 @@ class TestReportContext:
         )
         assert context3.has_weekly_challenges() is True
 
-    def test_report_context_has_championship_data(self):
+    def test_report_context_has_championship_data(self) -> None:
         """Test checking for championship data."""
         # No championship data
         context1 = ReportContext(
@@ -216,7 +216,7 @@ class TestReportContext:
         )
         assert context2.has_championship_data() is True
 
-    def test_report_context_defaults(self):
+    def test_report_context_defaults(self) -> None:
         """Test ReportContext default values."""
         context = ReportContext(mode=ReportMode.REGULAR, year=2024)
 

@@ -50,7 +50,7 @@ def create_mock_box_score(
     return box_score
 
 
-def test_determine_max_week_regular_season():
+def test_determine_max_week_regular_season() -> None:
     """Test that _determine_max_week correctly handles regular season weeks."""
     print("Testing _determine_max_week (Regular Season)...")
 
@@ -82,7 +82,7 @@ def test_determine_max_week_regular_season():
     # Mock Week 15 as incomplete (not started)
     week15_incomplete = [create_mock_box_score(team1, team2, 0.0, 0.0, is_playoff=True)]
 
-    def mock_box_scores_week15(week: int):
+    def mock_box_scores_week15(week: int) -> list[Mock]:
         if week == 14:
             return box_scores  # Week 14 complete
         elif week == 15:
@@ -99,7 +99,7 @@ def test_determine_max_week_regular_season():
     print("_determine_max_week (Regular Season): ALL TESTS PASSED ✅\n")
 
 
-def test_determine_max_week_playoffs():
+def test_determine_max_week_playoffs() -> None:
     """
     Test that _determine_max_week correctly handles playoff weeks.
 
@@ -137,7 +137,7 @@ def test_determine_max_week_playoffs():
         create_mock_box_score(team4, team2, 0.0, 0.0),  # Finals TBD
     ]
 
-    def mock_box_scores(week: int):
+    def mock_box_scores(week: int) -> list[Mock]:
         if week == 15:
             return week15_box_scores
         elif week == 16:
@@ -165,7 +165,7 @@ def test_determine_max_week_playoffs():
         create_mock_box_score(team4, Mock(), 0.0, 0.0),
     ]
 
-    def mock_box_scores_week17(week: int):
+    def mock_box_scores_week17(week: int) -> list[Mock]:
         if week == 16:
             return week16_finals_complete
         elif week == 17:
@@ -200,7 +200,7 @@ def test_determine_max_week_playoffs():
     print("  🎯 This test would have caught the bug!")
 
 
-def test_playoff_bracket_uses_correct_week():
+def test_playoff_bracket_uses_correct_week() -> None:
     """
     Test that playoff bracket extraction uses self.current_week, not league.current_week.
 
@@ -235,7 +235,7 @@ def test_playoff_bracket_uses_correct_week():
     league.settings.name = "Test League"
     league.settings.reg_season_count = 14
 
-    def mock_box_scores(week: int):
+    def mock_box_scores(week: int) -> list[Mock]:
         if week == 15:
             return week15_box_scores
         elif week == 16:
@@ -263,7 +263,7 @@ def test_playoff_bracket_uses_correct_week():
     print("playoff bracket uses correct week: ALL TESTS PASSED ✅\n")
 
 
-def test_get_playoff_round_with_week_parameter():
+def test_get_playoff_round_with_week_parameter() -> None:
     """Test that get_playoff_round can determine round based on specific week."""
     print("Testing get_playoff_round with week parameter...")
 
@@ -294,7 +294,7 @@ def test_get_playoff_round_with_week_parameter():
     print("get_playoff_round with week parameter: ALL TESTS PASSED ✅\n")
 
 
-def test_complete_workflow_tuesday_after_week15():
+def test_complete_workflow_tuesday_after_week15() -> None:
     """
     Integration test simulating the exact scenario from the bug report.
 
@@ -339,7 +339,7 @@ def test_complete_workflow_tuesday_after_week15():
         create_mock_box_score(team4, team2, 0.0, 0.0),
     ]
 
-    def mock_box_scores(week: int):
+    def mock_box_scores(week: int) -> list[Mock]:
         if week == 15:
             return week15_box_scores
         elif week == 16:
@@ -398,7 +398,7 @@ def test_complete_workflow_tuesday_after_week15():
     print()
 
 
-def main():
+def main() -> None:
     """Run all tests."""
     print("=" * 80)
     print("PLAYOFF WEEK HANDLING & COMPLETION DETECTION - VALIDATION TEST")

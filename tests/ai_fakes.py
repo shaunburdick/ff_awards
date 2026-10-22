@@ -40,7 +40,9 @@ LEAGUE_B = "My 2026 League"
 def make_owner(name: str) -> Owner:
     """Create an owner whose full name is the display name."""
     first, _, last = name.partition(" ")
-    return Owner(display_name=name, first_name=first, last_name=last, id=name.lower().replace(" ", "-"))
+    return Owner(
+        display_name=name, first_name=first, last_name=last, id=name.lower().replace(" ", "-")
+    )
 
 
 def make_team(
@@ -353,7 +355,9 @@ def make_regular_divisions(week: int = WEEK) -> list[DivisionData]:
                 ),
             ],
             weekly_games=[row for row in games_a if row.division == LEAGUE_B],
-            weekly_players=[make_player("Malik Nabers", 28.50, position="WR", slot="WR", division=LEAGUE_B)],
+            weekly_players=[
+                make_player("Malik Nabers", 28.50, position="WR", slot="WR", division=LEAGUE_B)
+            ],
             reg_season_count=14,
         ),
     ]
@@ -375,7 +379,9 @@ def make_playoff_divisions(week: int = 15) -> list[DivisionData]:
         make_division(
             LEAGUE_A,
             league_id=111,
-            weekly_players=[make_player("Christian McCaffrey", 30.70, division=LEAGUE_A, week=week)],
+            weekly_players=[
+                make_player("Christian McCaffrey", 30.70, division=LEAGUE_A, week=week)
+            ],
             playoff_bracket=make_playoff_bracket(week=week, division=LEAGUE_A),
             reg_season_count=14,
         )
@@ -388,7 +394,9 @@ def make_championship_divisions(week: int = 17) -> list[DivisionData]:
         make_division(
             LEAGUE_A,
             league_id=111,
-            weekly_players=[make_player("Christian McCaffrey", 30.70, division=LEAGUE_A, week=week)],
+            weekly_players=[
+                make_player("Christian McCaffrey", 30.70, division=LEAGUE_A, week=week)
+            ],
             reg_season_count=14,
         )
     ]
@@ -455,12 +463,18 @@ class FakeTransport:
         return self.body
 
 
-def envelope(content: str, finish_reason: str = "stop", usage: dict[str, int] | None = None) -> bytes:
+def envelope(
+    content: str, finish_reason: str = "stop", usage: dict[str, int] | None = None
+) -> bytes:
     """Build a Chat Completions response body."""
     payload: dict[str, object] = {
         "id": "chatcmpl-test",
         "choices": [
-            {"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": finish_reason}
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": content},
+                "finish_reason": finish_reason,
+            }
         ],
     }
     if usage is not None:

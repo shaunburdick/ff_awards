@@ -19,6 +19,7 @@ class WeeklyChallenge:
     Represents the winner and details of a weekly challenge.
     Can be team-based or player-based.
     """
+
     challenge_name: str
     week: int
     winner: str  # Team name or player name

@@ -86,9 +86,7 @@ class EmailFormatter(BaseFormatter):
         # The template declares on the class (.winner, .challenge-name,
         # .playoff-team, .container), so the colour belongs here: a weight-only
         # rule left email.ai_team_color with nothing to style.
-        ai_team_color = self._escape_html(
-            self._get_arg("ai_team_color") or DEFAULT_AI_TEAM_COLOR
-        )
+        ai_team_color = self._escape_html(self._get_arg("ai_team_color") or DEFAULT_AI_TEAM_COLOR)
         # Emitted only when the section renders: a report without it must stay
         # byte-identical, stylesheet included (AC-001).
         ai_team_rule = (
@@ -557,7 +555,9 @@ class EmailFormatter(BaseFormatter):
 
         html = '<div class="ai-summary">\n'
         html += "<h2>🤖 Commissioner's Take (AI-generated)</h2>\n"
-        html += '<p class="ai-marker"><strong>AI-generated text</strong> - not a league record.</p>\n'
+        html += (
+            '<p class="ai-marker"><strong>AI-generated text</strong> - not a league record.</p>\n'
+        )
         html += f"<p><strong>{self._highlight_teams(ai_summary.headline, matcher)}</strong></p>\n"
 
         for league in ai_summary.leagues:
@@ -599,9 +599,7 @@ class EmailFormatter(BaseFormatter):
         """Compile the whole-name matcher once per section, longest name first."""
         if not names:
             return None
-        pattern = "|".join(
-            r"\s+".join(re.escape(word) for word in name.split()) for name in names
-        )
+        pattern = "|".join(r"\s+".join(re.escape(word) for word in name.split()) for name in names)
         return re.compile(rf"(?<!\w)(?:{pattern})(?!\w)", re.IGNORECASE)
 
     def _highlight_teams(self, text: str, matcher: re.Pattern[str] | None) -> str:
@@ -619,7 +617,7 @@ class EmailFormatter(BaseFormatter):
         parts: list[str] = []
         cursor = 0
         for match in matcher.finditer(text):
-            parts.append(self._escape_html(text[cursor:match.start()]))
+            parts.append(self._escape_html(text[cursor : match.start()]))
             parts.append(f'<span class="ai-team">{self._escape_html(match.group(0))}</span>')
             cursor = match.end()
         parts.append(self._escape_html(text[cursor:]))

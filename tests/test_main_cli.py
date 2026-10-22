@@ -518,9 +518,9 @@ class TestAISummaryWiring:
             patch(
                 "ff_tracker.main.load_ai_summary_config",
                 return_value=self._ai_config(enabled),
-            ) if config_error is None else patch(
-                "ff_tracker.main.load_ai_summary_config", side_effect=config_error
-            ),
+            )
+            if config_error is None
+            else patch("ff_tracker.main.load_ai_summary_config", side_effect=config_error),
             patch.dict(os.environ, env, clear=False),
         ):
             espn = espn_class.return_value
@@ -540,12 +540,8 @@ class TestAISummaryWiring:
             assert result == 0
             assert service.return_value.generate.call_count == 1
 
-    def test_output_dir_mode_calls_once_and_renders_five_formats(
-        self, tmp_path: Path
-    ) -> None:
-        result, service, formatter = self._run(
-            ai_summary=make_narrative(), output_dir=tmp_path
-        )
+    def test_output_dir_mode_calls_once_and_renders_five_formats(self, tmp_path: Path) -> None:
+        result, service, formatter = self._run(ai_summary=make_narrative(), output_dir=tmp_path)
 
         assert result == 0
         assert service.return_value.generate.call_count == 1
@@ -560,9 +556,7 @@ class TestAISummaryWiring:
         assert service.return_value.generate.call_count == 0
         assert formatter.format_output.call_args.kwargs["ai_summary"] is None
 
-    def test_warning_only_inside_actions(
-        self, capsys: pytest.CaptureFixture
-    ) -> None:
+    def test_warning_only_inside_actions(self, capsys: pytest.CaptureFixture) -> None:
         unavailable = AISummaryUnavailable(reason="timed out after 120s")
 
         result, _, _ = self._run(ai_summary=unavailable, github_actions=None)
@@ -574,9 +568,7 @@ class TestAISummaryWiring:
         assert result == 0
         assert out.count("::warning::AI summary unavailable: timed out after 120s.") == 1
 
-    def test_configuration_error_stops_the_run(
-        self, capsys: pytest.CaptureFixture
-    ) -> None:
+    def test_configuration_error_stops_the_run(self, capsys: pytest.CaptureFixture) -> None:
         result, service, formatter = self._run(
             config_error=ConfigurationError("AI_SUMMARY_API_KEY is required")
         )
@@ -641,8 +633,7 @@ class TestMidBodyFailureShipstheReport:
         assert result == 0
         assert "Unexpected error" not in out.err
         assert (
-            "AI summary unavailable: connection failed (opencode.ai). "
-            "The report is unaffected."
+            "AI summary unavailable: connection failed (opencode.ai). The report is unaffected."
         ) in out.out
         # The deterministic report is still there.
         assert "Fantasy Football Multi-Division Challenge Tracker" in out.out

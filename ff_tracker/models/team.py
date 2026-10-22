@@ -17,6 +17,7 @@ class TeamStats:
 
     Contains cumulative stats for the entire regular season.
     """
+
     name: str
     owner: Owner
     points_for: float

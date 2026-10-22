@@ -22,7 +22,7 @@ from ff_tracker.models import (
 )
 
 
-def test_playoff_matchup():
+def test_playoff_matchup() -> None:
     """Test PlayoffMatchup model validation."""
     print("Testing PlayoffMatchup...")
 
@@ -296,7 +296,7 @@ def test_playoff_matchup():
     print("PlayoffMatchup: ALL TESTS PASSED ✅\n")
 
 
-def test_playoff_bracket():
+def test_playoff_bracket() -> None:
     """Test PlayoffBracket model validation."""
     print("Testing PlayoffBracket...")
 
@@ -412,7 +412,7 @@ def test_playoff_bracket():
     print("PlayoffBracket: ALL TESTS PASSED ✅\n")
 
 
-def test_championship_entry():
+def test_championship_entry() -> None:
     """Test ChampionshipEntry model validation."""
     print("Testing ChampionshipEntry...")
 
@@ -541,7 +541,7 @@ def test_championship_entry():
     print("ChampionshipEntry: ALL TESTS PASSED ✅\n")
 
 
-def test_championship_leaderboard():
+def test_championship_leaderboard() -> None:
     """Test ChampionshipLeaderboard model validation."""
     print("Testing ChampionshipLeaderboard...")
 
@@ -655,7 +655,7 @@ def test_championship_leaderboard():
     print("ChampionshipLeaderboard: ALL TESTS PASSED ✅\n")
 
 
-def test_division_data_extension():
+def test_division_data_extension() -> None:
     """Test DivisionData playoff_bracket field and is_playoff_mode property."""
     print("Testing DivisionData extension...")
 
@@ -712,7 +712,7 @@ def test_division_data_extension():
     print("DivisionData: ALL TESTS PASSED ✅\n")
 
 
-def test_division_sync_error():
+def test_division_sync_error() -> None:
     """Test DivisionSyncError exception."""
     print("Testing DivisionSyncError...")
 
@@ -729,7 +729,7 @@ def test_division_sync_error():
     print("DivisionSyncError: ALL TESTS PASSED ✅\n")
 
 
-def main():
+def main() -> None:
     """Run all tests."""
     print("=" * 60)
     print("PHASE 1: PLAYOFF DATA MODELS - VALIDATION TEST")

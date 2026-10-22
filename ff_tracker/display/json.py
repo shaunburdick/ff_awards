@@ -108,8 +108,7 @@ class JsonFormatter(BaseFormatter):
                 ]
 
             data["weekly_player_highlights"] = [
-                self._serialize_weekly_highlight(challenge)
-                for challenge in filtered_challenges
+                self._serialize_weekly_highlight(challenge) for challenge in filtered_challenges
             ]
 
         # Add season challenges with historical note

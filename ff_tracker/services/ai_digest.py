@@ -164,8 +164,7 @@ def build_digest(
     playoff_only = mode in (MODE_PLAYOFFS, MODE_CHAMPIONSHIP)
 
     leagues = [
-        _league_digest(division, weekly_challenges, current_week, mode)
-        for division in divisions
+        _league_digest(division, weekly_challenges, current_week, mode) for division in divisions
     ]
 
     return AIDigest(
@@ -216,9 +215,7 @@ def _league_digest(
         standings_note=STANDINGS_NOTE if standings else None,
         matchups=matchups,
         matchups_note=matchups_note,
-        weekly_challenges=_weekly_challenge_rows(
-            weekly_challenges, division.name, player_only
-        ),
+        weekly_challenges=_weekly_challenge_rows(weekly_challenges, division.name, player_only),
     )
 
 
@@ -241,9 +238,7 @@ def _standings_rows(division: DivisionData) -> list[AIStandingsRow]:
             points_for=team.points_for,
             points_against=team.points_against,
             playoff_status=(
-                "in_playoff_position"
-                if team.in_playoff_position
-                else "outside_playoff_position"
+                "in_playoff_position" if team.in_playoff_position else "outside_playoff_position"
             ),
         )
         for index, team in enumerate(ordered, 1)
@@ -322,9 +317,7 @@ def _season_challenges(
 def _playoff_round(divisions: Sequence[DivisionData]) -> AIPlayoffRound | None:
     """Flatten every division's bracket into one round for the digest."""
     brackets: list[PlayoffBracket] = [
-        division.playoff_bracket
-        for division in divisions
-        if division.playoff_bracket is not None
+        division.playoff_bracket for division in divisions if division.playoff_bracket is not None
     ]
     if not brackets:
         return None

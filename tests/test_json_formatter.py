@@ -696,7 +696,8 @@ class TestWeeklyHighlightFields:
             weekly_challenges=shaped_challenges,
             current_week=6,
         )
-        return json.loads(output)["weekly_player_highlights"]
+        entries: list[dict[str, object]] = json.loads(output)["weekly_player_highlights"]
+        return entries
 
     def test_team_challenge_carries_team_name_only(
         self,
@@ -705,9 +706,7 @@ class TestWeeklyHighlightFields:
         shaped_challenges: list[WeeklyChallenge],
     ) -> None:
         """A team challenge publishes team_name, never player_name or position."""
-        team_entry = self._entries(
-            sample_division, sample_challenges, shaped_challenges
-        )[0]
+        team_entry = self._entries(sample_division, sample_challenges, shaped_challenges)[0]
 
         assert team_entry["challenge_type"] == "team"
         assert team_entry["team_name"] == "Donut Lose"
@@ -723,9 +722,7 @@ class TestWeeklyHighlightFields:
         shaped_challenges: list[WeeklyChallenge],
     ) -> None:
         """A player challenge publishes the player, position, team, and league."""
-        player_entry = self._entries(
-            sample_division, sample_challenges, shaped_challenges
-        )[1]
+        player_entry = self._entries(sample_division, sample_challenges, shaped_challenges)[1]
 
         assert player_entry["challenge_type"] == "player"
         assert player_entry["player_name"] == "Christian McCaffrey"
@@ -740,9 +737,7 @@ class TestWeeklyHighlightFields:
         shaped_challenges: list[WeeklyChallenge],
     ) -> None:
         """team_name comes from additional_info["team"]."""
-        qb_entry = self._entries(
-            sample_division, sample_challenges, shaped_challenges
-        )[2]
+        qb_entry = self._entries(sample_division, sample_challenges, shaped_challenges)[2]
 
         assert qb_entry["player_name"] == "Trevor Lawrence"
         assert qb_entry["team_name"] == "Caserta Chumps"
@@ -776,8 +771,7 @@ class TestWeeklyHighlightFields:
         assert below["value"] == "-51.71"
         assert below["points"] is None
         assert not any(
-            isinstance(entry["points"], float) and entry["points"] < 0
-            for entry in entries
+            isinstance(entry["points"], float) and entry["points"] < 0 for entry in entries
         )
 
 
@@ -814,9 +808,9 @@ class TestAISummarySection:
         sample_challenges: list[ChallengeResult],
         sample_weekly_challenges: list[WeeklyChallenge],
     ) -> None:
-        output = self._output(*self._args(
-            sample_division, sample_challenges, sample_weekly_challenges
-        ))
+        output = self._output(
+            *self._args(sample_division, sample_challenges, sample_weekly_challenges)
+        )
         assert "ai_summary" not in json.loads(output)
 
     def test_serializes_the_narrative(
@@ -827,9 +821,10 @@ class TestAISummarySection:
     ) -> None:
         summary = make_narrative()
         data = json.loads(
-            self._output(*self._args(
-                sample_division, sample_challenges, sample_weekly_challenges
-            ), ai_summary=summary)
+            self._output(
+                *self._args(sample_division, sample_challenges, sample_weekly_challenges),
+                ai_summary=summary,
+            )
         )
 
         ai = data["ai_summary"]
@@ -857,9 +852,10 @@ class TestAISummarySection:
         sample_weekly_challenges: list[WeeklyChallenge],
     ) -> None:
         data = json.loads(
-            self._output(*self._args(
-                sample_division, sample_challenges, sample_weekly_challenges
-            ), ai_summary=AISummaryUnavailable(reason="timed out after 120s"))
+            self._output(
+                *self._args(sample_division, sample_challenges, sample_weekly_challenges),
+                ai_summary=AISummaryUnavailable(reason="timed out after 120s"),
+            )
         )
 
         assert data["ai_summary"] == {
@@ -872,12 +868,18 @@ class TestAISummarySection:
         sample_challenges: list[ChallengeResult],
         sample_weekly_challenges: list[WeeklyChallenge],
     ) -> None:
-        output = self._output(*self._args(
-            sample_division, sample_challenges, sample_weekly_challenges
-        ), ai_summary=make_narrative())
+        output = self._output(
+            *self._args(sample_division, sample_challenges, sample_weekly_challenges),
+            ai_summary=make_narrative(),
+        )
         assert list(json.loads(output))[-1] == "ai_summary"
 
-    def test_feature_off_is_byte_identical(self, sample_division, sample_challenges, sample_weekly_challenges) -> None:
+    def test_feature_off_is_byte_identical(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        sample_weekly_challenges: list[WeeklyChallenge],
+    ) -> None:
         """AC-001: the off output equals the on output minus the key."""
         args = self._args(sample_division, sample_challenges, sample_weekly_challenges)
         off = json.loads(self._output(*args))

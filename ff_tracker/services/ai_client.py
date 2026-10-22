@@ -57,10 +57,7 @@ class AIRequest:
             raise DataValidationError("User message cannot be empty")
         if self.max_tokens <= 0:
             raise DataValidationError(f"Max tokens must be positive: {self.max_tokens}")
-        if (
-            self.reasoning_effort is not None
-            and self.reasoning_effort not in AI_REASONING_EFFORTS
-        ):
+        if self.reasoning_effort is not None and self.reasoning_effort not in AI_REASONING_EFFORTS:
             raise DataValidationError(
                 f"Reasoning effort must be one of "
                 f"{'|'.join(AI_REASONING_EFFORTS)}: {self.reasoning_effort}"
@@ -93,9 +90,7 @@ def _urlopen(request: urllib.request.Request, timeout: int) -> bytes:
 class OpenAICompatibleClient:
     """Chat Completions client for any OpenAI-compatible endpoint."""
 
-    def __init__(
-        self, config: AISummaryConfig, transport: HTTPTransport | None = None
-    ) -> None:
+    def __init__(self, config: AISummaryConfig, transport: HTTPTransport | None = None) -> None:
         """
         Initialize the client.
 
@@ -191,9 +186,7 @@ class OpenAICompatibleClient:
             raise AIHTTPError(status=e.code, host=self._host, model=self._config.model) from None
         except urllib.error.URLError as e:
             if isinstance(e.reason, (TimeoutError, socket.timeout)):
-                logger.warning(
-                    "AI summary provider timed out after %ss", self._config.timeout
-                )
+                logger.warning("AI summary provider timed out after %ss", self._config.timeout)
                 raise AITimeoutError(self._config.timeout) from None
             raise AITransportError(self._host) from None
         except (TimeoutError, socket.timeout):

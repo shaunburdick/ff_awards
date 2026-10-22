@@ -17,6 +17,7 @@ class WeeklyPlayerStats:
     Represents a single player's performance in one week,
     including actual vs projected points.
     """
+
     name: str
     position: str
     team_name: str  # Fantasy team they're on

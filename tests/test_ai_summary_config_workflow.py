@@ -37,8 +37,11 @@ class _UniqueKeyLoader(yaml.SafeLoader):
         return mapping
 
 
-def _workflow() -> dict[str, Any]:
-    """Parse the workflow, failing on duplicate keys."""
+def _workflow() -> dict[str | bool, Any]:
+    """Parse the workflow, failing on duplicate keys.
+
+    Keys are ``str | bool`` because YAML 1.1 reads the top-level ``on`` as ``True``.
+    """
     with WORKFLOW.open(encoding="utf-8") as handle:
         document = yaml.load(handle, Loader=_UniqueKeyLoader)
     assert isinstance(document, dict)
@@ -86,12 +89,12 @@ class TestWorkflowGuard:
     def test_env_appends_are_inside_the_guard(self) -> None:
         lines = _lines()
         guard_index = next(
-            index for index, line in enumerate(lines) if 'if [ "$AI_SUMMARY_ENABLED" = "true" ]' in line
+            index
+            for index, line in enumerate(lines)
+            if 'if [ "$AI_SUMMARY_ENABLED" = "true" ]' in line
         )
         end_index = next(
-            index
-            for index in range(guard_index + 1, len(lines))
-            if lines[index].strip() == "fi"
+            index for index in range(guard_index + 1, len(lines)) if lines[index].strip() == "fi"
         )
         guarded = "\n".join(lines[guard_index:end_index])
 
