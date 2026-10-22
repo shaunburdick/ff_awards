@@ -201,3 +201,22 @@ Minor: FR-002's no-matchups sentence restored; the "existing mode predicate" wor
 **Closed by spec v0.15 wording correction:** FR-005's stylesheet sentence now reads that the class is for targeting and for clients that strip `<style>`, the inline style applies unless a rule uses `!important`, and the shipped `.ai-team` rule is weight-only. The doubled-brace CSS defect and the missing `--help` line remain implementer items.
 
 **Verdict:** HOLD — fix the doubled braces, add a test for the rule's presence with a narrative and absence when off, and add the help line. The matching limitations are accepted trade-offs, not defects.
+
+---
+
+## v0.16 — team-name span is class-only (spec v0.16)
+
+| Change | Status |
+|---|---|
+| Email team-name highlight: the span becomes `<span class="ai-team">` with no `style` attribute, and `.ai-team { color: <email.ai_team_color, default #0b57d0>; font-weight: 700; }` in the email's stylesheet carries the appearance, emitted only when a narrative renders | **OWNER CHANGE, spec closed** — FR-005's email row, its span bullet and the two style bullets state the class-only span, the stylesheet rule and its emission condition; AC-023 asserts the colour lands in the rule and the rule is absent for the notice. Reason recorded: the template is already stylesheet-driven — `.winner`, `.challenge-name`, `.playoff-team` and `.container` all declare on the class — so an inline span was inconsistent with the rest of the message, and leaving only the weight on the class made `email.ai_team_color` unstyleable by class. Trade-off accepted rather than hidden: a client that strips `<style>` loses the highlight, exactly as it already loses those other classes. Matching and escaping rules are unchanged. Supersedes the v0.15 row's "class-plus-inline-style split so stylesheets can override", which was also factually wrong — an inline style wins unless a rule uses `!important`. |
+
+### Gate 3 — v0.16 class-only span @ c385e9c (2026-10-21)
+
+| Point | Outcome |
+|---|---|
+| Defect this switch exposes | The doubled-brace rule recorded in the v0.15 Gate 3 row is now the only carrier of the appearance, so `ff_tracker/display/email.py` must emit single-braced, valid CSS; an invalid rule now loses the highlight instead of the inline style covering for it. Implementer item, with a test asserting the rule's presence and its colour. |
+| Not emitted when off, not for the notice | The rule belongs in the same conditional as the section, so no `.ai-team` selector appears when `ai_summary` is absent or is the `AISummaryUnavailable` notice. Implementer item: assert the rule's absence in both. |
+| Clauses this edit does not touch | Longest-first ordering, whole-name matching, the model's original casing, segment-by-segment escaping and the report-data-only name list are unchanged; AC-023's clauses for them stand. |
+| `--help` | The `email.ai_team_color` line missing from `--help` stays an implementer item from the v0.15 row; the argument's name and default do not change here, so the spec needs no new wording for it. |
+
+**Verdict:** HOLD — the spec, AC and ledger agree; the implementer must drop the inline style, emit a valid single-brace `.ai-team` rule, assert its presence with a narrative and its absence for the notice and when off, and add the `--help` line.
