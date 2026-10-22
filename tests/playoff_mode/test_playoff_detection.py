@@ -29,7 +29,7 @@ def create_mock_league(
     return league
 
 
-def test_is_in_playoffs():
+def test_is_in_playoffs() -> None:
     """Test playoff detection logic."""
     print("Testing is_in_playoffs...")
 
@@ -61,7 +61,7 @@ def test_is_in_playoffs():
     print("is_in_playoffs: ALL TESTS PASSED ✅\n")
 
 
-def test_get_playoff_round():
+def test_get_playoff_round() -> None:
     """Test playoff round detection."""
     print("Testing get_playoff_round...")
 
@@ -98,7 +98,7 @@ def test_get_playoff_round():
     print("get_playoff_round: ALL TESTS PASSED ✅\n")
 
 
-def test_check_division_sync():
+def test_check_division_sync() -> None:
     """Test division synchronization checking."""
     print("Testing check_division_sync...")
 
@@ -172,7 +172,7 @@ def test_check_division_sync():
     print("check_division_sync: ALL TESTS PASSED ✅\n")
 
 
-def main():
+def main() -> None:
     """Run all tests."""
     print("=" * 60)
     print("PHASE 2: PLAYOFF DETECTION LOGIC - VALIDATION TEST")

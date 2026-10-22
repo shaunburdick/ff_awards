@@ -254,8 +254,7 @@ class AISummaryConfig:
         parts = urlsplit(self.base_url)
         if parts.scheme not in ("http", "https") or not parts.hostname:
             raise ConfigurationError(
-                "AI_SUMMARY_BASE_URL must be an http(s) URL with a host, "
-                f"got: '{self.base_url}'"
+                f"AI_SUMMARY_BASE_URL must be an http(s) URL with a host, got: '{self.base_url}'"
             )
 
         if not self.model.strip():
@@ -300,8 +299,7 @@ def _parse_ai_bool(value: str) -> bool:
     normalised = value.strip().lower()
     if normalised not in _AI_BOOL_VALUES:
         raise ConfigurationError(
-            "AI_SUMMARY_ENABLED must be one of true/1/yes/on/false/0/no/off, "
-            f"got: '{value}'"
+            f"AI_SUMMARY_ENABLED must be one of true/1/yes/on/false/0/no/off, got: '{value}'"
         )
     return normalised in {"true", "1", "yes", "on"}
 

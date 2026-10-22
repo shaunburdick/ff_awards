@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import email.message
 import http.client
 import io
 import json
@@ -62,6 +63,13 @@ def _request(user_message: str = '{"week": 6}') -> AIRequest:
     )
 
 
+def _body(request: urllib.request.Request) -> bytes:
+    """The client always posts JSON bytes; narrow typeshed's wide Request.data union."""
+    data = request.data
+    assert isinstance(data, bytes)
+    return data
+
+
 class TestRequestShape:
     """AC-010: what the provider receives comes from the configuration."""
 
@@ -79,7 +87,7 @@ class TestRequestShape:
         assert USER_AGENT != "Python-urllib"  # the default UA is rejected upstream
         assert timeout == 120
 
-        body = json.loads(request.data.decode("utf-8"))
+        body = json.loads(_body(request).decode("utf-8"))
         assert body["model"] == DEFAULT_AI_MODEL
         assert body["max_tokens"] == DEFAULT_AI_MAX_TOKENS == 8000
         assert body["messages"] == [
@@ -97,7 +105,7 @@ class TestRequestShape:
 
         client.complete(request)
 
-        body = json.loads(transport.calls[0][0].data.decode("utf-8"))
+        body = json.loads(_body(transport.calls[0][0]).decode("utf-8"))
         assert body["max_tokens"] == 1234
         assert body["max_tokens"] != DEFAULT_AI_MAX_TOKENS
 
@@ -105,7 +113,7 @@ class TestRequestShape:
         transport = FakeTransport(envelope(NARRATIVE))
         OpenAICompatibleClient(_config(), transport).complete(_request())
 
-        body = json.loads(transport.calls[0][0].data.decode("utf-8"))
+        body = json.loads(_body(transport.calls[0][0]).decode("utf-8"))
         assert "reasoning_effort" not in body
 
     @pytest.mark.parametrize("effort", ["low", "medium", "high"])
@@ -119,7 +127,7 @@ class TestRequestShape:
         )
         OpenAICompatibleClient(_config(), transport).complete(request)
 
-        body = json.loads(transport.calls[0][0].data.decode("utf-8"))
+        body = json.loads(_body(transport.calls[0][0]).decode("utf-8"))
         assert body["reasoning_effort"] == effort
 
     def test_reasoning_effort_is_never_sent_as_null(self) -> None:
@@ -133,7 +141,7 @@ class TestRequestShape:
             )
         )
 
-        body = json.loads(transport.calls[0][0].data.decode("utf-8"))
+        body = json.loads(_body(transport.calls[0][0]).decode("utf-8"))
         # Absent, not null: the key must not exist at all.
         assert "reasoning_effort" not in body
 
@@ -153,7 +161,7 @@ class TestRequestShape:
     def test_model_override_is_sent_verbatim(self) -> None:
         transport = FakeTransport(envelope(NARRATIVE))
         OpenAICompatibleClient(_config(model="kimi-k2.6"), transport).complete(_request())
-        body = json.loads(transport.calls[0][0].data.decode("utf-8"))
+        body = json.loads(_body(transport.calls[0][0]).decode("utf-8"))
         assert body["model"] == "kimi-k2.6"
 
     @pytest.mark.parametrize(
@@ -211,9 +219,7 @@ class TestResponseHandling:
     ) -> None:
         """A reasoning model can spend the whole budget and return no content."""
         body = (
-            b'{"choices": [{"message": {"content": '
-            + content
-            + b'}, "finish_reason": "length"}]}'
+            b'{"choices": [{"message": {"content": ' + content + b'}, "finish_reason": "length"}]}'
         )
         client = OpenAICompatibleClient(_config(), FakeTransport(body))
 
@@ -221,7 +227,9 @@ class TestResponseHandling:
             client.complete(_request())
 
     def test_usage_is_logged_at_debug(self, caplog: pytest.LogCaptureFixture) -> None:
-        transport = FakeTransport(envelope(NARRATIVE, usage={"prompt_tokens": 12, "completion_tokens": 34}))
+        transport = FakeTransport(
+            envelope(NARRATIVE, usage={"prompt_tokens": 12, "completion_tokens": 34})
+        )
         caplog.set_level(logging.DEBUG, logger="ff_tracker.services.ai_client")
         OpenAICompatibleClient(_config(), transport).complete(_request())
         assert "prompt=12 completion=34" in caplog.text
@@ -235,7 +243,7 @@ class TestFailureTaxonomy:
             "https://opencode.ai/inference/openai/v1/chat/completions",
             410,
             "Gone",
-            {},
+            email.message.Message(),
             io.BytesIO(b"model retired"),
         )
         client = OpenAICompatibleClient(_config(), FakeTransport(error=error))
@@ -257,7 +265,9 @@ class TestFailureTaxonomy:
             client.complete(_request())
 
     def test_plain_timeout(self) -> None:
-        client = OpenAICompatibleClient(_config(timeout=120), FakeTransport(error=TimeoutError("slow")))
+        client = OpenAICompatibleClient(
+            _config(timeout=120), FakeTransport(error=TimeoutError("slow"))
+        )
         with pytest.raises(AITimeoutError, match="timed out after 120s"):
             client.complete(_request())
 
@@ -350,7 +360,7 @@ class TestLoggingHygiene:
             "https://opencode.ai/inference/openai/v1/chat/completions",
             400,
             "Bad Request",
-            {},
+            email.message.Message(),
             io.BytesIO(f"echo: {API_KEY} {self.MARKER}".encode()),
         )
         client = OpenAICompatibleClient(_config(), FakeTransport(error=error))

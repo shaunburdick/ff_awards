@@ -19,7 +19,7 @@ from ff_tracker.exceptions import (
     AITransportError,
     AITruncationError,
 )
-from ff_tracker.models import AISummary, AISummaryUnavailable
+from ff_tracker.models import AISummary, AISummaryUnavailable, DivisionData
 from ff_tracker.services.ai_client import AIRequest
 from ff_tracker.services.ai_summary_service import (
     HEADLINE_WORD_CAP,
@@ -103,7 +103,7 @@ def _service(
     error: AISummaryError | None = None,
     max_tokens: int = DEFAULT_AI_MAX_TOKENS,
     reasoning_effort: str | None = None,
-):
+) -> tuple[AISummaryService, FakeAIClient]:
     client = FakeAIClient(response=response, error=error)
     config = _config(user_prompt, max_tokens=max_tokens, reasoning_effort=reasoning_effort)
     return AISummaryService(config, client), client
@@ -113,7 +113,7 @@ def _two_sections() -> list[dict[str, object]]:
     return [_league_section(LEAGUE_A), _league_section(LEAGUE_B)]
 
 
-def _generate(service: AISummaryService, divisions=None) -> object:
+def _generate(service: AISummaryService, divisions: list[DivisionData] | None = None) -> object:
     return service.generate(
         divisions if divisions is not None else make_regular_divisions(),
         [],
@@ -173,9 +173,7 @@ class TestHappyPath:
 
     def test_budget_and_effort_come_from_configuration(self) -> None:
         """AC-010: a non-default budget and an upper-case effort reach the request."""
-        service, client = _service(
-            _response(), max_tokens=1234, reasoning_effort="LOW"
-        )
+        service, client = _service(_response(), max_tokens=1234, reasoning_effort="LOW")
         _generate(service)
 
         request = client.requests[0]
@@ -299,7 +297,9 @@ class TestFailureDegradation:
     """FR-006: provider failures become the notice, never an exception."""
 
     def test_http_error(self) -> None:
-        service, _ = _service(error=AIHTTPError(status=410, host="opencode.ai", model="deepseek-v4.1-flash"))
+        service, _ = _service(
+            error=AIHTTPError(status=410, host="opencode.ai", model="deepseek-v4.1-flash")
+        )
         result = _generate(service)
 
         assert isinstance(result, AISummaryUnavailable)
@@ -323,7 +323,9 @@ class TestFailureDegradation:
 class TestRetry:
     """AC-019..AC-022: one retry, contract failures only, same request object."""
 
-    def _service_with(self, *responses: str | AISummaryError) -> tuple[AISummaryService, SequenceClient]:
+    def _service_with(
+        self, *responses: str | AISummaryError
+    ) -> tuple[AISummaryService, SequenceClient]:
         client = SequenceClient(*responses)
         return AISummaryService(_config(), client), client
 
@@ -351,9 +353,7 @@ class TestRetry:
 
     def test_two_contract_failures_stop_after_two_calls(self) -> None:
         four = [*_two_sections(), _league_section(LEAGUE_B)]
-        service, client = self._service_with(
-            _response(leagues=four), _response(leagues=four)
-        )
+        service, client = self._service_with(_response(leagues=four), _response(leagues=four))
         result = _generate(service)
 
         assert isinstance(result, AISummaryUnavailable)
@@ -434,17 +434,13 @@ class TestProgrammerErrorsPropagate:
         def _explode(*args: object, **kwargs: object) -> object:
             raise AttributeError("bug in the builder")
 
-        monkeypatch.setattr(
-            "ff_tracker.services.ai_summary_service.build_digest", _explode
-        )
+        monkeypatch.setattr("ff_tracker.services.ai_summary_service.build_digest", _explode)
         service, _ = _service(_response())
 
         with pytest.raises(AttributeError, match="bug in the builder"):
             _generate(service)
 
-    def test_type_error_from_the_parser_propagates(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_type_error_from_the_parser_propagates(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _explode(*args: object, **kwargs: object) -> object:
             raise TypeError("bug in the parse")
 
@@ -459,9 +455,7 @@ class TestLeagueMatching:
     """FR-004's total order, AC-008."""
 
     def test_name_match_with_reordered_entries(self) -> None:
-        response = _response(
-            leagues=[_league_section(LEAGUE_B), _league_section(LEAGUE_A)]
-        )
+        response = _response(leagues=[_league_section(LEAGUE_B), _league_section(LEAGUE_A)])
         service, _ = _service(response)
         result = _generate(service)
 
@@ -501,9 +495,7 @@ class TestLeagueMatching:
         assert "Another League" not in headings
 
     def test_duplicate_entry_renders_by_position(self) -> None:
-        response = _response(
-            leagues=[_league_section(LEAGUE_A), _league_section(LEAGUE_A)]
-        )
+        response = _response(leagues=[_league_section(LEAGUE_A), _league_section(LEAGUE_A)])
         service, _ = _service(response)
         result = _generate(service)
 
@@ -511,9 +503,7 @@ class TestLeagueMatching:
         assert [league.league for league in result.leagues] == [LEAGUE_A, LEAGUE_B]
 
     def test_no_response_supplied_name_ever_becomes_a_heading(self) -> None:
-        response = _response(
-            leagues=[_league_section("Mine"), _league_section("Yours")]
-        )
+        response = _response(leagues=[_league_section("Mine"), _league_section("Yours")])
         service, _ = _service(response)
         result = _generate(service)
 
@@ -573,9 +563,7 @@ class TestNormalisation:
         sixty = " ".join(["word"] * 60)
         response = _response(
             leagues=[
-                _league_section(
-                    LEAGUE_A, paragraphs=[sixty, sixty, sixty]
-                ),
+                _league_section(LEAGUE_A, paragraphs=[sixty, sixty, sixty]),
                 _league_section(LEAGUE_B),
             ]
         )
@@ -684,15 +672,13 @@ class TestLogging:
         assert LEAGUE_B in prompt_records[0]
 
         joined = "\n".join(r.getMessage() for r in caplog.records)
-        assert "Butt Fumble" not in joined       # team name
-        assert "Owner " not in joined            # owner name
-        assert "147.78" not in joined            # score
-        assert "DIGEST-MARKER" not in joined     # digest marker
-        assert "sk-test" not in joined           # key
+        assert "Butt Fumble" not in joined  # team name
+        assert "Owner " not in joined  # owner name
+        assert "147.78" not in joined  # score
+        assert "DIGEST-MARKER" not in joined  # digest marker
+        assert "sk-test" not in joined  # key
 
-    def test_warning_and_above_carry_no_league_name(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_warning_and_above_carry_no_league_name(self, caplog: pytest.LogCaptureFixture) -> None:
         caplog.set_level(logging.WARNING)
         service, _ = _service(error=AIHTTPError(status=500, host="opencode.ai", model="m"))
 

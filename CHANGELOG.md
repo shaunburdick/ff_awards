@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.1] - 2026-10-21 (Lint Cleanup + AI Report Polish)
+
 ### Added - Email team-name highlighting
 - **Team names inside the email's AI section are wrapped in a highlighted span**,
   so each manager can find their own team in the prose. Matching is
@@ -38,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `AI_SUMMARY_USER_PROMPT` block scalar is gone — the consequence is that the
   prompt is no longer in git, so an archived report's narration can be
   reproduced only from the variable or secret value together with `prompt_sha`.
+
+### Changed - Lint cleanup and test type coverage
+- **`ruff format` runs clean across the repository, and `mypy .` now checks all
+  73 files with zero errors** — `tests/` is fully annotated with real narrowing
+  and the `types-PyYAML` stubs instead of suppressions, and no runtime behavior
+  changed.
 
 ## [3.5.0] - 2026-10-21 (AI Summary)
 

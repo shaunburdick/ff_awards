@@ -16,6 +16,7 @@ class GameResult:
 
     Represents one team's performance in a single week matchup.
     """
+
     team_name: str
     score: float
     opponent_name: str

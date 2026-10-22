@@ -17,6 +17,7 @@ class Owner:
     Represents the person who owns/manages a fantasy football team,
     including their display name, real name, and notification preferences.
     """
+
     display_name: str
     first_name: str
     last_name: str
@@ -32,11 +33,7 @@ class Owner:
             raise DataValidationError("Owner ID cannot be empty")
 
         # At least one name field should be provided
-        if not any([
-            self.display_name.strip(),
-            self.first_name.strip(),
-            self.last_name.strip()
-        ]):
+        if not any([self.display_name.strip(), self.first_name.strip(), self.last_name.strip()]):
             raise DataValidationError("Owner must have at least one name field")
 
     @property
@@ -60,8 +57,8 @@ class Owner:
 
         # Common username patterns
         username_indicators = [
-            name.startswith('ESPNFAN'),
-            name.startswith('espn'),
+            name.startswith("ESPNFAN"),
+            name.startswith("espn"),
             len(name) > 15 and any(c.isdigit() for c in name),
             name.islower() and len(name) > 8,
             sum(c.isdigit() for c in name) > len(name) // 2,

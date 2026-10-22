@@ -43,7 +43,7 @@ class WeeklyChallengeCalculator:
         self,
         weekly_games: Sequence[WeeklyGameResult],
         weekly_players: Sequence[WeeklyPlayerStats],
-        week: int
+        week: int,
     ) -> list[WeeklyChallenge]:
         """
         Calculate all weekly challenges.
@@ -66,7 +66,9 @@ class WeeklyChallengeCalculator:
 
         # Team-based challenges (require game data)
         if weekly_games:
-            logger.info(f"Calculating team challenges for week {week} with {len(weekly_games)} games")
+            logger.info(
+                f"Calculating team challenges for week {week} with {len(weekly_games)} games"
+            )
             results.append(self._calculate_highest_score(weekly_games, week))
             results.append(self._calculate_lowest_score(weekly_games, week))
             results.append(self._calculate_biggest_win(weekly_games, week))
@@ -75,11 +77,15 @@ class WeeklyChallengeCalculator:
             # Projection-based challenges (require starter projections)
             games_with_projections = [g for g in weekly_games if g.true_projection_diff is not None]
             if games_with_projections:
-                logger.info(f"Calculating projection challenges with {len(games_with_projections)} teams")
+                logger.info(
+                    f"Calculating projection challenges with {len(games_with_projections)} teams"
+                )
                 results.append(self._calculate_overachiever(games_with_projections, week))
                 results.append(self._calculate_below_expectations(games_with_projections, week))
             else:
-                logger.warning(f"No projection data for week {week}, skipping projection challenges")
+                logger.warning(
+                    f"No projection data for week {week}, skipping projection challenges"
+                )
         else:
             logger.warning(f"No weekly game data for week {week}, skipping team challenges")
 
@@ -104,9 +110,7 @@ class WeeklyChallengeCalculator:
         return results
 
     def _calculate_highest_score(
-        self,
-        games: Sequence[WeeklyGameResult],
-        week: int
+        self, games: Sequence[WeeklyGameResult], week: int
     ) -> WeeklyChallenge:
         """Find team with highest score this week."""
         winner = max(games, key=lambda g: g.score)
@@ -122,14 +126,12 @@ class WeeklyChallengeCalculator:
             additional_info={
                 "opponent": winner.opponent_name,
                 "opponent_score": winner.opponent_score,
-                "won": winner.won
-            }
+                "won": winner.won,
+            },
         )
 
     def _calculate_lowest_score(
-        self,
-        games: Sequence[WeeklyGameResult],
-        week: int
+        self, games: Sequence[WeeklyGameResult], week: int
     ) -> WeeklyChallenge:
         """Find team with lowest score this week."""
         winner = min(games, key=lambda g: g.score)
@@ -145,14 +147,12 @@ class WeeklyChallengeCalculator:
             additional_info={
                 "opponent": winner.opponent_name,
                 "opponent_score": winner.opponent_score,
-                "won": winner.won
-            }
+                "won": winner.won,
+            },
         )
 
     def _calculate_biggest_win(
-        self,
-        games: Sequence[WeeklyGameResult],
-        week: int
+        self, games: Sequence[WeeklyGameResult], week: int
     ) -> WeeklyChallenge:
         """Find largest margin of victory this week."""
         # Only consider games that were won
@@ -176,14 +176,12 @@ class WeeklyChallengeCalculator:
                 "score": winner.score,
                 "opponent": winner.opponent_name,
                 "opponent_score": winner.opponent_score,
-                "margin": winner.margin
-            }
+                "margin": winner.margin,
+            },
         )
 
     def _calculate_closest_game(
-        self,
-        games: Sequence[WeeklyGameResult],
-        week: int
+        self, games: Sequence[WeeklyGameResult], week: int
     ) -> WeeklyChallenge:
         """Find smallest margin game this week, reported from the winner's side."""
         # Both teams in a matchup share the margin, so prefer the winning row.
@@ -194,8 +192,7 @@ class WeeklyChallengeCalculator:
             reported_winner = winner.team_name
         elif winner.score == winner.opponent_score:
             description = (
-                f"{winner.team_name} and {winner.opponent_name} "
-                f"tied at {winner.score:.2f}"
+                f"{winner.team_name} and {winner.opponent_name} tied at {winner.score:.2f}"
             )
             reported_winner = f"Tie: {winner.team_name} and {winner.opponent_name}"
         else:
@@ -215,14 +212,12 @@ class WeeklyChallengeCalculator:
                 "opponent": winner.opponent_name,
                 "opponent_score": winner.opponent_score,
                 "won": winner.won,
-                "margin": winner.margin
-            }
+                "margin": winner.margin,
+            },
         )
 
     def _calculate_overachiever(
-        self,
-        games: Sequence[WeeklyGameResult],
-        week: int
+        self, games: Sequence[WeeklyGameResult], week: int
     ) -> WeeklyChallenge:
         """
         Find team that most exceeded their pre-game starter projections.
@@ -248,14 +243,12 @@ class WeeklyChallengeCalculator:
                 "score": winner.score,
                 "starter_projection": starter_proj,
                 "true_diff": true_diff,
-                "opponent": winner.opponent_name
-            }
+                "opponent": winner.opponent_name,
+            },
         )
 
     def _calculate_below_expectations(
-        self,
-        games: Sequence[WeeklyGameResult],
-        week: int
+        self, games: Sequence[WeeklyGameResult], week: int
     ) -> WeeklyChallenge:
         """
         Find team that most underperformed their pre-game starter projections.
@@ -281,14 +274,12 @@ class WeeklyChallengeCalculator:
                 "score": winner.score,
                 "starter_projection": starter_proj,
                 "true_diff": true_diff,
-                "opponent": winner.opponent_name
-            }
+                "opponent": winner.opponent_name,
+            },
         )
 
     def _calculate_top_player(
-        self,
-        players: Sequence[WeeklyPlayerStats],
-        week: int
+        self, players: Sequence[WeeklyPlayerStats], week: int
     ) -> WeeklyChallenge:
         """Find highest scoring player this week (starters only)."""
         winner = max(players, key=lambda p: p.points)
@@ -304,14 +295,12 @@ class WeeklyChallengeCalculator:
             additional_info={
                 "position": winner.position,
                 "team": winner.team_name,
-                "pro_team": winner.pro_team
-            }
+                "pro_team": winner.pro_team,
+            },
         )
 
     def _calculate_top_by_position(
-        self,
-        players: Sequence[WeeklyPlayerStats],
-        week: int
+        self, players: Sequence[WeeklyPlayerStats], week: int
     ) -> list[WeeklyChallenge]:
         """Find top scorer for each position this week (starters only)."""
         results: list[WeeklyChallenge] = []
@@ -327,28 +316,26 @@ class WeeklyChallengeCalculator:
 
             winner = max(position_players, key=lambda p: p.points)
 
-            results.append(WeeklyChallenge(
-                challenge_name=f"Best {position}",
-                week=week,
-                winner=winner.name,
-                owner=None,
-                division=winner.division,
-                value=f"{winner.points:.2f}",
-                description=f"{winner.name} scored {winner.points:.2f} points",
-                additional_info={
-                    "position": winner.position,
-                    "team": winner.team_name,
-                    "pro_team": winner.pro_team
-                }
-            ))
+            results.append(
+                WeeklyChallenge(
+                    challenge_name=f"Best {position}",
+                    week=week,
+                    winner=winner.name,
+                    owner=None,
+                    division=winner.division,
+                    value=f"{winner.points:.2f}",
+                    description=f"{winner.name} scored {winner.points:.2f} points",
+                    additional_info={
+                        "position": winner.position,
+                        "team": winner.team_name,
+                        "pro_team": winner.pro_team,
+                    },
+                )
+            )
 
         return results
 
-    def _create_no_data_placeholder(
-        self,
-        challenge_name: str,
-        week: int
-    ) -> WeeklyChallenge:
+    def _create_no_data_placeholder(self, challenge_name: str, week: int) -> WeeklyChallenge:
         """Create a placeholder challenge when data is insufficient."""
         return WeeklyChallenge(
             challenge_name=challenge_name,
@@ -358,5 +345,5 @@ class WeeklyChallengeCalculator:
             division="N/A",
             value="N/A",
             description="Insufficient data for this challenge",
-            additional_info={}
+            additional_info={},
         )

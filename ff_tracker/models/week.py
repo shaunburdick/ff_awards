@@ -17,6 +17,7 @@ class WeeklyGameResult:
     Represents one team's performance in a single week matchup,
     including projected scores for over/under analysis.
     """
+
     team_name: str
     score: float
     projected_score: float  # ESPN's real-time updated team projection

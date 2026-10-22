@@ -67,7 +67,7 @@ def create_mock_league(
     return league
 
 
-def test_extract_playoff_matchups_semifinals():
+def test_extract_playoff_matchups_semifinals() -> None:
     """Test playoff matchup extraction for semifinals."""
     print("Testing extract_playoff_matchups (Semifinals)...")
 
@@ -124,7 +124,7 @@ def test_extract_playoff_matchups_semifinals():
     print("extract_playoff_matchups (Semifinals): ALL TESTS PASSED ✅\n")
 
 
-def test_extract_playoff_matchups_finals():
+def test_extract_playoff_matchups_finals() -> None:
     """Test playoff matchup extraction for finals."""
     print("Testing extract_playoff_matchups (Finals)...")
 
@@ -162,7 +162,7 @@ def test_extract_playoff_matchups_finals():
     print("extract_playoff_matchups (Finals): ALL TESTS PASSED ✅\n")
 
 
-def test_extract_playoff_matchups_in_progress():
+def test_extract_playoff_matchups_in_progress() -> None:
     """Test playoff matchup extraction with in-progress games."""
     print("Testing extract_playoff_matchups (In Progress)...")
 
@@ -196,7 +196,7 @@ def test_extract_playoff_matchups_in_progress():
     print("extract_playoff_matchups (In Progress): ALL TESTS PASSED ✅\n")
 
 
-def test_extract_playoff_matchups_filters_consolation():
+def test_extract_playoff_matchups_filters_consolation() -> None:
     """Test that consolation bracket games are filtered out."""
     print("Testing extract_playoff_matchups (Filters Consolation)...")
 
@@ -229,7 +229,7 @@ def test_extract_playoff_matchups_filters_consolation():
     print("extract_playoff_matchups (Filters Consolation): ALL TESTS PASSED ✅\n")
 
 
-def test_build_playoff_bracket():
+def test_build_playoff_bracket() -> None:
     """Test playoff bracket building."""
     print("Testing build_playoff_bracket...")
 
@@ -265,7 +265,7 @@ def test_build_playoff_bracket():
     print("build_playoff_bracket: ALL TESTS PASSED ✅\n")
 
 
-def main():
+def main() -> None:
     """Run all tests."""
     print("=" * 60)
     print("PHASE 3: PLAYOFF DATA EXTRACTION - VALIDATION TEST")

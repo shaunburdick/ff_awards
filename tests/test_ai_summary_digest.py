@@ -237,14 +237,18 @@ class TestPlayoffDigest:
         assert len(digest["playoffs"]["matchups"]) == 2
 
     def test_bracket_rows_are_flat_with_no_seed_key(self) -> None:
-        row = _digest(make_playoff_divisions(), current_week=15)["playoffs"]["matchups"][0]
+        digest = _digest(make_playoff_divisions(), current_week=15)
+        assert digest["playoffs"] is not None
+        row = digest["playoffs"]["matchups"][0]
         assert set(row) == EXPECTED_KEYS["playoff_matchup"]
         assert "seed1" not in row
         assert row["winner"] == "Butt Fumble"
         assert row["division"] == LEAGUE_A
 
     def test_unfinished_games_keep_none_scores(self) -> None:
-        row = _digest(make_playoff_divisions(), current_week=15)["playoffs"]["matchups"][1]
+        digest = _digest(make_playoff_divisions(), current_week=15)
+        assert digest["playoffs"] is not None
+        row = digest["playoffs"]["matchups"][1]
         assert row["score1"] is None
         assert row["score2"] is None
         assert row["winner"] is None
@@ -268,9 +272,7 @@ class TestPlayoffDigest:
         divisions[0] = make_division(
             LEAGUE_A,
             teams=divisions[0].teams,
-            weekly_games=make_matchup_pair(
-                "Butt Fumble", 132.40, "Donut Lose", 101.10
-            ),
+            weekly_games=make_matchup_pair("Butt Fumble", 132.40, "Donut Lose", 101.10),
             playoff_bracket=divisions[0].playoff_bracket,
             reg_season_count=14,
         )
@@ -334,9 +336,7 @@ class TestDigestPrivacy:
     """FR-002: no league IDs, no credentials, no key."""
 
     def test_no_league_ids(self) -> None:
-        divisions = [
-            make_division(LEAGUE_A, league_id=987654321, teams=[make_team("Butt Fumble")])
-        ]
+        divisions = [make_division(LEAGUE_A, league_id=987654321, teams=[make_team("Butt Fumble")])]
         serialised = json.dumps(_digest(divisions))
         assert "987654321" not in serialised
         assert "league_id" not in serialised
@@ -360,8 +360,8 @@ class TestDigestGoldenKeys:
             for row in league["standings"]:
                 assert set(row) == EXPECTED_KEYS["standings_row"]
             assert league["matchups"], "regular season must carry matchups"
-            for row in league["matchups"]:
-                assert set(row) == EXPECTED_KEYS["matchup_row"]
+            for matchup in league["matchups"]:
+                assert set(matchup) == EXPECTED_KEYS["matchup_row"]
             for challenge in league["weekly_challenges"]:
                 assert set(challenge) == EXPECTED_KEYS["weekly_challenge"]
         for challenge in digest["season_challenges"]:

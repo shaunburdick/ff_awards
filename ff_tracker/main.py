@@ -315,18 +315,17 @@ def main() -> int:
         # both output modes embeds the same text from one provider call.
         ai_summary: AISummaryResult | None = None
         if ai_config.enabled:
-            ai_summary = AISummaryService(
-                ai_config, OpenAICompatibleClient(ai_config)
-            ).generate(
+            ai_summary = AISummaryService(ai_config, OpenAICompatibleClient(ai_config)).generate(
                 divisions,
                 challenges,
                 weekly_challenges if weekly_challenges else None,
                 espn_service.current_week,
                 championship,
             )
-            if isinstance(ai_summary, AISummaryUnavailable) and os.environ.get(
-                "GITHUB_ACTIONS"
-            ) == "true":
+            if (
+                isinstance(ai_summary, AISummaryUnavailable)
+                and os.environ.get("GITHUB_ACTIONS") == "true"
+            ):
                 print(f"::warning::{ai_summary.notice}")
 
         # Handle output based on mode

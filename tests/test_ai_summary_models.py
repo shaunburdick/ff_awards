@@ -72,7 +72,10 @@ class TestAISummaryLeague:
             AISummaryLeague(league="League A", paragraphs=["A paragraph."], bullets=["  "])
 
     def test_bullets_may_be_empty(self) -> None:
-        assert AISummaryLeague(league="League A", paragraphs=["A paragraph."], bullets=[]).bullets == []
+        assert (
+            AISummaryLeague(league="League A", paragraphs=["A paragraph."], bullets=[]).bullets
+            == []
+        )
 
 
 class TestAIProvenance:
@@ -163,7 +166,8 @@ class TestAISummary:
     def test_is_frozen(self) -> None:
         summary = _summary()
         with pytest.raises(FrozenInstanceError):
-            summary.headline = "changed"
+            # mypy calls a frozen field read-only; __setattr__ is the call the assignment makes.
+            summary.__setattr__("headline", "changed")
 
 
 class TestAISummaryUnavailable:

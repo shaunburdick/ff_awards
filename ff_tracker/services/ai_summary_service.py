@@ -186,9 +186,7 @@ class AISummaryService:
         identically at the same cost. The retry reuses the same request
         object, so prompt, payload, model and budget are unchanged.
         """
-        digest = build_digest(
-            divisions, challenges, weekly_challenges, current_week, championship
-        )
+        digest = build_digest(divisions, challenges, weekly_challenges, current_week, championship)
         league_names = [league["league"] for league in digest["leagues"]]
         system_prompt = build_system_prompt(self._config.user_prompt, league_names)
         request = AIRequest(
@@ -271,16 +269,13 @@ class AISummaryService:
         if counts_match and names_resolve:
             by_name = {entry["league"].strip().casefold(): entry for entry in raw_leagues}
             return [
-                (division.name, by_name[division.name.strip().casefold()])
-                for division in divisions
+                (division.name, by_name[division.name.strip().casefold()]) for division in divisions
             ]
 
         if counts_match:
             # A stray, renamed or duplicated entry still renders; the heading is
             # ours, so a response-supplied name can never appear.
-            return [
-                (division.name, entry) for division, entry in zip(divisions, raw_leagues)
-            ]
+            return [(division.name, entry) for division, entry in zip(divisions, raw_leagues)]
 
         raise AIContractError(
             f"league count mismatch ({len(divisions)} leagues, {len(raw_leagues)} sections)"

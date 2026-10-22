@@ -17,6 +17,7 @@ class ChallengeResult:
 
     Represents the winner and details of one of the 5 tracked challenges.
     """
+
     challenge_name: str
     winner: str
     owner: Owner

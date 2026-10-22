@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -15,7 +17,7 @@ from ff_tracker.exceptions import ConfigurationError
 HELP = "Path to environment file (default: .env in the working directory)"
 
 
-def _parsers():
+def _parsers() -> dict[str, Callable[[], argparse.ArgumentParser]]:
     from ff_tracker.championship import create_parser as championship_parser
     from ff_tracker.main import create_parser as tracker_parser
     from ff_tracker.season_recap import create_parser as recap_parser
@@ -58,9 +60,7 @@ class TestEnvFileSurface:
 class TestMainForwardsThePath:
     """main.py must pass the flag to both loaders, not just the report config."""
 
-    def test_create_config_and_the_ai_loader_receive_the_path(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_config_and_the_ai_loader_receive_the_path(self, tmp_path: Path) -> None:
         from ff_tracker.main import main
 
         alt = tmp_path / "alt.env"
@@ -68,7 +68,9 @@ class TestMainForwardsThePath:
         config = FFTrackerConfig(league_ids=[123456], year=2024, private=False)
 
         with (
-            patch.object(sys, "argv", ["ff-tracker", "--env", "--env-file", str(alt), "--format", "json"]),
+            patch.object(
+                sys, "argv", ["ff-tracker", "--env", "--env-file", str(alt), "--format", "json"]
+            ),
             patch("ff_tracker.config.create_config", return_value=config) as create_config,
             patch(
                 "ff_tracker.main.load_ai_summary_config",

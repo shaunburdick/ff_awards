@@ -436,9 +436,7 @@ class TestAISummaryConfig:
         with pytest.raises(ConfigurationError, match="AI_SUMMARY_API_KEY is required"):
             load_ai_summary_config()
 
-    def test_a_key_alone_does_not_enable_the_feature(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_a_key_alone_does_not_enable_the_feature(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AI_SUMMARY_API_KEY", "sk-test")
         assert load_ai_summary_config().enabled is False
 
@@ -460,9 +458,7 @@ class TestAISummaryConfig:
         assert config.reasoning_effort is None
         assert config.base_url == DEFAULT_AI_BASE_URL
 
-    def test_malformed_flag_is_still_an_error(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_malformed_flag_is_still_an_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """An unreadable flag cannot be read as off."""
         monkeypatch.setenv("AI_SUMMARY_ENABLED", "maybe")
         with pytest.raises(ConfigurationError, match="AI_SUMMARY_ENABLED must be one of"):
@@ -488,7 +484,9 @@ class TestAISummaryConfig:
         self, enabled_env: None, monkeypatch: pytest.MonkeyPatch, value: str
     ) -> None:
         monkeypatch.setenv("AI_SUMMARY_TIMEOUT", value)
-        with pytest.raises(ConfigurationError, match="AI_SUMMARY_TIMEOUT must be a positive integer"):
+        with pytest.raises(
+            ConfigurationError, match="AI_SUMMARY_TIMEOUT must be a positive integer"
+        ):
             load_ai_summary_config()
 
     @pytest.mark.parametrize("value", ["0", "-1", "lots"])
@@ -513,13 +511,17 @@ class TestAISummaryConfig:
         assert "101" in message
         assert "100" in message
 
-    def test_prompt_at_the_limit_is_accepted(self, enabled_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_prompt_at_the_limit_is_accepted(
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("AI_SUMMARY_MAX_PROMPT_CHARS", "100")
         monkeypatch.setenv("AI_SUMMARY_USER_PROMPT", "x" * 100)
         assert len(load_ai_summary_config().user_prompt) == 100
 
     @pytest.mark.parametrize("value", ["", "   ", "\n\t "])
-    def test_empty_prompt_is_a_no_op(self, enabled_env: None, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    def test_empty_prompt_is_a_no_op(
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
         monkeypatch.setenv("AI_SUMMARY_USER_PROMPT", value)
         assert load_ai_summary_config().user_prompt == ""
 
@@ -663,7 +665,9 @@ class TestAISummaryBudgetAndEffort:
     def test_max_tokens_defaults_to_eight_thousand(self) -> None:
         assert load_ai_summary_config().max_tokens == DEFAULT_AI_MAX_TOKENS == 8000
 
-    def test_max_tokens_is_read_from_the_environment(self, enabled_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_max_tokens_is_read_from_the_environment(
+        self, enabled_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("AI_SUMMARY_MAX_TOKENS", "1234")
         assert load_ai_summary_config().max_tokens == 1234
 
@@ -749,9 +753,7 @@ class TestEnvFile:
 
         assert config.league_ids == [111111, 222222]
 
-    def test_repo_dotenv_is_not_read_when_an_explicit_file_is_given(
-        self, tmp_path: Path
-    ) -> None:
+    def test_repo_dotenv_is_not_read_when_an_explicit_file_is_given(self, tmp_path: Path) -> None:
         alt = tmp_path / "alt.env"
         alt.write_text("LEAGUE_IDS=333333\n", encoding="utf-8")
 
