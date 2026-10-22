@@ -1,6 +1,6 @@
 # Challenge Ledger — 009 AI Summary
 
-> Gate 1 (spec) · `spec.md` v0.14 (this commit) · Constitution v1.0.0, no conflict.
+> Gate 1 (spec) · `spec.md` v0.15 (this commit) · Constitution v1.0.0, no conflict.
 > Owner decisions of 2026-10-21 are precedent: fail-fast when enabled-but-unconfigured with a
 > workflow guard; league matching by name with positional fallback; failure notice at the bottom.
 > They are not reopened. The v0.4 owner changes (endpoint default, enforced length, committed lore
@@ -179,3 +179,11 @@ Minor: FR-002's no-matchups sentence restored; the "existing mode predicate" wor
 | Stale docs | **OPEN** — `plan.md:532/536/544/723` and `tasks.md:268/287` still describe the removed committed `AI_SUMMARY_USER_PROMPT: \|` block scalar, and this v0.14 row's "`.env` write for these variables" is wrong: the optional settings are inherited from the workflow env and never written to `.env`. `README.md`'s example sets the variable and the secret one after the other, so the variable wins and the unmasked store is used — present them as alternatives. |
 
 **Verdict:** HOLD — the CI change works; the plan/tasks references and the README example must follow, and the prompt secret should move to the report step's `env:`.
+
+---
+
+## v0.15 — email name highlighting and a one-run prompt override (spec v0.15)
+
+| Change | Status |
+|---|---|
+| Email names: team names inside the AI text wrapped in `<span class="ai-team">`, bold and coloured by the new `email.ai_team_color` format argument (default `#0b57d0`), plus a one-run `ai_summary_prompt` `workflow_dispatch` input with precedence input → `vars.AI_SUMMARY_USER_PROMPT` → `secrets.AI_SUMMARY_USER_PROMPT` → empty | **OWNER CHANGE, spec closed** — FR-005's email row and its five highlighting bullets state the matching (case-insensitive, original casing kept, longest name first, whole names), the escaping rule (segment by segment, so apostrophes and `<`, `>`, `&` stay text), the class-plus-inline-style split so stylesheets can override, and that the notice path and the other four formats are untouched; AC-023 covers it. FR-010 states the input precedence, that the input is non-persistent, that an empty input falls through rather than clearing the variable or secret, that dispatch strings are single-line, and that a dispatch input is visible in the run's inputs so it must not carry a secret; FR-009 and the Configuration note list the new source. Implementation follow-ups: the email wrapper and format argument, the dispatch input, and the workflow step env that forwards `inputs.ai_summary_prompt || vars.AI_SUMMARY_USER_PROMPT || secrets.AI_SUMMARY_USER_PROMPT`. |
