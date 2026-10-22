@@ -1,0 +1,60 @@
+name: CI - Lint, Types, and Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.13']
+    env:
+      # uv can fall back to any interpreter on the runner; pinning UV_PYTHON
+      # makes both `uv sync` and `uv run` resolve to the matrixed version.
+      UV_PYTHON: ${{ matrix.python-version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        with:
+          version: "latest-known"
+
+      - name: Install dependencies
+        # --locked fails instead of silently re-locking, so a dependency edit
+        # without a committed uv.lock cannot go green against an env nobody shipped.
+        run: uv sync --locked
+
+      - name: Show interpreter the gates run under
+        run: uv run python -c 'import sys; print(sys.executable); print(sys.version)'
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Mypy type check
+        run: uv run mypy .
+
+      - name: Pytest
+        run: uv run pytest -q
