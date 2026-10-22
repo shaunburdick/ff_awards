@@ -200,6 +200,7 @@ uv run ff-tracker 123456 --format json --format-arg json.pretty=true
 | `note` | All | Display a message at the top of the output |
 | `email.accent_color` | email | Customize border/accent colors (hex color) |
 | `email.max_teams` | email | Cap the overall standings table (default: `0` = all teams) |
+| `email.ai_team_color` | email | Colour of team names in the AI summary's stylesheet rule (default: `#0b57d0`) |
 | `markdown.include_toc` | markdown | Generate table of contents with section links |
 | `json.pretty` | json | Enable indented JSON output (true/false) |
 
@@ -498,6 +499,15 @@ repository variable renders as; a malformed non-blank value (a non-numeric
 timeout, an unknown reasoning effort, a URL without a scheme) is a configuration
 error that fails the run while the feature is enabled — it never degrades to a
 report without the section.
+
+**One-run prompt override.** The manual *Run workflow* dialog has an
+`ai_summary_prompt` input for a single run's instructions. Precedence is
+`inputs.ai_summary_prompt` → `vars.AI_SUMMARY_USER_PROMPT` →
+`secrets.AI_SUMMARY_USER_PROMPT` → empty: an empty input falls through to the
+standing prompt rather than clearing it, and the input never persists. Dispatch
+string inputs are single-line, so keep a multi-line standing prompt in the
+variable or the secret; a dispatch input is also visible in the run's inputs, so
+never put a secret in it.
 
 **What leaves the machine:** team names, owner names, points for, points against,
 scores and league names are sent to `AI_SUMMARY_BASE_URL`, together with

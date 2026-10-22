@@ -1,6 +1,6 @@
 # Challenge Ledger — 009 AI Summary
 
-> Gate 1 (spec) · `spec.md` v0.14 (this commit) · Constitution v1.0.0, no conflict.
+> Gate 1 (spec) · `spec.md` v0.15 (this commit) · Constitution v1.0.0, no conflict.
 > Owner decisions of 2026-10-21 are precedent: fail-fast when enabled-but-unconfigured with a
 > workflow guard; league matching by name with positional fallback; failure notice at the bottom.
 > They are not reopened. The v0.4 owner changes (endpoint default, enforced length, committed lore
@@ -179,3 +179,44 @@ Minor: FR-002's no-matchups sentence restored; the "existing mode predicate" wor
 | Stale docs | **OPEN** — `plan.md:532/536/544/723` and `tasks.md:268/287` still describe the removed committed `AI_SUMMARY_USER_PROMPT: \|` block scalar, and this v0.14 row's "`.env` write for these variables" is wrong: the optional settings are inherited from the workflow env and never written to `.env`. `README.md`'s example sets the variable and the secret one after the other, so the variable wins and the unmasked store is used — present them as alternatives. |
 
 **Verdict:** HOLD — the CI change works; the plan/tasks references and the README example must follow, and the prompt secret should move to the report step's `env:`.
+
+---
+
+## v0.15 — email name highlighting and a one-run prompt override (spec v0.15)
+
+| Change | Status |
+|---|---|
+| Email names: team names inside the AI text wrapped in `<span class="ai-team">`, bold and coloured by the new `email.ai_team_color` format argument (default `#0b57d0`), plus a one-run `ai_summary_prompt` `workflow_dispatch` input with precedence input → `vars.AI_SUMMARY_USER_PROMPT` → `secrets.AI_SUMMARY_USER_PROMPT` → empty | **OWNER CHANGE, spec closed** — FR-005's email row and its five highlighting bullets state the matching (case-insensitive, original casing kept, longest name first, whole names), the escaping rule (segment by segment, so apostrophes and `<`, `>`, `&` stay text), the class-plus-inline-style split so stylesheets can override, and that the notice path and the other four formats are untouched; AC-023 covers it. FR-010 states the input precedence, that the input is non-persistent, that an empty input falls through rather than clearing the variable or secret, that dispatch strings are single-line, and that a dispatch input is visible in the run's inputs so it must not carry a secret; FR-009 and the Configuration note list the new source. Implementation follow-ups: the email wrapper and format argument, the dispatch input, and the workflow step env that forwards `inputs.ai_summary_prompt || vars.AI_SUMMARY_USER_PROMPT || secrets.AI_SUMMARY_USER_PROMPT`. |
+
+### Gate 3 — v0.15 delta @ ff6369d (2026-10-21)
+
+| Point | Outcome |
+|---|---|
+| Email highlighting | Matching handles the asked cases: a prefix name loses to the longer one (longest-first); straight apostrophes, a trailing space in the data, possessives (the name is wrapped, `'s` stays outside), repeated occurrences and case-only matches. Escaping is per segment — the raw match never reaches the HTML, and the colour is HTML-escaped. **Known trade-offs:** case-insensitive whole-word matching wraps ordinary prose when a team name is a common word (`Win`, `Big`, `The`) or a player's surname (`Brown` in "A.J. Brown"); it misses curly-apostrophe variants (`Drew’s`), punctuation changes the model makes (`St.` → `St`), and paraphrases. The spec says "every occurrence", so these are accepted, not defects. **Defect:** the `.ai-team` stylesheet rule is built from a plain string with doubled braces (`ff_tracker/display/email.py:88-92`), so the email emits `.ai-team {{ … }}` — invalid CSS; the inline style still applies, and no test asserts the rule's presence or content. |
+| AC-001 helper | **Not weakened.** It asserts every non-equal SequenceMatcher opcode is an `insert` and reconstructs the off string exactly from the on string minus the inserted ranges, so a replace/delete (a moved or reworded line) fails; the multi-insert tolerance is what the email's two blocks need. It still uses the off output as the reference, so an addition present in both off and on is invisible to it; the absolute guarantee remains the worktree `diff -r`, and a targeted off-state assertion would close the CSS-rule case. |
+| Conditional rule | `isinstance(ai_summary, AISummary)` — narrative only; the notice path is tested; the off path is not tested in the suite (external diff only). |
+| Workflow input | `inputs` is permitted in step-level `env:`. On `schedule` the context is unavailable and evaluates to an empty string, so the `\|\|` chain falls through correctly (community caveat: using it as a boolean `if` without a type guard errors; here it is a string). Empty input falls through; a whitespace-only input is truthy and then stripped to no instructions. |
+| Help/doc | `--help`'s "Email-Specific" list (`ff_tracker/main.py:151-153`) omits `email.ai_team_color` although README and `get_supported_args` have it. FR-005's "stylesheet rule can override it" is inaccurate: the inline style wins unless the rule uses `!important`. Plan/tasks carry no AC-023 or dispatch-input entry (low). |
+
+**Closed by spec v0.15 wording correction:** FR-005's stylesheet sentence now reads that the class is for targeting and for clients that strip `<style>`, the inline style applies unless a rule uses `!important`, and the shipped `.ai-team` rule is weight-only. The doubled-brace CSS defect and the missing `--help` line remain implementer items.
+
+**Verdict:** HOLD — fix the doubled braces, add a test for the rule's presence with a narrative and absence when off, and add the help line. The matching limitations are accepted trade-offs, not defects.
+
+---
+
+## v0.16 — team-name span is class-only (spec v0.16)
+
+| Change | Status |
+|---|---|
+| Email team-name highlight: the span becomes `<span class="ai-team">` with no `style` attribute, and `.ai-team { color: <email.ai_team_color, default #0b57d0>; font-weight: 700; }` in the email's stylesheet carries the appearance, emitted only when a narrative renders | **OWNER CHANGE, spec closed** — FR-005's email row, its span bullet and the two style bullets state the class-only span, the stylesheet rule and its emission condition; AC-023 asserts the colour lands in the rule and the rule is absent for the notice. Reason recorded: the template is already stylesheet-driven — `.winner`, `.challenge-name`, `.playoff-team` and `.container` all declare on the class — so an inline span was inconsistent with the rest of the message, and leaving only the weight on the class made `email.ai_team_color` unstyleable by class. Trade-off accepted rather than hidden: a client that strips `<style>` loses the highlight, exactly as it already loses those other classes. Matching and escaping rules are unchanged. Supersedes the v0.15 row's "class-plus-inline-style split so stylesheets can override", which was also factually wrong — an inline style wins unless a rule uses `!important`. |
+
+### Gate 3 — v0.16 class-only span @ c385e9c (2026-10-21)
+
+| Point | Outcome |
+|---|---|
+| Defect this switch exposes | The doubled-brace rule recorded in the v0.15 Gate 3 row is now the only carrier of the appearance, so `ff_tracker/display/email.py` must emit single-braced, valid CSS; an invalid rule now loses the highlight instead of the inline style covering for it. Implementer item, with a test asserting the rule's presence and its colour. |
+| Not emitted when off, not for the notice | The rule belongs in the same conditional as the section, so no `.ai-team` selector appears when `ai_summary` is absent or is the `AISummaryUnavailable` notice. Implementer item: assert the rule's absence in both. |
+| Clauses this edit does not touch | Longest-first ordering, whole-name matching, the model's original casing, segment-by-segment escaping and the report-data-only name list are unchanged; AC-023's clauses for them stand. |
+| `--help` | The `email.ai_team_color` line missing from `--help` stays an implementer item from the v0.15 row; the argument's name and default do not change here, so the spec needs no new wording for it. |
+
+**Verdict:** HOLD — the spec, AC and ledger agree; the implementer must drop the inline style, emit a valid single-brace `.ai-team` rule, assert its presence with a narrative and its absence for the notice and when off, and add the `--help` line.

@@ -218,9 +218,11 @@ class TestEmailFormatterBasics:
         assert "note" in supported_args
         assert "accent_color" in supported_args
         assert "max_teams" in supported_args
+        assert "ai_team_color" in supported_args
         assert isinstance(supported_args["note"], str)
         assert isinstance(supported_args["accent_color"], str)
         assert isinstance(supported_args["max_teams"], str)
+        assert "#0b57d0" in supported_args["ai_team_color"]
 
 
 class TestFormatOutput:
