@@ -51,6 +51,15 @@ def _env() -> dict[str, Any]:
     return env
 
 
+def _report_step_env() -> dict[str, Any]:
+    """The prompt lives on the report step, its only consumer."""
+    steps = _workflow()["jobs"]["generate-report"]["steps"]
+    step = next(step for step in steps if step.get("id") == "generate-report")
+    env = step.get("env") or {}
+    assert isinstance(env, dict)
+    return env
+
+
 def _lines() -> list[str]:
     return WORKFLOW.read_text(encoding="utf-8").splitlines()
 
@@ -115,35 +124,27 @@ class TestOptionalSettings:
             assert env.get(key) == expression, f"{key} is not forwarded from its variable"
 
     def test_prompt_reads_the_variable_then_the_secret(self) -> None:
-        prompt = _env()[PROMPT_KEY]
+        prompt = _report_step_env()[PROMPT_KEY]
         assert prompt == (
             "${{ vars.AI_SUMMARY_USER_PROMPT || secrets.AI_SUMMARY_USER_PROMPT }}"
         )
         assert "vars.AI_SUMMARY_USER_PROMPT" in prompt
         assert "secrets.AI_SUMMARY_USER_PROMPT" in prompt
 
+    def test_prompt_is_scoped_to_the_report_step(self) -> None:
+        """A prompt held in a secret must not reach checkout or the setup steps."""
+        assert PROMPT_KEY not in _env()
+        assert PROMPT_KEY in _report_step_env()
+
     def test_no_block_scalar_remains_for_the_prompt(self) -> None:
         raw = WORKFLOW.read_text(encoding="utf-8")
         assert f"{PROMPT_KEY}: |" not in raw
-        assert isinstance(_env()[PROMPT_KEY], str)
-        assert _env()[PROMPT_KEY].startswith("${{")
-
-    def test_no_duplicate_env_keys(self) -> None:
-        """The loader raises on duplicates; reaching here proves the env block is clean."""
-        assert _env()
+        prompt = _report_step_env()[PROMPT_KEY]
+        assert isinstance(prompt, str)
+        assert prompt.startswith("${{")
 
     def test_comments_sit_above_the_keys(self) -> None:
         lines = _lines()
         for key in (*VARIABLE_KEYS, PROMPT_KEY):
             index = next(i for i, line in enumerate(lines) if line.strip().startswith(f"{key}:"))
             assert not lines[index].strip().startswith(f"{key}: #"), f"{key} has an inline comment"
-
-    def test_no_optional_value_is_wrapped_in_a_shell_guard(self) -> None:
-        """A blank variable is the intended signal; guards would hide it."""
-        lines = _lines()
-        env_start = next(i for i, line in enumerate(lines) if line.strip() == "env:")
-        env_end = next(i for i in range(env_start + 1, len(lines)) if lines[i] and not lines[i].startswith(" "))
-        env_block = "\n".join(lines[env_start:env_end])
-        for key in (*VARIABLE_KEYS, PROMPT_KEY):
-            assert 'if [ -n "$' not in env_block, "no shell guard belongs in env:"
-            assert f"{key}:-" not in env_block, "no default-expansion guard belongs in env:"

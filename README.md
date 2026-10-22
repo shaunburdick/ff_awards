@@ -465,22 +465,33 @@ the same digest in about 2,057 reasoning tokens and roughly 9 seconds.
 `glm-5.3-flash` is still selectable through `AI_SUMMARY_MODEL`, at the cost of a
 much larger `AI_SUMMARY_MAX_TOKENS` or a `reasoning_effort` the endpoint honours.
 
-**Configuration in GitHub Actions.** The weekly workflow reads every optional
-setting from repository **variables** (Settings → Secrets and variables →
-Actions → Variables), so changing the model, budget or prompt is a settings edit
-rather than a YAML commit. The prompt may be a variable or a secret; `vars` wins
-when both are set. Variables are **not masked in logs** while secrets are, so a
-prompt the league would not publish belongs in the secret.
+**Configuration in GitHub Actions.** The weekly workflow reads the settings from
+repository **variables** (Settings → Secrets and variables → Actions →
+Variables), with the prompt from a variable or a secret, so changing the model,
+budget or prompt is a settings edit rather than a YAML commit. Variables are
+**not masked in logs** while secrets are, so a prompt the league would not
+publish belongs in the secret.
 
 ```bash
-# Every optional setting is a repository variable, e.g.
+# The settings are repository variables, e.g.
 gh variable set AI_SUMMARY_MODEL --body "deepseek-v4.1-flash"
 gh variable set AI_SUMMARY_MAX_TOKENS --body "8000"
 
-# The prompt: a variable (readable in settings), or a secret (masked in logs)
-gh variable set AI_SUMMARY_USER_PROMPT --body "$(cat prompt.txt)"
-gh secret  set AI_SUMMARY_USER_PROMPT --body "$(cat prompt.txt)"
+# The prompt: choose ONE of these. A variable is readable in settings and
+# unmasked in logs; a secret is masked. Do not set both.
+# gh variable set AI_SUMMARY_USER_PROMPT --body "$(cat prompt.txt)"
+gh secret set AI_SUMMARY_USER_PROMPT --body "$(cat prompt.txt)"
 ```
+
+Use `--body "$(cat prompt.txt)"` (or the secret) for a multi-line prompt: the
+settings UI accepts only a single line per field, so newlines are easiest to keep
+through the CLI or the API.
+
+When the prompt lives in the secret, do **not** also set the variable. An unset
+variable falls through to the secret, but a whitespace-only one does not: in
+`vars … || secrets …` any non-empty string is truthy, so a few stray spaces would
+win the fallback, shadow the secret, and then be stripped by the loader to "no
+instructions".
 
 A blank or unset variable means "use the default", which is what an unset
 repository variable renders as; a malformed non-blank value (a non-numeric

@@ -525,15 +525,23 @@ The loader runs **after** `create_config(...)` (which is what loads `.env`) and 
 ### Component 11: Workflow — **MODIFIED** `.github/workflows/weekly-report.yml`
 
 ```yaml
-env:
+env:                                   # workflow level: harmless everywhere
   PYTHONUNBUFFERED: 1
   AI_SUMMARY_ENABLED: ${{ secrets.AI_SUMMARY_API_KEY != '' }}
-  AI_SUMMARY_USER_PROMPT: |
-    <the commissioner's committed instructions; empty by default>
+  AI_SUMMARY_BASE_URL: ${{ vars.AI_SUMMARY_BASE_URL }}
+  AI_SUMMARY_MODEL: ${{ vars.AI_SUMMARY_MODEL }}
+  AI_SUMMARY_TIMEOUT: ${{ vars.AI_SUMMARY_TIMEOUT }}
+  AI_SUMMARY_MAX_TOKENS: ${{ vars.AI_SUMMARY_MAX_TOKENS }}
+  AI_SUMMARY_REASONING_EFFORT: ${{ vars.AI_SUMMARY_REASONING_EFFORT }}
+  AI_SUMMARY_MAX_PROMPT_CHARS: ${{ vars.AI_SUMMARY_MAX_PROMPT_CHARS }}
+
+# and, on the "Generate fantasy football report" step only:
+env:
+  AI_SUMMARY_USER_PROMPT: ${{ vars.AI_SUMMARY_USER_PROMPT || secrets.AI_SUMMARY_USER_PROMPT }}
 ```
 
 - `secrets` is legal in `env:`, illegal in `if:` — exactly the FR-007 trap. The expression renders the literal `true`/`false`.
-- **Only `AI_SUMMARY_ENABLED` is set for settings** (Gate 2 cut): `AI_SUMMARY_MODEL`, `AI_SUMMARY_BASE_URL`, `AI_SUMMARY_TIMEOUT` and `AI_SUMMARY_MAX_PROMPT_CHARS` come from repository settings or the code defaults, so the workflow cannot pin a model that drifts from the default in `config.py`. `AI_SUMMARY_USER_PROMPT` stays because it is content, not a setting: FR-008 names the committed `env:` block scalar as the only record an archived CI report can be reproduced from.
+- **The optional settings are repository variables**, so they are changed in settings rather than YAML: an unset variable renders empty, which the loader already reads as the code default. `AI_SUMMARY_USER_PROMPT` may be a variable or a secret (`vars` wins); it sits on the report step alone, its only consumer, because a secret prompt must not reach `actions/checkout`, `setup-python`, `setup-uv` or the `.env` writer. A prompt that must not be published belongs in the secret: variables are unmasked in logs.
 - In the "Create .env file from secrets" step, append **only when the flag is `true`**:
   ```bash
   if [ "$AI_SUMMARY_ENABLED" = "true" ]; then
@@ -541,7 +549,7 @@ env:
     echo "AI_SUMMARY_API_KEY=${{ secrets.AI_SUMMARY_API_KEY }}" >> .env
   fi
   ```
-  The committed user prompt stays in the job `env:` where multiline `.env` quoting cannot break it; `load_dotenv` does not override an already-set environment variable, so `os.getenv` sees it either way.
+  These settings are **inherited from the step's `env:` and never written to `.env`**: the writer handles `LEAGUE_IDS`, the ESPN cookies and `AI_SUMMARY_ENABLED`/`AI_SUMMARY_API_KEY` only. The report process sees the variables directly (and `load_dotenv` does not override an already-set variable), so no multiline quoting problem arises.
 - No `if:` anywhere in the file mentions `AI_SUMMARY_ENABLED` (WC-001).
 - The `::warning::` needs no workflow change: the service's reason is printed to stdout by the step, and Actions surfaces it as an annotation.
 
@@ -720,7 +728,7 @@ Digest size is bounded by the data: 3–4 leagues × (≤16 standings rows + ≤
 
 - The key exists only as an environment value, a `.env` line and `AISummaryConfig.api_key` (`field(repr=False)`). It is never a CLI flag, never a format argument, never logged, never rendered.
 - Request and response bodies are never logged at any level (they carry team/owner names, PF/PA and — in principle — anything the model echoes). Only model id, status, latency and token counts are logged.
-- The system prompt is logged at DEBUG only, because a public repo's Actions logs are world-readable; the committed `env:` block scalar is the CI record (FR-008/FR-009).
+- The system prompt is logged at DEBUG only, because a public repo's Actions logs are world-readable. FR-008's CI record is the `AI_SUMMARY_USER_PROMPT` value behind the workflow's `vars`/`secrets` expression — a repository variable or a secret, not a file in git (FR-008/FR-009).
 - Reasons name the endpoint **host only** — a custom base URL may carry a credential in its path.
 - The digest carries no league IDs, no credentials and no API key (FR-002), and the prompt tells the model not to invent facts; no verification of prose claims is claimed or implied anywhere in the output.
 

@@ -265,7 +265,7 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 
 **Goal**: a checkout without the key produces a normal report (FR-007), and the flag cannot be in an `if:`.
 
-- [ ] `.github/workflows/weekly-report.yml`: job-level `env:` gains `AI_SUMMARY_ENABLED: ${{ secrets.AI_SUMMARY_API_KEY != '' }}` and the committed `AI_SUMMARY_USER_PROMPT: |` block scalar (empty by default). The explanatory comment sits on a `#` line **above** `AI_SUMMARY_USER_PROMPT:`, never inside the block scalar — anything inside it is literal prompt text, would be sent to the provider, and would change `prompt_sha`
+- [ ] `.github/workflows/weekly-report.yml`: workflow-level `env:` gains `AI_SUMMARY_ENABLED: ${{ secrets.AI_SUMMARY_API_KEY != '' }}` plus `AI_SUMMARY_BASE_URL`, `AI_SUMMARY_MODEL`, `AI_SUMMARY_TIMEOUT`, `AI_SUMMARY_MAX_TOKENS`, `AI_SUMMARY_REASONING_EFFORT` and `AI_SUMMARY_MAX_PROMPT_CHARS` from `vars.*`; the report step's own `env:` gains `AI_SUMMARY_USER_PROMPT: ${{ vars.AI_SUMMARY_USER_PROMPT || secrets.AI_SUMMARY_USER_PROMPT }}`, since a secret prompt must not reach checkout or the setup steps. No shell guards: an unset variable renders empty and means the default. These settings are never written to `.env` — the writer handles `LEAGUE_IDS`, the ESPN cookies and `AI_SUMMARY_ENABLED`/`AI_SUMMARY_API_KEY` only. Every explanatory comment sits on a `#` line above its key
 - [ ] **No `AI_SUMMARY_MODEL`** (or base URL / timeout / cap) in the workflow — those come from repository settings or the code defaults, so the workflow cannot pin a model that drifts from `config.py` (Gate 2 cut). The user prompt stays because it is content, not a setting
 - [ ] "Create .env file from secrets" step: append `AI_SUMMARY_ENABLED=true` and `AI_SUMMARY_API_KEY=…` **only** inside `if [ "$AI_SUMMARY_ENABLED" = "true" ]; then … fi`
 - [ ] No `if:` anywhere in the file references `AI_SUMMARY_ENABLED`
@@ -284,7 +284,7 @@ Thirteen tasks. Each is independently verifiable, and the suite (`uv run ruff ch
 **Goal**: an operator can enable the feature, understand the egress, and find the defaults without reading code.
 
 - [ ] `.env.example`: the seven variables, commented, with real defaults and the egress note
-- [ ] `README.md` → Configuration: "AI Summary (optional)" — what leaves the machine, key-only enablement, `ff-championship`/`ff-season-recap` unaffected, `.env` multi-line quoting and the Actions `env:` block scalar
+- [ ] `README.md` → Configuration: "AI Summary (optional)" — what leaves the machine, key-only enablement, `ff-championship`/`ff-season-recap` unaffected, the repository-variable settings, the prompt as a variable **or** a secret (never both; a whitespace-only variable shadows the secret), and multi-line prompts via `gh … --body "$(cat prompt.txt)"`
 - [ ] `CHANGELOG.md`: `## [Unreleased]` → `### Added - AI Summary (optional)`
 - [ ] **No `AGENTS.md` change** (Gate 2 cut): no FR requires it, and a fourth copy of the description in the file every agent reads is drift, not documentation
 - [ ] No `--help` change here (Task 11 ships it with the code it documents)
