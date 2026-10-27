@@ -183,3 +183,66 @@ class TestDispatchInput:
     def test_input_is_referenced_only_in_that_expression(self) -> None:
         raw = WORKFLOW.read_text(encoding="utf-8")
         assert raw.count("inputs.ai_summary_prompt") == 1
+
+
+MEMORY_FLAG = "AI_MEMORY_ENABLED"
+MEMORY_GUARD = "${{ secrets.AI_MEMORY_GIST_TOKEN != '' && vars.AI_MEMORY_GIST_ID != '' }}"
+MEMORY_STEP_VALUES = {
+    "AI_MEMORY_GIST_ID": "${{ vars.AI_MEMORY_GIST_ID }}",
+    "AI_MEMORY_GIST_TOKEN": "${{ secrets.AI_MEMORY_GIST_TOKEN }}",
+}
+
+
+class TestMemoryWorkflowGuard:
+    """WC-002: the memory flag is an env expression, its settings live on the report step."""
+
+    def test_the_guard_references_the_token_and_the_gist_id(self) -> None:
+        expression = _env()[MEMORY_FLAG]
+
+        assert expression == MEMORY_GUARD
+        assert "secrets.AI_MEMORY_GIST_TOKEN" in expression
+        assert "vars.AI_MEMORY_GIST_ID" in expression
+
+    def test_the_flag_is_never_set_unconditionally(self) -> None:
+        flag = _env()[MEMORY_FLAG]
+
+        assert flag not in ("true", "false", "")
+
+    def test_no_if_condition_mentions_the_flag(self) -> None:
+        offenders = [
+            line for line in _lines() if line.strip().startswith("if:") and MEMORY_FLAG in line
+        ]
+        assert offenders == []
+
+    def test_both_settings_are_forwarded_on_the_report_step(self) -> None:
+        env = _report_step_env()
+
+        for key, expression in MEMORY_STEP_VALUES.items():
+            assert env.get(key) == expression, f"{key} is not forwarded on the report step"
+
+    def test_the_settings_never_reach_the_workflow_level_env(self) -> None:
+        """The token must not reach checkout or any setup step."""
+        env = _env()
+
+        for key in MEMORY_STEP_VALUES:
+            assert key not in env
+
+    def test_no_memory_value_is_written_to_dot_env(self) -> None:
+        lines = _lines()
+        step_start = next(
+            index for index, line in enumerate(lines) if "Create .env file from secrets" in line
+        )
+        step_end = next(
+            index
+            for index in range(step_start + 1, len(lines))
+            if lines[index].strip() == "- name:" or lines[index].strip().startswith("- name:")
+        )
+        env_step = "\n".join(lines[step_start:step_end])
+
+        assert "AI_MEMORY" not in env_step
+
+    def test_comments_sit_above_the_keys(self) -> None:
+        lines = _lines()
+        for key in (*MEMORY_STEP_VALUES, MEMORY_FLAG):
+            index = next(i for i, line in enumerate(lines) if line.strip().startswith(f"{key}:"))
+            assert not lines[index].strip().startswith(f"{key}: #"), f"{key} has an inline comment"

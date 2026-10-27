@@ -12,7 +12,7 @@ import json
 import urllib.request
 from collections.abc import Mapping, Sequence
 
-from ff_tracker.exceptions import AISummaryError
+from ff_tracker.exceptions import AIMemoryStoreError, AISummaryError
 from ff_tracker.models import (
     AIProvenance,
     AISummary,
@@ -31,6 +31,12 @@ from ff_tracker.models import (
     WeeklyPlayerStats,
 )
 from ff_tracker.services.ai_client import AIRequest
+from ff_tracker.services.ai_memory import (
+    MemoryEntry,
+    MemoryFile,
+    MemoryLeague,
+    serialize_archive,
+)
 
 WEEK = 6
 LEAGUE_A = "MM Driveway Surfers"
@@ -687,3 +693,63 @@ def envelope(
     if usage is not None:
         payload["usage"] = usage
     return json.dumps(payload).encode("utf-8")
+
+
+def make_memory_entry(week: int, season: int = 2026) -> MemoryEntry:
+    """A published summary for one week, as the memory log stores it."""
+    return MemoryEntry(
+        week=week,
+        generated_at=f"{season}-10-{week:02d}T05:00:00Z",
+        headline=f"Week {week} headline",
+        season_note=f"Week {week} season note.",
+        leagues=[
+            MemoryLeague(
+                league=LEAGUE_A,
+                paragraphs=[f"Week {week} prose about Butt Fumble."],
+                bullets=[f"Week {week} bullet"],
+            )
+        ],
+    )
+
+
+def make_memory_archive(weeks: Sequence[int] = (1, 2, 3, 4, 5, 6), season: int = 2026) -> bytes:
+    """A serialised archive with one entry per week, as an earlier run left it."""
+    archive = MemoryFile(
+        schema=1,
+        season=season,
+        entries=[make_memory_entry(week, season) for week in weeks],
+    )
+    return serialize_archive(archive)
+
+
+class FakeMemoryStore:
+    """A ``MemoryStore`` that records calls, holds bytes and can fail per call."""
+
+    def __init__(
+        self,
+        data: bytes | None = None,
+        *,
+        read_errors: Sequence[AIMemoryStoreError | None] = (),
+        write_errors: Sequence[AIMemoryStoreError | None] = (),
+    ) -> None:
+        self.data = data
+        self._read_errors = list(read_errors)
+        self._write_errors = list(write_errors)
+        self.read_calls = 0
+        self.write_calls = 0
+
+    def load(self) -> bytes | None:
+        """Record the read, then return the bytes or raise the canned error."""
+        self.read_calls += 1
+        error = self._read_errors.pop(0) if self._read_errors else None
+        if error is not None:
+            raise error
+        return self.data
+
+    def save(self, data: bytes) -> None:
+        """Record the write, then store the bytes or raise the canned error."""
+        self.write_calls += 1
+        error = self._write_errors.pop(0) if self._write_errors else None
+        if error is not None:
+            raise error
+        self.data = data

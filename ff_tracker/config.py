@@ -218,6 +218,38 @@ AI_REASONING_EFFORTS = ("low", "medium", "high")
 
 
 @dataclass(frozen=True)
+class AIMemoryConfig:
+    """
+    The secret gist that holds ``memory.json`` (FR-013).
+
+    Built only inside ``load_ai_summary_config``'s enabled branch: memory is
+    inert while the narrative feature is off, so no memory variable can deny a
+    report it has no effect on. ``timeout`` is ``AI_SUMMARY_TIMEOUT`` — the
+    store's socket read is bounded by it, and it is not a memory setting.
+    """
+
+    enabled: bool = False
+    gist_id: str = ""
+    # Never in a repr or a traceback, exactly as AI_SUMMARY_API_KEY.
+    gist_token: str = field(default="", repr=False)
+    timeout: int = DEFAULT_AI_TIMEOUT
+
+    def __post_init__(self) -> None:
+        """Validate the pair; there are no defaults, and blank is the missing-value error."""
+        if self.enabled and not self.gist_id.strip():
+            raise ConfigurationError(
+                "AI_MEMORY_GIST_ID is required when AI_MEMORY_ENABLED is true. "
+                "Set the gist id, or unset AI_MEMORY_ENABLED to run without memory."
+            )
+
+        if self.enabled and not self.gist_token.strip():
+            raise ConfigurationError(
+                "AI_MEMORY_GIST_TOKEN is required when AI_MEMORY_ENABLED is true. "
+                "Set a token with Gists read and write, or unset AI_MEMORY_ENABLED."
+            )
+
+
+@dataclass(frozen=True)
 class AISummaryConfig:
     """
     Optional AI narrative settings, loaded beside ``FFTrackerConfig``.
@@ -239,6 +271,8 @@ class AISummaryConfig:
     reasoning_effort: str | None = None
     max_prompt_chars: int = DEFAULT_AI_MAX_PROMPT_CHARS
     user_prompt: str = ""
+    # None means "no store call, no block, no memory provenance fields".
+    memory: AIMemoryConfig | None = None
 
     def __post_init__(self) -> None:
         """Validate the settings; configuration errors are not degraded."""
@@ -294,12 +328,12 @@ class AISummaryConfig:
             )
 
 
-def _parse_ai_bool(value: str) -> bool:
-    """Parse AI_SUMMARY_ENABLED, accepting only the documented eight values."""
+def _parse_ai_bool(name: str, value: str) -> bool:
+    """Parse one of the eight documented boolean spellings, naming the variable on failure."""
     normalised = value.strip().lower()
     if normalised not in _AI_BOOL_VALUES:
         raise ConfigurationError(
-            f"AI_SUMMARY_ENABLED must be one of true/1/yes/on/false/0/no/off, got: '{value}'"
+            f"{name} must be one of true/1/yes/on/false/0/no/off, got: '{value}'"
         )
     return normalised in {"true", "1", "yes", "on"}
 
@@ -345,7 +379,7 @@ def load_ai_summary_config(env_file: str | Path | None = None) -> AISummaryConfi
         # Nothing else is read: with the feature off, no AI variable can deny a
         # report by being malformed. Only the flag itself is validated.
         return AISummaryConfig()
-    if not _parse_ai_bool(enabled_raw):
+    if not _parse_ai_bool("AI_SUMMARY_ENABLED", enabled_raw):
         return AISummaryConfig()
 
     enabled = True
@@ -377,4 +411,26 @@ def load_ai_summary_config(env_file: str | Path | None = None) -> AISummaryConfi
         reasoning_effort=reasoning_effort,
         max_prompt_chars=max_prompt_chars,
         user_prompt=user_prompt,
+        memory=_parse_memory_config(timeout),
+    )
+
+
+def _parse_memory_config(timeout: int) -> AIMemoryConfig | None:
+    """
+    Read the memory group, only ever called from the enabled branch.
+
+    Blank or false means "memory off", which is ``None`` rather than a disabled
+    object: nothing downstream can then mistake an off run for a configured one.
+    """
+    enabled_raw = os.getenv("AI_MEMORY_ENABLED", "")
+    if not enabled_raw.strip():
+        return None
+    if not _parse_ai_bool("AI_MEMORY_ENABLED", enabled_raw):
+        return None
+
+    return AIMemoryConfig(
+        enabled=True,
+        gist_id=os.getenv("AI_MEMORY_GIST_ID", ""),
+        gist_token=os.getenv("AI_MEMORY_GIST_TOKEN", ""),
+        timeout=timeout,
     )

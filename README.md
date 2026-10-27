@@ -458,6 +458,9 @@ AI_SUMMARY_API_KEY=your_opencode_api_key_here
 | `AI_SUMMARY_REASONING_EFFORT` | unset | Optional `low\|medium\|high`; sent as `reasoning_effort` only when set, and an endpoint that ignores it is not an error |
 | `AI_SUMMARY_MAX_PROMPT_CHARS` | `8000` | Size cap for the instructions below |
 | `AI_SUMMARY_USER_PROMPT` | empty | Free-form instructions appended to the system prompt, sent verbatim |
+| `AI_MEMORY_ENABLED` | `false` | Opt-in memory log; inert while `AI_SUMMARY_ENABLED` is off |
+| `AI_MEMORY_GIST_ID` | none | Id of the secret gist holding `memory.json`, required when memory is on |
+| `AI_MEMORY_GIST_TOKEN` | none | Token with Gists read and write, never printed, required when memory is on |
 
 **Why `deepseek-v4.1-flash` is the default:** `glm-5.3-flash` spends the whole
 8000-token budget on reasoning for a three-league digest (8000/8000 tokens,
@@ -508,6 +511,59 @@ standing prompt rather than clearing it, and the input never persists. Dispatch
 string inputs are single-line, so keep a multi-line standing prompt in the
 variable or the secret; a dispatch input is also visible in the run's inputs, so
 never put a secret in it.
+
+### AI Memory (optional, `ff-tracker` only)
+
+With `AI_MEMORY_ENABLED=true` and a gist configured, the weekly report keeps a
+log of what it published: one file, `memory.json`, in one secret gist, with one
+entry per week holding that week's summary verbatim. The whole archive goes into
+the prompt, so a running bit escalates or retires instead of being repeated, and
+the take can cite an earlier week it already wrote about. It is off by default;
+off means no store call, no prompt change and output identical to a run without
+it.
+
+**What the file never contains:** the archive is this tool's own published prose
+and week tags only — no standings, scores, projections, digest, prompt, API key,
+gist token or any other credential. **GitHub has no private gist**: a secret gist
+is unlisted, not private, so anyone who obtains its URL can read it. The tool
+assumes exactly that.
+
+**The store.** `AI_MEMORY_GIST_ID` comes from a repository variable and
+`AI_MEMORY_GIST_TOKEN` from a secret — a fine-grained token with Gists read and
+write, or a classic token with the `gist` scope. Both are required when memory is
+on: a missing or empty one is a configuration error that stops the run, exactly
+as a missing API key does, which is why the workflow enables memory only when
+both are present. One read happens before the narrative is generated and at most
+one write after it is accepted; nothing else about a run changes.
+
+**Append-only.** A run appends its week and replaces that same week's entry on a
+re-run, so a dispatch re-run cannot stack a second take. Nothing written earlier
+is ever modified, reordered or dropped, which is what makes a hand edit inside an
+earlier entry safe by construction. A file that does not parse as the archive shape
+is treated as no memory for that run, warned once under Actions, and left exactly
+as it is — never overwritten.
+
+**Reading the report.** `provenance.memory_read` (`ok`, `none`, `failed`),
+`provenance.memory_write` (`ok`, `failed`, `skipped`) and `provenance.memory_weeks`
+(the weeks the model was shown) appear in JSON only when a narrative rendered; the
+failure notice carries none of them. A read failure never appears in any format: a
+404 is "nothing published yet", a 401/403 warns once under Actions, and a 5xx,
+transport error or timeout is silent. A write failure ships the complete report,
+exits 0, and warns once under Actions naming scope or authentication. A run whose
+week is not 1–18 — pre-kickoff, or a week it could not detect — writes nothing and
+records `skipped`.
+
+**Seeding past weeks** is a series of ordinary `--week N` runs, not a feature: the
+throwaway script that loops over a season is the owner's, not part of this repo.
+Each run appends the week it was given, so the archive grows one entry at a time.
+
+**Retire the file at a season boundary.** Entries are keyed by week alone inside a
+file whose `season` is fixed when it is created, and the tool never compares that
+season to the run's. A Week 6 run next season would therefore **replace** last
+season's Week 6 entry — a hand edit included — rather than add to it. At the end of
+a season either start a new gist or empty `memory.json` in the existing one; that is
+a hand action on purpose, because a rollover rule would make a legitimate mid-season
+correction impossible.
 
 **What leaves the machine:** team names, owner names, points for, points against,
 scores and league names are sent to `AI_SUMMARY_BASE_URL`, together with

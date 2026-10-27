@@ -173,6 +173,21 @@ class JsonFormatter(BaseFormatter):
         if isinstance(ai_summary, AISummaryUnavailable):
             return {"error": ai_summary.notice}
 
+        provenance: dict[str, object] = {
+            "model": ai_summary.provenance.model,
+            "prompt_sha": ai_summary.provenance.prompt_sha,
+            "generated_at": ai_summary.provenance.generated_at,
+            "truncated": ai_summary.provenance.truncated,
+            "attempts": ai_summary.provenance.attempts,
+            "history_weeks": ai_summary.provenance.history_weeks,
+        }
+        # Validated all-or-none, so one guard keeps all three out of the
+        # document when memory is off.
+        if ai_summary.provenance.memory_read is not None:
+            provenance["memory_read"] = ai_summary.provenance.memory_read
+            provenance["memory_write"] = ai_summary.provenance.memory_write
+            provenance["memory_weeks"] = ai_summary.provenance.memory_weeks
+
         return {
             "headline": ai_summary.headline,
             "season_note": ai_summary.season_note,
@@ -184,14 +199,7 @@ class JsonFormatter(BaseFormatter):
                 }
                 for league in ai_summary.leagues
             ],
-            "provenance": {
-                "model": ai_summary.provenance.model,
-                "prompt_sha": ai_summary.provenance.prompt_sha,
-                "generated_at": ai_summary.provenance.generated_at,
-                "truncated": ai_summary.provenance.truncated,
-                "attempts": ai_summary.provenance.attempts,
-                "history_weeks": ai_summary.provenance.history_weeks,
-            },
+            "provenance": provenance,
         }
 
     def _serialize_weekly_highlight(self, challenge: WeeklyChallenge) -> dict[str, object]:

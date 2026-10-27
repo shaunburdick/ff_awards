@@ -54,6 +54,10 @@ env:
   AI_SUMMARY_MAX_TOKENS: ${{ vars.AI_SUMMARY_MAX_TOKENS }}
   AI_SUMMARY_REASONING_EFFORT: ${{ vars.AI_SUMMARY_REASONING_EFFORT }}
   AI_SUMMARY_MAX_PROMPT_CHARS: ${{ vars.AI_SUMMARY_MAX_PROMPT_CHARS }}
+  # Memory guard, the same shape as the key guard above: `secrets` cannot appear
+  # in `if:`, so the expression renders the literal true/false here and the loader
+  # reads it. Empty either setting and memory is simply off.
+  AI_MEMORY_ENABLED: ${{ secrets.AI_MEMORY_GIST_TOKEN != '' && vars.AI_MEMORY_GIST_ID != '' }}
 
 jobs:
   generate-report:
@@ -101,8 +105,13 @@ jobs:
       # value falls through to the next rather than clearing it, and dispatch string
       # inputs are single-line, so a multi-line standing prompt belongs in the
       # variable or the secret. Keep every comment above the key.
+      # The gist id and token are scoped to this step, their only consumer, so
+      # checkout, setup-python, setup-uv and the .env writer never see the token.
+      # Neither is written to .env: the process reads them from this env directly.
       env:
         AI_SUMMARY_USER_PROMPT: ${{ inputs.ai_summary_prompt || vars.AI_SUMMARY_USER_PROMPT || secrets.AI_SUMMARY_USER_PROMPT }}
+        AI_MEMORY_GIST_ID: ${{ vars.AI_MEMORY_GIST_ID }}
+        AI_MEMORY_GIST_TOKEN: ${{ secrets.AI_MEMORY_GIST_TOKEN }}
       run: |
         # Hardcoded note for this week (set to empty string to disable)
         # Example: HARDCODED_NOTE="Playoffs start next week! 🏆"

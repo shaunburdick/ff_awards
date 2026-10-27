@@ -19,6 +19,7 @@ from ff_tracker.config import (
     DEFAULT_AI_MAX_TOKENS,
     DEFAULT_AI_MODEL,
     DEFAULT_AI_TIMEOUT,
+    AIMemoryConfig,
     AISummaryConfig,
     ESPNCredentials,
     FFTrackerConfig,
@@ -814,3 +815,134 @@ class TestEnvFile:
         (tmp_path / ".env").write_text("LEAGUE_IDS=666666\n", encoding="utf-8")
         load_environment()
         assert os.environ.get("LEAGUE_IDS") == "666666"
+
+
+class TestMemoryConfig:
+    """FR-013/FR-007: the memory group, validated only inside the enabled branch."""
+
+    _VARS = (
+        "AI_SUMMARY_ENABLED",
+        "AI_SUMMARY_API_KEY",
+        "AI_SUMMARY_TIMEOUT",
+        "AI_MEMORY_ENABLED",
+        "AI_MEMORY_GIST_ID",
+        "AI_MEMORY_GIST_TOKEN",
+    )
+
+    @pytest.fixture(autouse=True)
+    def _clean_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for name in self._VARS:
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setattr("ff_tracker.config.load_environment", lambda *args, **kwargs: None)
+
+    @pytest.fixture
+    def memory_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The feature and memory both on, with both settings present."""
+        monkeypatch.setenv("AI_SUMMARY_ENABLED", "true")
+        monkeypatch.setenv("AI_SUMMARY_API_KEY", "sk-test")
+        monkeypatch.setenv("AI_MEMORY_ENABLED", "true")
+        monkeypatch.setenv("AI_MEMORY_GIST_ID", "abc123")
+        monkeypatch.setenv("AI_MEMORY_GIST_TOKEN", "ghp-test")
+
+    def test_memory_is_none_when_the_group_is_unset(self) -> None:
+        assert load_ai_summary_config().memory is None
+
+    def test_a_configured_gist_is_returned(self, memory_env: None) -> None:
+        memory = load_ai_summary_config().memory
+
+        assert memory is not None
+        assert memory.enabled is True
+        assert memory.gist_id == "abc123"
+        assert memory.gist_token == "ghp-test"
+
+    @pytest.mark.parametrize("value", ["true", "1", "yes", "on", "TRUE", " On "])
+    def test_enabled_accepts_the_true_spellings(
+        self, memory_env: None, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("AI_MEMORY_ENABLED", value)
+        memory = load_ai_summary_config().memory
+
+        assert memory is not None and memory.enabled is True
+
+    @pytest.mark.parametrize("value", ["false", "0", "no", "off", "OFF"])
+    def test_false_spellings_mean_no_memory(
+        self, memory_env: None, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("AI_MEMORY_ENABLED", value)
+        assert load_ai_summary_config().memory is None
+
+    def test_bad_flag_value_raises_naming_the_variable(
+        self, memory_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AI_MEMORY_ENABLED", "maybe")
+        with pytest.raises(ConfigurationError, match="AI_MEMORY_ENABLED must be one of"):
+            load_ai_summary_config()
+
+    @pytest.mark.parametrize("value", ["", "   "])
+    def test_missing_gist_id_raises_naming_the_variable(
+        self, memory_env: None, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("AI_MEMORY_GIST_ID", value)
+        with pytest.raises(ConfigurationError, match="AI_MEMORY_GIST_ID is required"):
+            load_ai_summary_config()
+
+    def test_unset_gist_id_raises_naming_the_variable(
+        self, memory_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("AI_MEMORY_GIST_ID")
+        with pytest.raises(ConfigurationError, match="AI_MEMORY_GIST_ID is required"):
+            load_ai_summary_config()
+
+    @pytest.mark.parametrize("value", ["", "   "])
+    def test_missing_gist_token_raises_naming_the_variable(
+        self, memory_env: None, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("AI_MEMORY_GIST_TOKEN", value)
+        with pytest.raises(ConfigurationError, match="AI_MEMORY_GIST_TOKEN is required"):
+            load_ai_summary_config()
+
+    def test_token_keeps_its_whitespace(
+        self, memory_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A token is never stripped: whitespace inside it may be significant."""
+        monkeypatch.setenv("AI_MEMORY_GIST_TOKEN", "  ghp-spaced  ")
+        memory = load_ai_summary_config().memory
+
+        assert memory is not None
+        assert memory.gist_token == "  ghp-spaced  "
+
+    def test_malformed_memory_variables_are_ignored_with_the_feature_off(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Memory is inert without the narrative feature: no error, no store."""
+        monkeypatch.setenv("AI_MEMORY_ENABLED", "maybe")
+        monkeypatch.setenv("AI_MEMORY_GIST_ID", "")
+
+        config = load_ai_summary_config()
+
+        assert config.enabled is False
+        assert config.memory is None
+
+    def test_the_token_is_absent_from_a_configuration_error(self) -> None:
+        with pytest.raises(ConfigurationError) as caught:
+            AIMemoryConfig(enabled=True, gist_id="", gist_token="ghp-marker-token")
+
+        assert "AI_MEMORY_GIST_ID" in str(caught.value)
+        assert "ghp-marker-token" not in str(caught.value)
+
+    def test_token_is_absent_from_the_repr(self, memory_env: None) -> None:
+        config = load_ai_summary_config()
+        rendered = repr(config)
+
+        assert "ghp-test" not in rendered
+        assert "gist_token" not in rendered
+        assert "abc123" in rendered  # the id is not a credential
+
+    def test_timeout_is_the_summary_timeout_not_a_memory_setting(
+        self, memory_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_TIMEOUT", "7")
+        memory = load_ai_summary_config().memory
+
+        assert memory is not None
+        assert memory.timeout == 7
