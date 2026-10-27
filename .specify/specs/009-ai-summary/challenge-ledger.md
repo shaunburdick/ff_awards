@@ -220,3 +220,147 @@ Minor: FR-002's no-matchups sentence restored; the "existing mode predicate" wor
 | `--help` | The `email.ai_team_color` line missing from `--help` stays an implementer item from the v0.15 row; the argument's name and default do not change here, so the spec needs no new wording for it. |
 
 **Verdict:** HOLD — the spec, AC and ledger agree; the implementer must drop the inline style, emit a valid single-brace `.ai-team` rule, assert its presence with a narrative and its absence for the notice and when off, and add the `--help` line.
+
+---
+
+## Gate 1 — v0.19 memory amendment
+
+> Rulings of 2026-10-27 on spec v0.18. Nothing here reopens an earlier gate: the store,
+> the model-appended memory and the fail-open asymmetry stand as decided.
+> Verdict: HOLD lifted — all **seven** blockers (B1–B7) and all six should-fixes accepted,
+> three requirements cut.
+
+| Finding | Ruling | Carries to |
+|---|---|---|
+| B1 — a revoked gist token was described as behaving like a missing key, i.e. no report at all; the boolean `memory_read` could not separate "never configured" from "dead token for sixteen weeks" | ACCEPTED — one explicit status map in FR-014: `memory_read` is `"ok" \| "none" \| "failed"`, `memory_write` is `"ok" \| "failed" \| "skipped"`. Absent file / no file for a league / 404 on the gist is `"none"` — no memory yet, no warning, the write still attempted. Read 401/403 is `"failed"` with **exactly one** `::warning::` under Actions naming authentication; read 5xx/transport/timeout is `"failed"` and silent. Every write failure ships the report, warns once, exit 0. No read failure appears in the report in any format. FR-007's revoked-token sentence deleted; a present-but-dead token is a read/write failure, not a configuration error. AC-031/AC-032 restated. | FR-005, FR-006, FR-007, FR-014, AC-031, AC-032 |
+| B2 — `prompt_sha` had absorbed the memory block, breaking comparability with every archived report, and FR-005 claimed provenance fields were the only output-visible effect without naming them | ACCEPTED — `prompt_sha` hashes the **instructions only** (template, FR-003 league scope, `### COMMISSIONER'S INSTRUCTIONS` block), byte-equal to the archived definition. New `provenance.memory_sha` hashes the memory block text alone, present only when memory is on. FR-005 names all four: `history_weeks`, `memory_read`, `memory_write`, `memory_sha`. | FR-005, FR-008, Data Requirements |
+| B3 — the prompt never asked for a `memory` array, so Phase 2 could never write | ACCEPTED — FR-012 states the `### MEMORY` block's exact contents (alias-to-league-name mapping, stored season, up to six entries with season and week tags, up to three prior-season summaries); FR-003 requires the prompt to state the `memory` array's shape and its rules; AC-028 asserts both. | FR-003, FR-004, FR-012, AC-028 |
+| B4 — `scoring_trend` was not executable | ACCEPTED — `up` above the earlier-week mean by more than 1.0 point, `down` below by more than 1.0, otherwise `flat`, and `null` under two weeks. AC-024 carries one fixture per value; AC-025's one-week fixture asserts the `null`. | FR-011, AC-024, AC-025 |
+| B5 — caps and replacement contradicted the hand-edit rule | ACCEPTED — truncation and dropping bind only text the model supplied in this run; a human-written entry is written back byte-identical even over a cap and is never dropped; a hand-added entry keyed to the run's own `(season, week)` is replaced like any other. AC-029 and LV-005 restated to match FR-013. | FR-013, FR-014, AC-029, LV-005 |
+| B6 — an off-season run could write a schema-invalid file and, being then read-only forever, kill that league's memory | ACCEPTED — the write is skipped (`"skipped"`, file untouched) unless the report's season is a four-digit year and its week is an integer in 1–18. Reason stated in one clause: `espn_service.current_week` can be 0 or negative pre-kickoff and FR-014 treats a shape-mismatched file as permanently read-only. AC-030 extended to assert it. | FR-013, FR-014, AC-030 |
+| B7 — `rank_by_week` had no anchor against the standings the digest already carries | ACCEPTED — the latest week present takes `standings[].rank` verbatim; earlier weeks are recomputed from `DivisionData.games`. AC-024 adds a fixture whose `DivisionData.games` is missing a week the standings still count, proving the anchor where the tolerant collection and `TeamStats` disagree. | FR-011, AC-024 |
+| Should-fixes 1–6 | ACCEPTED — `average_margin` is the signed mean of `score - opponent_score`; `reg_season_count` (`int \| None`) and `weeks_remaining` (`int \| None`) are described as they exist, `None` case stated, "does not yet carry" claims deleted; Phase 1 ships first and AC-027 compares against a checked-in golden captured at the Phase-1 commit with `generated_at` pinned; FR-009 requires the DEBUG line to emit the system prompt with the memory block's text replaced by its per-alias season and week tags; memory truncation never sets `provenance.truncated`; the single contract-only retry is recorded against Articles III and V, with new **LV-006** re-measuring the 8000-token budget with both phases on and the expectation stated that it still completes in one call. | FR-005, FR-008, FR-009, FR-011, AC-024, AC-027, LV-005, LV-006, Constitution Deviations, Data Requirements |
+| Cut 1 — the model-written `season_summary` field | ACCEPTED — cut from the response contract; rollover uses the deterministic fallback only (that season's stored takes joined in order, truncated to 160 characters with `…`). AC-034 softened to the fallback alone; prior-season summaries stay in the `### MEMORY` block, which is what carries a finished season forward. | FR-004, FR-013, FR-014, FR-012, AC-034, Out of Scope |
+| Cut 2 — `head_to_head[].points_for` / `points_against` | ACCEPTED — the row is `{opponent, wins, losses}`. FR-011 and AC-024 updated; spec.md carries no derived-block size estimate, so no number to revise (the only token budget here is the memory record's and it does not touch these fields). | FR-011, AC-024 |
+| Cut 3 — FR-012 (backward references) as a requirement of its own | ACCEPTED — merged into FR-004 as the third bounded exception beside the 60-word floor and the no-invention rule, content intact in substance. Memory store/record/lifecycle renumber old FR-013…FR-015 → FR-012…FR-014, with every cross-reference in the requirements, ACs, Configuration table, Data Requirements and Out of Scope following. | FR-004, FR-012…FR-014, AC-036 |
+
+**Verdict:** HOLD lifted. Seven blockers and six should-fixes accepted, three requirements cut, `spec.md` at v0.19. Three changes an implementer must not silently reverse: **`prompt_sha` semantics** (instructions only; the memory block is `memory_sha`), **the store status map** (`"none"` is not `"failed"`, and only a 401/403 or a write failure warns), and **the newest-rank anchor** (the latest week's ranks are the digest's standings, never recomputed from a possibly incomplete game list).
+
+---
+
+## Gate 1 re-check — v0.20
+
+> Rulings of 2026-10-27 on spec v0.19. The seven original blockers and six should-fixes
+> of the previous gate are verified closed; this pass closes the two shapes they left behind.
+
+| Finding | Ruling | Carries to |
+|---|---|---|
+| 1 — the read gate rejected the file the spec permits: FR-013 allowed an over-cap hand-written entry, FR-014 called a shape mismatch read-only forever, so that league's memory died (the B6 shape again) | ACCEPTED — the read gate validates **structure only**: required keys, value types, `week` 1–18, a four-digit `season`, list counts. A `take`, `joke` or `summary` over its cap is **not** a shape mismatch and never makes a file read-only. An over-cap hand-written entry is truncated **for the prompt only** (word boundary, `…`) and stored byte-identical — one clause in FR-012's block contents, one in FR-014 — so the LV-006 budget stays bounded. AC-028, AC-029 and AC-033 assert it. | FR-012, FR-013, FR-014, AC-028, AC-029, AC-033 |
+| 2 — AC-031 asserted a gist-404 write succeeds while AC-032 asserted a write 404 fails | ACCEPTED — AC-031's gist-404 fixture only **attempts** the write; success stays with the absent-file and no-file fixtures and failure with AC-032's write-404 → `"failed"`. | AC-031, AC-032 |
+| 3 — "a run whose read and write both fail emits one line for each" contradicted FR-014's silent 5xx read | ACCEPTED — both sentences scoped to an **authentication** read failure: a 401/403 read plus a failed write emit one line each, and AC-032 names that fixture and pairs it with a silent-read case that emits only the write's line. | FR-014, AC-032 |
+| 4 — `memory_sha` had no algorithm, length or presence rule worth the name | ACCEPTED — sha256 over the block text, first 12 hex characters, exactly as `prompt_sha`; **absent whenever no block was sent**, i.e. on a `"none"` or `"failed"` read. FR-005, FR-008 and FR-014 say which memory field is present in which case; AC-028 asserts different blocks differ, the same block repeats, and a `"none"` read carries no key. | FR-005, FR-008, FR-014, AC-028 |
+| 5 — FR-004 miscounted its exceptions | ACCEPTED — "the third bounded exception" becomes "the bounded exception", since the 60-word floor excepts nothing and FR-004 calls it guidance elsewhere. | FR-004 |
+| 6 — AC-027 pinned `generated_at` but not `model` | ACCEPTED — the fixture pins both and configures the golden's model through `AI_SUMMARY_MODEL`, so a default-model bump cannot fail the Phase-1 golden for a reason unrelated to memory. | AC-027 |
+| 7 — FR-014's per-league triggers read as run-level outcomes | ACCEPTED — the read bullets are reworded per league ("for a league whose file is absent, …"), leaving the union rule as the only run-level sentence about the field. | FR-014 |
+
+**Verdict:** HOLD lifted — the seven original blockers and six should-fixes verified closed, and this pass closed the read-gate structure, the 404 contradiction, the warning scoping and `memory_sha`'s presence and algorithm. One residual for the owner, carried not decided: entry **count** is in the structural gate as ruled, and a file whose hand-written entries fill all six slots cannot take a new model-written entry without exceeding that count — the same read-only trap, one level up, if it ever happens.
+
+---
+
+## Gate 1 residual — v0.21
+
+> Ruling of 2026-10-27 on the entry-count trap left open by v0.20. This is the one
+> place the spec's **design** changed after the re-check rather than a wording fix:
+> without an authorship marker the service could not tell its own entries from a
+> human's, so "never drop a hand entry" was unimplementable, not merely awkward at
+> the count.
+
+| Point | Ruling | Carries to |
+|---|---|---|
+| The trap — entry count sat inside the structural gate while manual entries could never be dropped, so a file with six hand entries plus one model entry became read-only, and the service had no way to know which was which | ACCEPTED as a design change — an authorship marker is added rather than the count removed alone. | FR-013, FR-014 |
+| A — `entries[].source` | ACCEPTED — `"model"` or `"manual"`; the service tags what it writes, and an entry without the field reads as `"manual"`, so hand editing needs no ceremony. FR-013 states why in one clause: the file is co-authored and the tool must distinguish its own prose from an edit without guessing. | FR-013 (schema, table, JSON example) |
+| B — the gate checks no count | ACCEPTED — keys, value types, `week` 1–18, four-digit `season` values with the file's `season` equal to its newest entry's, `source` one of the two values or absent. Entry **and** summary counts never make a file read-only, joining over-cap text in that rule. | FR-013, FR-014, AC-033 |
+| C — the write drops only what it wrote | ACCEPTED — oldest `"model"` entries beyond six and oldest service-written summaries beyond three; a `"manual"` entry or summary is never dropped, reordered or rewritten except by the same-week replacement, which applies to any `source`. A file whose six slots are manual still accepts this week's entry. Rollover empties the model entries in the window and leaves manual ones alone. | FR-013, FR-014 |
+| D — the prompt takes the newest six | ACCEPTED — at most six entries, newest by `(season, week)`, no source preferred, because a joke from Week 3 is context rather than instruction; over the block's budget they are dropped oldest-first **for the prompt only**, file untouched. The size-budget bullet now says the figure bounds the prompt, not the file. | FR-012, FR-013, AC-028 |
+| E — `season_summaries` courtesy | ACCEPTED — unbounded by the gate, never dropped if hand-written, at most three in the block, truncated for the prompt only. One clause, not a second rule set. | FR-012, FR-013, AC-028 |
+
+**Verdict:** HOLD lifted — the trap is closed at its root, not at the count. The prompt's size is now bounded by rule (newest six by chronology, prompt-only truncation) rather than by the assumption that the file stays small, and `source` is the marker that makes C implementable at all.
+
+---
+
+## Owner redesign — v0.23: memory is the published summary
+
+> Owner decision of 2026-10-27, given in conversation. Phase 2 shrank from a second
+> artifact with its own schema, witnesses and compaction rules to a log of what the
+> tool already publishes.
+
+| Change | Ruling | Carries to |
+|---|---|---|
+| What memory is | The owner's reasoning, recorded: generating a second artifact per week invented a second voice and a second schema to keep honest. The published summary already exists, already passed the contract, and already carries the week it belongs to — so the log is the summary plus a week tag, and nothing is asked of the model for it. | FR-013 |
+| One gist, one file | `memory.json`, not one file per league id. The gist is the key: one gist is one commissioner setup however many divisions it spans, so league ids stay out of filenames and the `league_1`… alias layer has no job left. | FR-012 |
+| Hand edits without machinery | Append-only at the run level — earlier entries are never modified, reordered or dropped — so a hand edit inside an earlier entry is safe by construction and `entries[].source` is unnecessary. | FR-013 |
+| The only mutation | A re-run of the same week replaces that entry, so a dispatch re-run cannot stack a second take. Still the only mutation and the only removal. | FR-013 |
+| The whole archive in the prompt | No selection, window, truncation, dropping or caps. Trimming would be a compaction rule by another name, and the season is bounded anyway. | FR-012, FR-013 |
+| Two prompt rules replace a contract | Quotation — the archive is *what you published*, a record, never a source of league fact, and this week's data wins on any disagreement — and continuation: a running bit escalates or retires, because repeating a joke in the same words is the failure memory exists to prevent. | FR-004 |
+| `memory_weeks` replaces `memory_sha` | A list of the weeks that were in the prompt answers "what was in context"; a hash does not. All three memory provenance fields are absent when memory is off. | FR-005, FR-008 |
+| Cost | Stated once and plainly: ~500 words per entry, ~56 KB and ~10,000 prompt tokens by Week 17; a whole season of archive costs a few cents. Cost is not a reason to shorten anything, and `AI_SUMMARY_MAX_TOKENS` bounds the reply, not the prompt. Every sentence that treated token count or a prompt budget as governing memory size is gone. | FR-013, Configuration |
+| Deleted outright | Per-league files and league-id keying; the alias mapping; `entries[].source`; `take`/`joke` and their 200/120 caps; the truncation order; the six-entry window; the size-budget reasoning; `season_summaries`; rollover; the older-season rule; the structural read gate and the never-overwrite-a-bad-shape rule; the `memory` array in FR-004 with its retry interaction, per-entry validation and duplicate-alias rule; `provenance.memory_sha`. What survives from the old design is the store's status map, its one-read-one-write discipline and its two warning cases. | FR-002…FR-005, FR-008, FR-009, FR-012, FR-013, Configuration, Data Requirements, AC-006, AC-027…AC-032 |
+| Scope statements | Backfill is not a product feature — the owner will run a throwaway local script, so generating a week's summary and appending it must be callable outside the CLI. Out of Scope also names all prompt-side pruning, compaction, rollover and cross-season carry-over. | Out of Scope |
+| Raised, not decided | A cross-division consolidated view (all teams ranked across divisions, highest score and biggest beatdown across divisions) would give the shared headline something to be about for a 24-plus-person group. Derived from data already held. Recommended as a Phase 1 companion; **not approved**, so not in the requirements. | Open Questions |
+
+**Verdict:** ACCEPTED as the owner's design. Three things an implementer must not silently restore: **the quotation rule** (the archive is never a source of league fact), **append-only** (a write never touches an earlier entry — the only exception is the same-week replacement), and **`memory_weeks` instead of a hash** (the archive's presence is a list of weeks, not a checksum). Anything that reintroduces a cap, a window, a rollover or a model-authored memory field is a new owner decision, not an implementation detail.
+
+---
+
+## Owner addition — v0.24: the league-wide view
+
+> Owner decision of 2026-10-27. The item previously recorded as raised-but-not-decided
+> is now approved and becomes Phase 1's second block.
+
+| Change | Ruling | Carries to |
+|---|---|---|
+| Why it exists | One 24-plus-person league was split across divisions for platform limits. The shared headline is the only section addressed to everyone at once, and the per-division digest gave it nothing cross-division to be about — the narrative could only eyeball separate tables. | FR-012, Problem Statement |
+| `overall_standings` | Every team across every division in one ranking, `{rank, team, division, record, points_for}`. The ordering is **passed through, not newly computed**: the report already ranks all teams by wins then points for in `base.py:_get_overall_top_teams`, and the digest states that rule instead of inventing a second one and requires agreement with the console's overall table for the same inputs. Where the console table caps at 20, the digest carries every team — the jokes land at the bottom too. | FR-012, AC-027, AC-026 |
+| `weekly_extremes` | Highest and lowest score, biggest winning margin and closest game measured **across divisions**, from the weekly matchups already loaded. This one **is** new computation, unlike the ranking; where a value coincides with a per-division challenge winner the two must agree because both read the same rows. `null` when the run has no weekly matchups. | FR-012, AC-027 |
+| Prompt rules | Two, and only two: an overall claim may come only from this block (a division `rank: 1` is not the best record in the setup), and this block is the source for cross-division statements without changing a per-division value. | FR-012 |
+| Absence | One division: the block still exists, and `overall_standings` equals that division's standings. No completed games: both `null`, prompt says so. | FR-012, AC-027 |
+| No rendering | No section, line, field or provenance key: the block is prompt input only, so FR-005's "only output-visible effect" sentence stays true. | FR-005, FR-012 |
+| Renumbering | The memory requirements move to FR-013 and FR-014, and their acceptance criteria to AC-028…AC-033, with the new block taking AC-027 and AC-026's golden replaced (not doubled) to carry the three Phase-1 keys. Revision-history rows and the earlier sections of this ledger keep their original numbers — **in everything written before this section, FR-012 is today's FR-013 and FR-013 is today's FR-014**; the pointers here use the current ones. | FR-002…FR-014, AC-026, AC-027, Delivery Phases, Configuration, Data Requirements |
+
+**Verdict:** ACCEPTED. Two things an implementer must not silently change: **the ranking is a pass-through of the report's existing overall order** (a second comparator is a bug even when it looks equivalent), and **the per-division rank rule stays in the prompt** (without it the model reads a division's rank 1 as the best record in the whole setup, which is exactly the confusion this block exists to remove).
+
+---
+
+## Gate 2 — v0.25 wording fixes
+
+> Plan review of 2026-10-27. No design change was found — seven ambiguities, two of
+> which left criteria unowned.
+
+| Fix | Ruling | Carries to |
+|---|---|---|
+| AC-027, single division | ACCEPTED — "identical" was unsatisfiable: a league-wide row is `{rank, team, division, record, points_for}` and a per-league standings row also carries `owner`, `points_against` and `playoff_status`. The criterion now asserts the same teams in the same order with `rank`, `record` and `points_for` matching. | AC-027 |
+| Provenance on the notice path | ACCEPTED — `history_weeks` was promised "whenever the feature is on" and the memory fields "whenever memory is on", but a failed narrative renders `{"error": …}` with no provenance object at all, which is today's behaviour and the intended one. All four fields are now present only when a narrative renders. | FR-005, FR-008 |
+| FR-011 null types | ACCEPTED — the `games` collection is built tolerantly, so a team can have no game; `streak`, `best_week`, `worst_week` and `average_margin` are `null` for it, stated in the table and in a bullet. | FR-011 |
+| FR-014 read 404 | ACCEPTED — a 404 on read is `"none"`, and the write that follows 404s in turn and is AC-032's write failure. | FR-014 |
+| Season keying | ACCEPTED — entries are keyed by week inside a file whose `season` is fixed when the file is created, so a later-season run would replace the same week's entry; the operator retires `memory.json` at a season boundary. Documentation of the single-season assumption, not new behaviour. | FR-014 |
+| "No structural gate" | ACCEPTED — the two sentences contradicted each other and the plan does reject a wrong `schema`, a missing key and an out-of-range `week`. Reworded to *parses as the archive shape*: schema, required keys and week range are checked; content, counts, text length and season agreement never make a file read-only. | FR-014 |
+| Two unowned criteria | ACCEPTED — AC-031 gains the read-404-then-attempted-write case (it asserts the attempt, not the outcome, so it cannot contradict AC-032), and AC-033 gains the season/week guard: writes nothing, leaves the file byte-identical, records `"skipped"`. | AC-031, AC-033 |
+
+**Verdict:** ACCEPTED — the plan review found no design change, only these ambiguities and two unowned criteria. AC-027's wording was the one that could never have passed as written: it demanded byte-equality between two row shapes that differ by design. Nothing here reopens a design decision.
+
+---
+
+## Gate 2 closed — v2.2
+
+> Verification of 2026-10-27 on plan v2.1 / tasks v2.1 / spec v0.25. Two must-fixes, both
+> cross-reference defects rather than design; three notes. Nothing here reopens a ruling.
+
+| Finding | Ruling | Carries to |
+|---|---|---|
+| **M1 — the dependency map contradicted the design.** Tasks v2.1 said T101, T102 and T103 were independent, but T103's `overall_standings` calls `rank_overall_teams`, which T102 creates; followed literally, the phase's fourth task cannot start in either order. | ACCEPTED — restored: **T103 requires T102**; T101 is independent of both. The strict prerequisites now read T103 ← T102, T105 ← T101, T106 ← all four. | tasks.md, dependency map |
+| **M2 — AC-033's third clause had no owner.** "an over-long stored paragraph is read, sent into the prompt as written" was asserted nowhere: the traceability row listed T201, T202, T204 and T207, none of which composes the prompt, so the clause held only because nothing truncates. | ACCEPTED — **T205 joins AC-033's row**, and its six-week test asserts that a stored paragraph longer than any cap appears verbatim in the composed memory block. The criterion now fails if anything ever starts trimming the archive. | tasks.md, T205 and the AC-033 row |
+| Note — stale version pointers | CLOSED — plan 8/21/243 and tasks 9/642 still read "spec v0.24, plus the review wordings a parallel dispatch applies". All five now point at **spec v0.26**, the version that carries those wordings plus the AC-032 fix. The version rows in each Revision History keep their original dates as history, not pointers. | plan.md, tasks.md |
+| Note — a spec nit that did not exist | CLOSED — the plan recorded that the Configuration table still called `AI_SUMMARY_TIMEOUT` a whole-call timeout. It does not: the row already reads "Per-socket-read timeout in seconds". The nit is deleted so nobody opens a spec edit for a correct line. The section now reads "None". | plan.md, Spec nits |
+| Note — AC-032's "byte-identical" | CLOSED — the same-week replacement clause required every other entry to be byte-identical, which no parse-and-rewrite can satisfy: re-serialising changes whitespace and key order with nothing edited. Spec v0.26 changes it to **"unchanged in value"**, matching AC-033 and the plan's existing reading. One row records it and nothing else. | spec.md v0.26, AC-032 |
+
+**Verdict:** GATE 2 CLOSED. The two must-fixes are applied, all three notes are closed with no requirement changed beyond AC-032's one word, and every criterion clause now names a task that asserts it — the traceability table covers AC-001…AC-033, WC-001/WC-002, LV-001…LV-006 and T203's manual premise, with the manual rows marked as manual. **Artifacts frozen at plan v2.2, tasks v2.2 and spec v0.26**: no further edits to these three without a new gate. **Phase A (T101, T102, T103, T105, T106) may start**, delivered as one engineer pass against the merged task list.

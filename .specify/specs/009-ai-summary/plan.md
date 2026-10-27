@@ -1,18 +1,31 @@
 # Implementation Plan: AI Summary (Commissioner's Take)
 
 > **Spec ID**: 009
-> **Status**: Draft — revised after Gate 2 (plan HOLD)
+> **Status**: Frozen at v2.2 — Gate 2 closed; Phase A may start
 > **Created**: 2026-10-21
-> **Last Updated**: 2026-10-21
-> **Version**: 1.3
-> **Spec**: [spec.md](./spec.md) v0.13 (authority — this plan decides implementation only)
-> **Gate rulings**: [challenge-ledger.md](./challenge-ledger.md) (settled rows are settled; Gate 2 rows are precedent for Gate 3)
+> **Last Updated**: 2026-10-27
+> **Version**: 2.2
+> **Spec**: [spec.md](./spec.md) v0.26 (authority — this plan decides implementation only)
+> **Gate rulings**: [challenge-ledger.md](./challenge-ledger.md) (settled rows are settled; Gate 2 closed at v2.2)
+>
+> Sections 1–12 and Decisions 1–8 describe the **shipped** feature and are unchanged except where
+> this amendment touches them. The amendment lives in "Amendment Architecture" (Decisions 9–17),
+> Components 13–16, and the Phase 1 / Phase 2 rows added throughout.
 
 ## Scope
 
 Add one optional section to the weekly report (`ff-tracker`), in all five formats, generated once per run from the report's own domain models, rendered between the weekly highlights and the season-long challenges, and never able to stop the report. Nothing else changes: no new CLI, no new format, no new dependency, no change to `ff-championship` or `ff-season-recap`.
 
 **Out of scope** (spec "Not doing", unchanged): season recap and championship CLIs, other provider families, streaming/caching, retries beyond the single contract retry FR-003 allows, a user-authored system prompt, `weekly_games` in JSON, per-format opt-out, factual verification, format arguments for this feature.
+
+### The amendment this plan now also covers (spec v0.17–v0.26)
+
+Two phases, specced and approved together, delivered and reverted separately. **Phase 1 ships first**; Phase 2 is built against a merged Phase 1 and never against an unmerged one.
+
+- **Phase 1 — prompt input only (FR-011, FR-012).** A per-league `history` block and one league-wide block (`overall_standings`, `weekly_extremes`), both derived from data the report already loads, plus `provenance.history_weeks`. No new variable, no new call, no storage. Shipped alone it is today's run with a larger prompt; one `git revert` removes it.
+- **Phase 2 — the memory log (FR-013, FR-014).** Off by default. On: one gist, one `memory.json`, one read before generation and one write after, append-only, the whole archive in the prompt under two rules. Off means zero store calls and output identical to a Phase-1 run. One `git revert` removes it.
+
+Neither phase renders anything: no format gains a section, line or field, and the notice path is untouched.
 
 ---
 
@@ -28,6 +41,9 @@ Add one optional section to the weekly report (`ff-tracker`), in all five format
 
 ### Rationale
 The single HTTP call, one JSON body and one prompt are small enough that a dependency (httpx, openai SDK) buys nothing and costs a lockfile entry, a supply-chain surface and a second retry/timeout policy to reason about. `urllib` also keeps retry policy structural: the client is one-shot, and the single contract retry lives in the summary service, so no library retries behind our back.
+
+### The amendment adds no dependency either
+Phase 1 makes no network call at all. Phase 2's store is GitHub's gist API over the same stdlib `urllib`/`json`, with the same injectable transport the provider client has, so `pyproject.toml` is untouched by both phases and the suite still needs no network: a fake client, a fake store and checked-in fixtures. `tests/fixtures/` gains the Phase-1 golden (see Decision 17); nothing else is read from disk at run time.
 
 **Constitutional Compliance**:
 - Article I: fully typed, no `Any` (the digest is a `TypedDict`, parsed JSON is narrowed from `object`)
@@ -224,6 +240,124 @@ The AC-001 prefix/suffix assertion is now a **pure insertion in the middle**: `o
 
 ---
 
+## Amendment Architecture (spec v0.26)
+
+Phases 4–6 for the amendment. Decisions 1–8 stand untouched: the fail-open boundary is still one `try` around `_generate`, the digest is still a `TypedDict` document, the client is still one-shot, and no formatter learns anything new.
+
+### Decision 9: History is its own module; the league-wide view stays in the digest builder
+
+`ff_tracker/services/ai_history.py` (new) holds FR-011's block and its `TypedDict`s: `build_history(games, teams, anchor) -> AILeagueHistory | None`. It is the compromise between two bad shapes — ~130 lines of game arithmetic is more than a payload assembler should carry, and a second module for the league-wide view would be two small functions that need the same ranking helper and the same weekly rows the digest already unpacks. So:
+
+- `ai_history.py` — FR-011 only: rank by week, head-to-head, streak, trend, best/worst, margins.
+- `ai_digest.py` — `history` per league (one line, delegating) plus `overall_standings` and `weekly_extremes`.
+- `services/rankings.py` — one comparator, shared with the formatters (Decision 10).
+
+Rejected: everything in `ai_digest.py`, which turns one payload module into a 500-line mix of computation and assembly; and a new module per block, which is three modules for three keys.
+
+### Decision 10: One comparator in `services/rankings.py`, called by the digest and by the formatters
+
+FR-012 requires `overall_standings` to be in exactly the order the console's overall table produces, and the ledger forbids a second comparator "even when it looks equivalent". `rank_overall_teams(divisions, limit=None) -> list[TeamStats]` is `sorted(all_teams, key=lambda t: (t.wins, t.points_for), reverse=True)` with today's `limit` semantics (`None` or `<= 0` means every team). Both of `BaseFormatter`'s sorters become delegates — `_get_overall_top_teams` and `_get_sorted_teams_by_division` (which is the same comparator over one division's teams) — so the four `limit=20`/`max_teams` call sites (`console.py:442`, `markdown.py:433`, `sheets.py:212`, `email.py:481`), the per-division tables' order and their byte output are untouched; the digest calls it with no limit, because FR-012 carries every team where the console stops at 20, and `_standings_rows` calls it with one division so the per-league standings use the same rule.
+
+Rejected: duplicating the sort in the digest and relying on AC-027's agreement assertion — the assertion is still worth having, but as the only guard it lets two comparators ship and drift between releases. **What AC-027's agreement case can and cannot prove**: once both sides call `rank_overall_teams`, the rendered table and `overall_standings` are the same list, so the assertion guards the *rendering* order (that the console has not re-sorted, truncated differently, or read another collection) and not the comparator's correctness — the comparator is guarded by its own `limit` fixtures. The >20-team fixture is where the two sides differ on purpose (the console stops at 20, the digest does not), so the comparison there is the rendered 20 rows against the first 20 of `overall_standings`, and "every team appears" is a separate fixture with its own count.
+
+Rejected: putting the function in `models/` (Article II forbids business logic there) and importing `display` from a service (Article IV forbids it, and no service does today). Display importing a service is the downward direction Article IV permits; `services/__init__.py` imports nothing from `display`, so the import is acyclic. The season-recap formatters keep their own copies of this sort; that path is outside spec 009 and is deliberately not touched.
+
+### Decision 11: History's newest rankings are the per-league standings list itself
+
+`_league_digest` builds `rows = _standings_rows(division)` once. Its `standings` key is `rows` in regular and playoff modes and `[]` in championship mode (the formatters show none there); `build_history(..., anchor=rows)` receives the same list. In regular and playoff modes the anchor therefore *is* the digest's `standings[]`, so FR-011's "the latest week present is taken from `standings[].rank` verbatim" holds by construction rather than by agreement, and AC-024's second fixture — a `DivisionData.games` collection missing a week `TeamStats` counts — cannot move the newest column. In championship mode the digest shows no standings, so the anchor is the report's own ranking rather than nothing: still not a second comparator, and the block stays present, which AC-025 requires.
+
+Earlier weeks are recomputed from `games` with `week <= N` under the same wins-then-points-for order; ties keep the anchor's relative order, so every week in the block is a total order.
+
+### Decision 12: History's null cases and orderings, where FR-011 is silent
+
+- `teams[]` follows the anchor's order, so the block reads in the same order as the standings beside it.
+- `head_to_head[]` is sorted by opponent name: the spec fixes the row's keys, not its order, and the prompt reads better in a stable order than in game order.
+- `streak`, `best_week`, `worst_week` and `average_margin` are `null` for a team with no game in the collection (adopted into FR-011 by the review): a real division plays every week, but a tolerant `games` collection can still miss a team, and omitting the team instead would contradict "for every team".
+- A tie is a loss in `GameResult`'s own terms (`won` is `score > opponent_score`), so a tie extends a loss streak. The block invents no third `kind`.
+
+### Decision 13: The store is a `MemoryStore` protocol; one `MemorySession` per run owns the lifecycle and never raises
+
+- **`MemoryStore` (Protocol)**: `load() -> bytes | None` (`None` when the gist or `memory.json` is absent) and `save(data: bytes) -> None`. `GistMemoryStore(memory_config, transport=None)` is the production implementation with the same *shape* of injectable seam as the provider client, but its own small `(Request, timeout) -> bytes` wrapper inside `ai_memory.py`: `ai_client.py` is shipped and correct, and a rename there to share four lines would edit a file neither phase otherwise needs to touch. `FakeMemoryStore` lives in `tests/ai_fakes.py`: it records calls and can be told to fail per call.
+- **`MemorySession(memory_config, season, week, store=None)`** owns one run: `open()` performs the single read and sets `read_status`, `entries`, `weeks` and a `parsed` flag; `commit(summary)` performs at most one write and sets `write_status`. Each call appends at most one warning string.
+- **It never raises.** `GistMemoryStore` maps transport outcomes onto `AIMemoryStoreError(kind: auth | not_found | server | transport | timeout)`; `MemorySession` maps the kind onto FR-014's status map and decides whether that outcome warns. This is what keeps Decision 1's `try/except AISummaryError` exactly as wide as it is today: memory never enters that boundary, so no memory outcome can become a notice, and the taxonomy gains no new member that a narrative failure could be confused with.
+- **The write happens after the narrative exists.** `_generate` calls `memory.open()` first, builds the block from what it read, calls the client, and only once `_normalise` has returned an `AISummary` does it call `memory.commit(summary)` — because the entry's `generated_at` is `summary.provenance.generated_at`. One instant is computed once, inside `_normalise`, and the entry copies it, so the file and the report cannot disagree; a rejected narrative never reaches `commit`, which is FR-014's `"skipped"` without a branch of its own.
+- `AISummaryService.__init__(config, client, memory: MemorySession | None = None)`.
+- **Read 404 is `"none"`** (FR-014 now says so): a deleted or mistyped gist id reads as "nothing published yet", and the write that follows is AC-032's 404 failure with its warning — which is the signal an operator can act on.
+
+Rejected: the service constructing the store from config — a fake, a test and the throwaway backfill script could then not substitute one, and the backfill would have to reach into config for a seam. Rejected: `main.py` performing the read and the write around `generate` — the write lands after `provenance` is built, so `memory_write` would have to be patched into a frozen model from the CLI, and FR-014's lifecycle would live in the CLI.
+
+### Decision 14: Provenance carries the tri-state, and `None` is how "memory off" stays absent
+
+`AIProvenance` gains `history_weeks: int = 0`, `memory_read: str | None = None`, `memory_write: str | None = None` and `memory_weeks: list[int] | None = None`, validated as all-off or all-on, with FR-014's two vocabularies and `history_weeks >= 0`. `json.py` emits `history_weeks` on every narrative and each memory key only when it is not `None` — which is the mechanism AC-028 checks: with memory off no memory key exists, so the document matches the Phase-1 golden.
+
+`history_weeks` is defaulted rather than required because twenty-odd fixtures construct `AIProvenance` directly; its value is asserted on real fixtures (T101, T106) rather than trusted. The service passes `history_week_count(digest)`, a helper in `ai_digest.py` that counts the union of `weeks_included` across leagues, so the count and the block cannot disagree.
+
+All four fields exist only when a narrative renders, which is now FR-005's wording: the notice path is `{"error": …}` with no `provenance` at all, so a failed narrative records its `"skipped"` on the session where a test can see it and not in the report. `None`-means-absent is therefore the whole rule: `None` for a field is what keeps it out of JSON, and the three memory fields are all set or all absent.
+
+### Decision 15: Three prompt pieces; `prompt_sha` hashes the first, and the DEBUG line reuses the block renderer in redacted mode
+
+```
+instructions  = build_system_prompt(user_prompt, league_names)   # template + league-wide rules + scope + instructions block
+block         = build_memory_block(entries) if entries else None  # memory on, and something stored
+system_prompt = instructions + ("\n\n" + block if block else "")
+prompt_sha    = prompt_sha(instructions)
+```
+
+- `prompt_sha` keeps hashing the bytes it hashed before this amendment, so archived reports stay comparable and AC-028's memory-off comparison is possible at all. The memory block sits outside it, as FR-008 requires; the league-wide rules sit inside it, because they are instructions and a change to them must move the hash.
+- Every piece of prompt prose is a module constant in `ai_summary_service.py`: `SYSTEM_PROMPT` (bytes unchanged), `LEAGUE_WIDE_RULES` (Phase 1, two strings), `MEMORY_HEADING`, `MEMORY_INTRO`, `MEMORY_RULES` (Phase 2). One file to review for a prompt edit.
+- `build_memory_block(entries)` renders the archive in week order, each entry under its week tag, introduced as *what you published in earlier weeks*, then the two rules. `render_memory_block(entries, redact=True)` is the same function with each entry's prose replaced by its week tag, and that rendering is what the DEBUG line appends (FR-009): the block's shape is visible, its paragraphs are not. One function, two renderings, so the log cannot describe a block the model did not receive.
+- **How the rules are tested without asserting prose**: they are constants, and each test asserts every constant appears verbatim in the composed prompt (and that no block appears with memory off). Rewording a rule keeps the test green; deleting one fails it. No test contains a sentence of prompt text.
+
+### Decision 16: One predicate suppresses a write; one key replaces an entry
+
+- `_can_key_entry(season, week) -> bool`: `2000 <= season <= 9999` and `1 <= week <= 18`, checked once inside `commit` before any store call. False is `"skipped"` with no store call, so a pre-kickoff `current_week` of 0 or negative writes nothing — FR-014's only suppressed write (AC-033). The narrative-failure case reaches the same status by never calling `commit`.
+- `merge_entry(archive, entry)` replaces the entry whose `week` equals the run's week in place, and appends otherwise, then writes the list in week order. That is the only mutation and the only removal, so a dispatch re-run cannot stack a second take (AC-032) and every other entry's value is unchanged — including any key the tool does not know, which is carried through a successful merge untouched.
+- The current week is **not** filtered out of the block. On a same-week re-run the read has already happened, so the previous take for that week is in the archive and is sent, and `memory_weeks` includes it. FR-014 forbids selection, windows and dropping, so excluding it would be the compaction rule the spec deletes; a re-run simply sees what it last said and is told to escalate or retire it.
+- **Entries are keyed by week inside a file whose `season` is fixed at creation, and that has one consequence worth stating plainly**: a Week 6 run in 2027 against a 2026 file replaces the 2026 Week 6 entry — hand edits included — because the key is the week and the tool does not compare the file's season to the run's. The file is retired by the operator at a season boundary; starting a new one is a hand action (`memory.json` renamed or emptied in the gist), and FR-014's header rule means the tool never does it. The plan does not add a season check to the write: that would be the rollover rule the spec deletes, and it would make a legitimate mid-season correction impossible.
+
+### Decision 17: The Phase-1 golden is captured in Phase 1, and recapturing it is a reviewed decision
+
+AC-028 compares memory-off output against a golden captured at the Phase-1 commit. The capture is therefore **the last Phase-1 task** (T106), so the artifact exists, committed, before any Phase-2 test can read it. The fixture pins:
+
+| Pinned | How | Why |
+|---|---|---|
+| model | `AI_SUMMARY_MODEL` set to the golden's id | a default-model bump must not fail a memory criterion |
+| `generated_at` | the `datetime` **attribute on `ff_tracker.services.ai_summary_service`** replaced with a frozen class | the module imports the class, so patching `datetime.datetime` globally would leak; the module attribute is the only seam |
+| prompt | `AI_SUMMARY_USER_PROMPT` empty | `prompt_sha` is in the golden and moves with the prompt |
+| report data | the AC-027 three-division fixture built in `ai_fakes`, `year=2026`, week 6 | a small, stable, fully-synthetic report that already exists for another criterion |
+| narrative | one canned response | the section's text is part of the compared bytes |
+| format args | none | they change bytes in three formats |
+| CLI inputs | `sys.argv` and the league ids patched, `ESPNService` patched, `--output-dir` into a temporary directory | `main()` parses args and would otherwise read the real environment |
+| provider | `ff_tracker.main.OpenAICompatibleClient` replaced by a fake | one canned response, no network |
+
+That is the full patch set: `sys.argv`, the league ids, `ESPNService`, the provider client, and `ff_tracker.services.ai_summary_service.datetime`. T106 and T208 use the same harness, so the two phases compare identical paths rather than two re-implementations of one.
+
+The golden is one JSON file, `tests/fixtures/ai_summary_phase1_golden.json`, holding the console, sheets, email and markdown output as exact strings and the JSON format's document as a parsed object (dict equality, not string equality, so indentation cannot fake a pass). **No helper regenerates it at test time**, and the capture entry point is not importable from the test module.
+
+**Recapture procedure** (in T106's done-when, and the only accepted way to change the file):
+
+1. Run the harness from a clean tree at the commit whose output is being captured, with the pins above, and commit the result in its own commit with the reason in the message.
+2. A recapture must still prove what the criterion is for: the five formats render the same *narrative and the same deterministic sections* as the golden's own copy of them, so the diff is reviewed line by line as output, not accepted as a blob.
+3. **What may break it**: a deliberate change to a rendered format, to the digest-backed data the report shows, or to `SYSTEM_PROMPT`/`LEAGUE_WIDE_RULES` (which moves `prompt_sha`). **What may not**: anything memory-related. A Phase-2 change that fails AC-028 and is "fixed" by recapturing the golden is exactly the regression the criterion exists to catch, and a recapture in the same commit as a memory change is a review reject.
+
+### Phase 2 failure policy, mapped
+
+| Situation | `memory_read` | `memory_write` | Warnings under `GITHUB_ACTIONS` | Proved by |
+|---|---|---|---|---|
+| memory off | absent | absent | none | AC-028 |
+| absent file, or an empty gist | `"none"` | `"ok"` (a file is created) | none | AC-029 |
+| read 404 (gist gone or id mistyped) | `"none"` | `"failed"` (the write 404s too) | one, for the write | AC-031 (read case), AC-032 (its write) |
+| read 401/403 | `"failed"` | attempted; `"failed"` when it 401s too | one for the read, and one for the write when it fails — never more than one per cause | AC-031, AC-032 |
+| read 5xx / transport / timeout | `"failed"` | attempted; `"ok"` if the store recovers | none for the read | AC-031 |
+| write 404 / 401/403 / 5xx / transport / timeout | as read | `"failed"` | one, naming scope or authentication | AC-032 |
+| file will not parse as the archive shape | `"none"` | `"skipped"` — the file is not overwritten | one | AC-033 |
+| narrative unavailable | as read | `"skipped"` — the session's status; the notice object carries no provenance, so nothing prints it | none for memory | AC-020, AC-032 |
+| week not 1–18, or season not a 4-digit year | as read | `"skipped"`, no store call | none | AC-033 (write guard) |
+
+Every row ships the report, exits 0, and puts nothing in any format's notice slot: the section was produced, so the notice is not the channel (FR-006). "One per cause" is the rule a test asserts — `out.count("::warning::")` is exact in each fixture, so a duplicated line fails, and the paired authentication-read-plus-failed-write fixture counts **two**: one line for each cause.
+
+---
+
 ## Component Breakdown
 
 ### Component 1: `AISummary` models — **NEW** `ff_tracker/models/ai_summary.py`
@@ -302,33 +436,39 @@ Deriving from `Exception` rather than `FFTrackerError` is deliberate: if one eve
 
 ### Component 4: Configuration — **MODIFIED** `ff_tracker/config.py`
 
+**As shipped** (the amendment adds one field; nothing below is a change to correct):
+
 ```python
 @dataclass(frozen=True)
 class AISummaryConfig:
-    enabled: bool
-    api_key: str = field(default="", repr=False)   # never in a repr/traceback
-    base_url: str = DEFAULT_BASE_URL
-    model: str = DEFAULT_MODEL
-    timeout: int = 120
-    max_prompt_chars: int = 8000
+    enabled: bool = False
+    api_key: str = field(default="", repr=False)      # never in a repr/traceback
+    base_url: str = DEFAULT_AI_BASE_URL               # https://opencode.ai/inference/openai/v1
+    model: str = DEFAULT_AI_MODEL                     # deepseek-v4.1-flash
+    timeout: int = DEFAULT_AI_TIMEOUT                 # 120
+    max_tokens: int = DEFAULT_AI_MAX_TOKENS           # 8000, sent as the request's max_tokens
+    reasoning_effort: str | None = None               # None omits the key entirely
+    max_prompt_chars: int = DEFAULT_AI_MAX_PROMPT_CHARS   # 8000
     user_prompt: str = ""
-    # __post_init__: enabled -> api_key.strip() non-empty (ConfigurationError naming AI_SUMMARY_API_KEY)
-    #                timeout > 0, max_prompt_chars > 0  (names itself)
-    #                len(user_prompt) <= max_prompt_chars -> else ConfigurationError with
-    #                variable, actual length, configured limit
 ```
 
-`load_ai_summary_config() -> AISummaryConfig` calls `load_environment()` first, then reads the seven variables, following `load_espn_credentials()` / `parse_league_ids_from_env()`:
+`load_ai_summary_config()` calls `load_environment()` first, then reads the shipped settings, following `load_espn_credentials()` / `parse_league_ids_from_env()`:
 
 | Variable | Parse | Invalid |
 |---|---|---|
 | `AI_SUMMARY_ENABLED` | lowercase in `{true,1,yes,on,false,0,no,off}`, default false | `ConfigurationError("AI_SUMMARY_ENABLED must be one of true/1/yes/on/false/0/no/off, got: 'maybe'")` |
 | `AI_SUMMARY_API_KEY` | verbatim (not stripped — a token may not survive stripping; whitespace-only counts as empty) | `ConfigurationError` naming it when `enabled` |
-| `AI_SUMMARY_BASE_URL` | verbatim with trailing `/` stripped; empty/whitespace → default | never (falls back) |
-| `AI_SUMMARY_MODEL` | verbatim, default `glm-5.3-flash` | never |
+| `AI_SUMMARY_BASE_URL` | verbatim with trailing `/` stripped; empty/whitespace → default | `ConfigurationError` when not an `http(s)` URL with a host |
+| `AI_SUMMARY_MODEL` | `.strip()`, default `deepseek-v4.1-flash` | `ConfigurationError` when empty after strip |
 | `AI_SUMMARY_TIMEOUT` | `int()`, default 120 | `ConfigurationError` naming the variable and the value |
+| `AI_SUMMARY_MAX_TOKENS` | `int()`, default 8000 | `ConfigurationError` naming the variable and the value |
+| `AI_SUMMARY_REASONING_EFFORT` | `.strip().lower()`, `low\|medium\|high`, empty → `None` | `ConfigurationError` naming the variable and the allowed values |
 | `AI_SUMMARY_MAX_PROMPT_CHARS` | `int()`, default 8000 | `ConfigurationError` naming the variable |
 | `AI_SUMMARY_USER_PROMPT` | `.replace("\r\n", "\n").strip()`; empty → no block | length checked against the configured limit |
+
+While the feature is off the loader returns `AISummaryConfig()` after reading *only* the flag, so no other variable — including the memory group Phase B adds — can deny a report. `max_tokens` and `reasoning_effort` are configuration, not constants: FR-003 forbids a hard-coded budget and AC-010 proves both are read (the request double sees `max_tokens` and `reasoning_effort`, the construction double sees model, base URL, timeout and bearer token).
+
+**Phase B adds** `memory: AIMemoryConfig | None = None` and reads `AI_MEMORY_ENABLED`, `AI_MEMORY_GIST_ID` and `AI_MEMORY_GIST_TOKEN` inside the enabled branch only.
 
 `main.py` calls the loader **after** `create_config(...)` and before any ESPN call, inside its existing `try:` block; `ConfigurationError` is an `FFTrackerError`, so `main()` prints and returns 1 with no report and no HTTP call (AC-009), without new plumbing. `load_environment()` has already run inside `create_config`, and the loader calls it again defensively (idempotent), so a `.env`-only configuration enables the feature — proved by a test that leaves `create_config` unpatched.
 
@@ -398,18 +538,21 @@ Rules the builder implements, each traceable to FR-002:
 - **Playoffs**: `AIDigest["playoffs"]` is **one** `AIPlayoffRound` — `{"round": <semifinals|finals>, "matchups": [...]}` — with a **flat** matchup list spanning every division's matchups for that round, and **no seed key** (the formatters take the round from `divisions[0].playoff_bracket.round`, and `PlayoffMatchup` carries no seed field on the digest shape). Each row is the `AIPlayoffMatchup` TypedDict: round name, both team names and owners, both scores (`None` when a game has not started), winner (`None` when incomplete), and the division name. `null` outside playoff mode.
 - **Championship**: `{"leaderboard": [{"rank", "team", "owner", "division", "score", "is_champion"}]}` from `ChampionshipLeaderboard.entries`; `null` outside championship mode.
 
-### Component 6: Provider client — **NEW** `ff_tracker/services/ai_client.py`
+### Component 6: Provider client — **as shipped** `ff_tracker/services/ai_client.py`
+
+The amendment does not touch this file (the store gets its own wrapper — Decision 13). Recorded so no task re-derives it wrong:
 
 ```python
-MAX_TOKENS = 8000
 CONTRACT_REASON = "response did not match the summary contract"
+USER_AGENT = f"ff-awards/{version('ff-awards')}"
 
 @dataclass(frozen=True)
 class AIRequest:                       # data the fake can record (AC-010)
     system_prompt: str
     user_message: str
-    max_tokens: int = MAX_TOKENS
-    # __post_init__: prompts non-empty, max_tokens > 0
+    max_tokens: int                    # NO default: the configured budget is the only source
+    reasoning_effort: str | None = None  # None omits the key; never sent as null or ""
+    # __post_init__: prompts non-empty, max_tokens > 0, effort in low|medium|high
 
 class AIClient(Protocol):
     def complete(self, request: AIRequest) -> str: ...   # returns message.content
@@ -417,28 +560,25 @@ class AIClient(Protocol):
 class HTTPTransport(Protocol):
     def __call__(self, request: urllib.request.Request, timeout: int) -> bytes: ...
 
-def _urlopen(request: urllib.request.Request, timeout: int) -> bytes:
-    """Default transport: one request, one read, no retries."""
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        body: bytes = response.read()
-    return body
+def _urlopen(request: urllib.request.Request, timeout: int) -> bytes: ...
 
 class OpenAICompatibleClient:
     def __init__(self, config: AISummaryConfig, transport: HTTPTransport | None = None) -> None: ...
     def complete(self, request: AIRequest) -> str: ...
 ```
 
-`complete`:
+There is no `MAX_TOKENS` module constant: `max_tokens` comes from `config.max_tokens` on every call, which is what FR-003 requires and AC-010 proves. `complete`:
 
 1. URL `config.base_url.rstrip("/") + "/chat/completions"`.
 2. `urllib.request.Request(url, data=body, method="POST")` with
    `Authorization: Bearer <key>`, `Content-Type: application/json`,
    `User-Agent: ff-awards/<version>` (non-default; `Python-urllib/*` is refused by the default endpoint's front door).
-3. Body `{"model": config.model, "messages": [{"role":"system",...},{"role":"user",...}], "max_tokens": request.max_tokens}`. No `response_format`, no `temperature` — the spike validates the plain call, and inventing knobs the spec does not name is exactly the gold-plating this plan avoids.
+3. Body `{"model": config.model, "messages": [{"role":"system",...},{"role":"user",...}], "max_tokens": request.max_tokens}`, plus `"reasoning_effort": request.reasoning_effort` only when it is not `None`. No `response_format`, no `temperature`, no streaming.
 4. `self._transport(request_obj, self._config.timeout)` inside `try/except` (the transport is `_urlopen` unless one is injected — Decision 6):
    - `urllib.error.HTTPError` → read **and discard** `e.read()` (never logged), close, `raise AIHTTPError(status=e.code, host=host, model=...)`.
    - `urllib.error.URLError` → if `e.reason` is a `TimeoutError`/`socket.timeout` → `AITimeoutError(timeout)`; else `AITransportError(host)`.
    - `TimeoutError` (incl. `socket.timeout`, same class on 3.10+) → `AITimeoutError(timeout)`.
+   - `(OSError, http.client.HTTPException)` around the body read → `AITransportError(host)`; a mid-body reset is the failure that would otherwise deny a report.
 5. Parse the envelope: `choices[0].message.content` (must be `str`), `choices[0].finish_reason`. `finish_reason == "length"` → `AITruncationError()` **even when the content parses** (AC-007). Anything missing or mistyped → `AIContractError(CONTRACT_REASON)` (an explicit check, not a caught `TypeError`).
 6. Return the content string; the service parses *that* as JSON.
 
@@ -555,10 +695,123 @@ env:
 
 ### Component 12: Documentation — **MODIFIED**
 
-- `.env.example`: the seven variables, commented, with the real defaults (`https://opencode.ai/inference/openai/v1`, `glm-5.3-flash`, `120`, `8000`), and the egress note.
+- `.env.example`: the shipped settings, commented, with the real defaults (`https://opencode.ai/inference/openai/v1`, `deepseek-v4.1-flash`, `120`, `8000`, empty `AI_SUMMARY_REASONING_EFFORT`), and the egress note.
 - `README.md` → Configuration: an "AI Summary (optional)" subsection — what leaves the machine, how to enable with a key alone, that `.env.example` carries the defaults, and that `ff-championship`/`ff-season-recap` ignore it.
 - `CHANGELOG.md` → `## [Unreleased]` / `### Added - AI Summary (optional)`.
 - **No `AGENTS.md` change** (Gate 2 cut): no FR requires it, and a fourth copy of the feature description in the file every agent reads is exactly the drift this plan avoids elsewhere.
+
+### Component 13: Season history builder — **NEW** `ff_tracker/services/ai_history.py`
+
+FR-011 only, pure functions over `GameResult` rows plus the anchor (Decision 11).
+
+```python
+class AIRankByWeek(TypedDict):
+    week: int
+    rank: int
+
+class AIHeadToHead(TypedDict):
+    opponent: str
+    wins: int
+    losses: int
+
+class AIStreak(TypedDict):
+    kind: str          # "win" | "loss"
+    length: int
+
+class AIWeekScore(TypedDict):
+    week: int
+    score: float
+
+class AITeamHistory(TypedDict):
+    team: str
+    rank_by_week: list[AIRankByWeek]
+    head_to_head: list[AIHeadToHead]
+    streak: AIStreak | None            # None only for a team with no game (Decision 12)
+    scoring_trend: str | None          # "up" | "down" | "flat" | None
+    best_week: AIWeekScore | None
+    worst_week: AIWeekScore | None
+    average_margin: float | None       # signed mean of score - opponent_score
+    largest_win: float | None          # magnitude, like GameResult.margin
+    largest_loss: float | None
+
+class AILeagueHistory(TypedDict):
+    weeks_included: list[int]
+    teams: list[AITeamHistory]
+
+def build_history(
+    games: Sequence[GameResult],
+    teams: Sequence[TeamStats],
+    anchor: Sequence[AIStandingsRow],
+) -> AILeagueHistory | None
+```
+
+Rules, each one line from FR-011: `weeks_included` is the distinct `week` values ascending; `None` when `games` is empty. Rank at week `N` is wins descending then points for descending over that team's games with `week <= N`, except the latest week present, which takes the anchor's rank verbatim. `scoring_trend` compares the latest week's score with the mean of that team's earlier weeks: `up` above +1.0, `down` below −1.0, `flat` inside the band, `None` under two weeks. `streak` counts back from the latest game. `largest_win`/`largest_loss` are magnitudes and `None` when the team has not won or not lost.
+
+### Component 14: Overall ranking — **NEW** `ff_tracker/services/rankings.py`
+
+```python
+def rank_overall_teams(
+    divisions: Sequence[DivisionData], limit: int | None = None
+) -> list[TeamStats]
+```
+
+The single comparator (Decision 10). `display/base.py`'s two sorters — `_get_overall_top_teams` and `_get_sorted_teams_by_division` — keep their signatures, docstrings and `limit` semantics and become `return rank_overall_teams(divisions, limit)` and `return rank_overall_teams([division])`; the digest calls the first with no limit and `_standings_rows` calls the second's equivalent.
+
+### Component 15: Memory store, archive and session — **NEW** `ff_tracker/services/ai_memory.py`
+
+Payload types (a persisted document, shaped with `TypedDict` for the reason Decision 4 gives — it is serialised and read back, never held as application state, and FR-014's "the archive needs no model" settles it):
+
+```python
+class MemoryLeague(TypedDict):
+    league: str
+    paragraphs: list[str]
+    bullets: list[str]
+
+class MemoryEntry(TypedDict):
+    week: int
+    generated_at: str
+    headline: str
+    season_note: str
+    leagues: list[MemoryLeague]
+
+class MemoryFile(TypedDict):
+    schema: int        # always 1
+    season: int
+    entries: list[MemoryEntry]
+```
+
+Functions and types:
+
+| Name | Contract |
+|---|---|
+| `parse_archive(raw: bytes) -> MemoryFile | None` | `None` when the bytes do not parse **as the archive shape**: JSON, an object, `schema == 1`, a four-digit `season`, `entries` a list of objects with the required keys and types, `week` an int in 1–18. Structure only, as FR-014 now states — content, entry or summary counts and any text length are never reasons to reject a file, and a file that fails is reported as no memory and never overwritten (AC-033). An unknown key inside an entry is carried through untouched. |
+| `merge_entry(archive: MemoryFile | None, entry: MemoryEntry, season: int) -> MemoryFile` | `None` creates the file with `schema: 1, season`; otherwise the same-week entry is replaced in place and the list is ordered by `week`, so an entry keyed by a week the file already holds replaces it. |
+| `MEMORY_READ_OK/NONE/FAILED`, `MEMORY_WRITE_OK/FAILED/SKIPPED` | FR-014's two vocabularies, in one place, imported by the model's validator and the session. |
+| `MemoryStore` (Protocol) | `load() -> bytes | None`; `save(data: bytes) -> None`. |
+| `GistMemoryStore(memory_config, transport=None)` | `GET https://api.github.com/gists/{id}` and `PATCH` the same URL with `{"files": {"memory.json": {"content": …}}}`; `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`, non-default `User-Agent`; timeout from `AI_SUMMARY_TIMEOUT` (no new setting); failures mapped to `AIMemoryStoreError(kind)`. The transport seam is this module's own `(Request, timeout) -> bytes` wrapper — `ai_client.py` is shipped and is not edited. The token and gist id never appear in a message, a log line or a reason (FR-009). |
+| `MemorySession(memory_config, season, week, store=None)` | `open()`, `commit(summary)`, `read_status`, `write_status`, `entries`, `weeks`, `warnings` — Decision 13's lifecycle, never raising, and `commit` runs only after the narrative exists so the entry's `generated_at` is the report's. |
+
+**Premise to confirm, not assume, and not a committed file**: the gist API's read/write shape — `files["memory.json"].content` on `GET`, `PATCH` with a `files` object to create or replace a file, `truncated: true` above 1 MB. T203's first step is one `curl` against a scratch gist, **run manually once; the two responses go in the PR description**, not in the repo: they are evidence for a reviewer, not an artifact the code or the suite reads. The application's ~56 KB by Week 17 is two orders of magnitude below the truncation limit, so the truncation case is recorded in the PR and not handled in code.
+
+`ff_tracker/exceptions.py` gains `AIMemoryStoreError(Exception)` with `kind: str` and a `reason` that names the host and status only. It derives from `Exception`, not `FFTrackerError`, for Decision 1's reason: if one ever escaped the session it must surface as an unexpected error, never as a configuration failure that denies a report.
+
+### Component 16: Modifications for the two phases
+
+| File | Phase | Change |
+|---|---|---|
+| `services/ai_digest.py` | 1 | `history` per league; `overall_standings`; `weekly_extremes`; `history_week_count(digest)` |
+| `display/base.py` | 1 | both sorters (`_get_overall_top_teams`, `_get_sorted_teams_by_division`) delegate to `rank_overall_teams` |
+| `models/ai_summary.py` | 1, 2 | `history_weeks` (P1); `memory_read`/`memory_write`/`memory_weeks` (P2) |
+| `services/ai_summary_service.py` | 1, 2 | `LEAGUE_WIDE_RULES` in the hashed prompt (P1); `MemorySession` parameter, block composition, redacted DEBUG line (P2) |
+| `display/json.py` | 1, 2 | `history_weeks` always (P1); memory keys only when set (P2) |
+| `config.py` | 2 | `AIMemoryConfig` inside `AISummaryConfig`, validated only in the enabled branch |
+| `services/ai_memory.py` | 2 | new — Component 15, including its own transport wrapper |
+| `exceptions.py` | 2 | `AIMemoryStoreError` |
+| `main.py` | 2 | build the session when memory is on; print its warnings under Actions; call count assertions |
+| `.github/workflows/weekly-report.yml` | 2 | `AI_MEMORY_ENABLED` guard + the two settings on the report step |
+| `.env.example`, `README.md`, `CHANGELOG.md` | 2 | the three memory variables, the gist exposure, the token's scope, retiring the file at a season boundary |
+
+`display/console.py`, `markdown.py`, `sheets.py`, `email.py` and `services/ai_client.py` are **untouched by both phases**: nothing new is rendered, and the provider client is shipped and correct.
 
 ---
 
@@ -569,7 +822,7 @@ env:
 |---|---|
 | `ff_tracker/models/ai_summary.py` | `AISummaryLeague`, `AIProvenance` (incl. `attempts: 1\|2`), `AISummary`, `AISummaryUnavailable`, `AISummaryResult` |
 | `ff_tracker/services/ai_digest.py` | `build_digest` + typed helpers |
-| `ff_tracker/services/ai_client.py` | `AIRequest`, `AIClient`, `HTTPTransport`, `OpenAICompatibleClient`, `MAX_TOKENS` |
+| `ff_tracker/services/ai_client.py` | `AIRequest`, `AIClient`, `HTTPTransport`, `OpenAICompatibleClient`, `USER_AGENT` |
 | `ff_tracker/services/ai_summary_service.py` | `SYSTEM_PROMPT`, `build_system_prompt`, `prompt_sha`, `AISummaryService` |
 | `tests/ai_fakes.py` | `FakeAIClient`, `FakeTransport`, canned responses, digest/formatter fixtures |
 | `tests/test_ai_summary_models.py` | Article II validation, exception reasons |
@@ -602,7 +855,29 @@ env:
 
 **Also modified (3, docs)** `.env.example`, `README.md`, `CHANGELOG.md`.
 
-**Deliberately untouched**: `ff_tracker/championship.py`, `ff_tracker/season_recap.py`, `display/season_recap_*.py`, `display/factory.py`, `services/season_recap_service.py`, `services/championship_service.py`, `.github/workflows/championship-report.yml`, `.github/workflows/season-recap.yml`, `AGENTS.md` (Gate 2 cut — no FR requires it), `.specify/specs/**` (the spec is the authority; the plan does not edit it).
+### Phase 1 files (spec Phase 1 — season history, league-wide view)
+
+**New (4)**
+| File | Contents |
+|---|---|
+| `ff_tracker/services/ai_history.py` | FR-011 block builder + its `TypedDict`s |
+| `ff_tracker/services/rankings.py` | `rank_overall_teams` — the one comparator |
+| `tests/test_ai_summary_history.py` | AC-024, AC-025 |
+| `tests/fixtures/ai_summary_phase1_golden.json` | the five-format golden (T106) |
+
+**Modified (7)** `ff_tracker/services/ai_digest.py` (three keys + `history_week_count`), `ff_tracker/display/base.py` (two delegates), `ff_tracker/models/ai_summary.py` (`history_weeks`), `ff_tracker/services/ai_summary_service.py` (league-wide rules in the hashed prompt), `ff_tracker/display/json.py` (`history_weeks`), `tests/test_ai_summary_digest.py` (key-set golden + league-wide cases), `tests/ai_fakes.py` (multi-week game fixtures). No formatter outside `json`'s provenance block.
+
+### Phase 2 files (spec Phase 2 — the memory log)
+
+**New (2)**
+| File | Contents |
+|---|---|
+| `ff_tracker/services/ai_memory.py` | archive types, `parse_archive`, `merge_entry`, `MemoryStore`, `GistMemoryStore` (with its own transport wrapper), `MemorySession` |
+| `tests/test_ai_memory.py` | store, archive, session, status map (fake store + fake transport) |
+
+**Modified (8)** `ff_tracker/config.py`, `ff_tracker/exceptions.py`, `ff_tracker/models/ai_summary.py`, `ff_tracker/services/ai_summary_service.py`, `ff_tracker/display/json.py`, `ff_tracker/main.py`, `.github/workflows/weekly-report.yml`, `tests/ai_fakes.py` (`FakeMemoryStore`). Plus `tests/test_ai_summary_service.py`, `tests/test_ai_summary_rendering.py` (the AC-028 golden comparison), `tests/test_main_cli.py` (warning lines, call counts), `tests/test_ai_summary_config_workflow.py` (WC-002), `.env.example`, `README.md`, `CHANGELOG.md`. **No committed research note**: the gist API evidence lives in the PR description (T203).
+
+**Deliberately untouched by both phases**: `display/console.py`, `display/markdown.py`, `display/sheets.py`, `display/email.py`, `display/factory.py`, `services/ai_client.py`, `championship.py`, `season_recap.py`, `services/championship_service.py`, `services/season_recap_service.py`, the two non-weekly workflows, `AGENTS.md`, `.specify/specs/**`.
 
 ---
 
@@ -620,6 +895,12 @@ Any `AISummaryError` → `AISummaryUnavailable(reason)` → notice in the sectio
 ### Feature on, misconfigured
 `load_ai_summary_config()` raises `ConfigurationError` before any ESPN data is fetched → `main` returns 1, no report, zero provider calls (AC-009). This is the *only* new failure path that stops a run, and it is deliberate (FR-007).
 
+### Phase 1 (feature on, either mode)
+`build_digest` → per league: `_standings_rows` once → `standings` (mode-filtered) *and* `build_history(games, teams, anchor=rows)` → `history`; across divisions: `rank_overall_teams` → `overall_standings`, and the weekly rows → `weekly_extremes` → `history_week_count(digest)` → `AIProvenance.history_weeks` → `json.dumps(digest)` into the same one request. No store, no extra call, nothing rendered.
+
+### Phase 2 (memory on, narrative accepted)
+`MemorySession.open()` → one `GET` → `parse_archive` → `read_status`, `entries`, `weeks` → `build_memory_block(entries)` appended to the instructions → one provider call → parse, match, normalise → `AISummary` (its `provenance.generated_at` is the run's one instant) → `MemorySession.commit(summary)` → `_can_key_entry` → `merge_entry` (the entry copies `generated_at` from the summary) → one `PATCH` → `write_status` → `provenance` carries all three fields → `main` prints the session's warnings under Actions. A read or write failure changes no format and no exit code.
+
 ---
 
 ## Implementation Phases
@@ -634,6 +915,28 @@ Thirteen tasks, detailed in [tasks.md](./tasks.md). Grouped so the suite is gree
 | 4 — Rendering | 8–10 | protocol signature + JSON, then console/markdown, then sheets/email |
 | 5 — Wiring | 11 | one call per run, `::warning::`, `--help` egress paragraph |
 | 6 — Ops & docs | 12–13 | workflow guard, README/`.env.example`/CHANGELOG |
+
+Phases 1–6 above are **shipped**; their task numbers 1–13 keep their ids. The amendment adds two
+phases of its own, numbered `T1xx` and `T2xx` so nothing shipped is renumbered:
+
+| Phase | Tasks | Outcome | Revertable alone |
+|---|---|---|---|
+| A — Season history and league-wide view (spec Phase 1) | T101–T103, T105, T106 (**5**) | three digest keys, one provenance field, the two league-wide prompt rules (in T103), the golden | yes: one `git revert`, nothing Phase-2-only touched |
+| B — The memory log (spec Phase 2) | T201–T208, T210 (**9**) | config, archive, store, session, prompt block, service lifecycle, wiring, AC-028, workflow and docs (in T210) | yes: one `git revert` over B's commits |
+
+**One engineer pass per phase.** Phase A is 5 tasks and Phase B is 9, both inside the ~15 a single
+pass allows. Three tasks were folded rather than added: T104's prompt rules join T103 (same two
+files, one test), and T209's workflow guard joins T210 with the operator documentation (both exist
+to let an operator enable memory in CI without a report failing). Two more were considered and left
+out: a `--help` paragraph for the memory settings (no FR asks, and it would be a fourth copy of a
+variable list), and a separate "backfill works outside the CLI" task — the constraint rides on
+T206's subprocess proof instead.
+
+**Boundary rule**: Phase B is planned and delivered against a **merged** Phase A. Every Phase B
+task that touches a Phase A file (`ai_summary_service.py`, `models/ai_summary.py`, `json.py`)
+extends it; no Phase B task edits a Phase A *behaviour*, and reverting B leaves the Phase A golden
+and its digest untouched. Reverting A alone is only meaningful before B merges, which the
+sequencing guarantees.
 
 **Signature-ordering constraint**: mypy requires an override to accept every parameter of the abstract method, so task 8 changes `display/base.py` **and all five** concrete `format_output` signatures in one commit (only JSON renders). Tasks 9–10 then add rendering to the other four without touching any signature. Splitting them the other way round would leave a red `mypy ff_tracker`.
 
@@ -651,6 +954,16 @@ Recorded because they shape the implementation and are not visible from the spec
 6. **Baseline mypy is clean on this branch** (`Success: no issues found in 41 source files`) — the 27 pre-existing errors the Gate 2 brief refers to were fixed in `a78e6ba`. The bar is therefore zero new errors, not "the same 27".
 7. **`urlopen` returns `HTTPResponse` and its second positional argument is `data`.** The transport seam therefore cannot be `urlopen` itself; it is the `_urlopen(request, timeout) -> bytes` wrapper (Decision 6), and one test must patch `urllib.request.urlopen` to exercise that wrapper — every other client test injects a fake and would never run the production path.
 8. **`load_environment()` runs only inside `create_config()`.** A loader that reads `AI_SUMMARY_*` must call it itself or run after `create_config`; the plan does both (Decision 3), and Task 4 proves a `.env`-only setup with `create_config` unpatched.
+
+Found while planning the amendment:
+
+9. **`DivisionData.games` is the whole season up to the week processed, and it can be short.** `extract_games` builds both rows of every box score, so it carries `team_name`, `score`, `opponent_name`, `opponent_score`, `won`, `week`, `margin`, `division` — everything FR-011 needs — but a box score it failed to parse is silently skipped (`espn_service.py:453`, a `logger.warning` and `continue`). That is why FR-011 anchors the newest week on the standings rather than on the recomputation, and why AC-024's second fixture is not hypothetical.
+10. **The overall ranking lives in exactly four formatter call sites.** `console.py:442`, `markdown.py:433`, `sheets.py:212` pass `limit=20`; `email.py:481` passes `format_args`' `max_teams` (0 = all). Delegating the method (Decision 10) is therefore a change to one body with four unchanged callers; changing any call site would change output under AC-001.
+11. **Weekly challenges are computed once, across all divisions.** `main.py:296-312` concatenates every division's `weekly_games` before `calculate_all_weekly_challenges`, so "Highest Score This Week" is already league-wide. That is what makes AC-027's agreement clause cheap to test — the extremes and the challenge winner read the same rows — and it means the digest must not recompute a *per-division* winner for that comparison.
+12. **`--week N` sets `espn_service.current_week = N`**, and the ESPN path then processes only weeks up to `N` (`_determine_max_week`). So the throwaway backfill script is the ordinary report path with a week override, applied in a loop; it needs no new API, only that `create_config(week=…)`, `load_ai_summary_config()`, `ESPNService`, `MemorySession` and `AISummaryService` stay callable and that `generate` never prints.
+13. **`ff_tracker/__init__.py` imports `.main`**, so every `ff_tracker.services.*` import loads the CLI module. "Callable outside the CLI" therefore cannot be asserted as "main is not imported" — it has to be asserted as behaviour: a process that calls the services, makes no CLI invocation, and prints nothing. T206 proves it in a fresh subprocess.
+14. **`config.year` is always a four-digit year** (`FFTrackerConfig` rejects `< 2000` and `detect_fantasy_year` returns a calendar year), so FR-014's season check is defensive rather than reachable through the CLI; it stays because a backfill script or a future caller can pass anything, and because `current_week` genuinely can be 0 or negative.
+15. **`json.loads` returns `Any`, and the archive parser is new surface.** `parse_archive` binds to `object` first and narrows with `isinstance`, exactly as `_parse_response` and `_parse_envelope` do, so Article I holds with no suppression anywhere in the new file.
 
 ---
 
@@ -683,6 +996,28 @@ No network: `FakeAIClient` implements `AIClient`; `FakeTransport` implements `HT
 | WC-001 static workflow check | `tests/test_ai_summary_config_workflow.py` (string assertions on the YAML, no YAML dependency) |
 | LV-001…004 | manual, once, against the live provider (not in the suite) |
 
+The amendment's criteria:
+
+| AC | Where |
+|---|---|
+| AC-024 history block from games, anchored latest week, second fixture where `games` is short a week | `tests/test_ai_summary_history.py` (one fixture per `scoring_trend` value; magnitudes and nulls asserted as values) |
+| AC-025 no games → `null`; one week → one entry, streak 1, trend `None`; present in all three modes; one provider call, no other outbound call | `test_ai_summary_history.py` + `test_ai_summary_digest.py` (mode fixtures), call count via `FakeAIClient.requests` |
+| AC-026 exactly three digest keys; five formats byte-identical; only `history_weeks` differs in JSON; feature-off still today's output | `test_ai_summary_digest.py` (replaced `EXPECTED_KEYS`), the T106 golden, existing AC-001 test re-run |
+| AC-027 overall standings order and completeness, division per row, extremes across three divisions, agreement with the per-division winners, single division, no games, prompt rules present | `test_ai_summary_digest.py` (order and completeness on their own fixtures; the >20-team fixture compares the rendered 20 console rows against the first 20 of `overall_standings`, which guards rendering order) + `test_ai_summary_service.py` (rule constants in the composed prompt) |
+| AC-028 memory off: zero store calls, no block, no memory keys, five formats equal the Phase-1 golden | `test_ai_summary_rendering.py` (the golden comparison) + `test_ai_memory.py` (zero calls) |
+| AC-029 absent file and empty gist: `"none"`, `[]`, one read, one write, the entry's contents | `test_ai_memory.py` + `test_ai_summary_service.py` |
+| AC-030 six prior weeks: one read, every entry under its tag in week order, no gist id/token/league id in the body, `"ok"`, `[1…6]`, one provider call, response carries no memory field | `test_ai_summary_service.py` + `test_ai_memory.py` |
+| AC-031 read failures: a 404 is `"none"` and its write fails per AC-032; 401/403 vs 5xx/transport/timeout, one warning and none, deterministic sections byte-identical, one provider call, `memory_weeks: []` | `test_ai_memory.py` (session) + `test_main_cli.py` (the printed line) |
+| AC-032 write failures: 404/401/403/5xx/transport/timeout, exit 0, one warning and none, token absent; same-week re-run replaces in place | `test_ai_memory.py` (merge + session) + `test_main_cli.py` |
+| AC-033 a file that will not parse as the archive shape warns once and is left unchanged; unknown keys and over-long text are read and never rewritten; a `week` outside 1–18 or a season that is not a four-digit year skips the write with no store call; missing gist id/token → `ConfigurationError`, exit 1, zero provider and zero store calls | `test_ai_memory.py` + `tests/test_config.py` + `test_main_cli.py` |
+| WC-002 static workflow check | `tests/test_ai_summary_config_workflow.py` |
+| LV-005 (live gist: write, re-run replaces, hand edit survives) and LV-006 (both phases, full archive, one call) | manual, once, at each phase's release — not in the suite |
+| Gist API premise for T203 | **manual, once, against a scratch gist; not in the suite** — the two `curl` responses go in the PR description |
+
+**No network, both phases**: `FakeAIClient` for the provider, `FakeMemoryStore` for the store (`tests/ai_fakes.py`), `FakeTransport` for both HTTP seams (the provider client's and the store's own wrapper), and `tests/fixtures/` for the golden. One test patches `urllib.request.urlopen` and drives the provider's production `_urlopen`, so that path is exercised once and only once; the store's wrapper gets its own small equivalent.
+
+**Golden discipline**: T106 writes `tests/fixtures/ai_summary_phase1_golden.json` from Phase-1 code and commits it; AC-028's test only reads it. A capture helper that a test can call would make the golden a snapshot of the code under test, which is the failure mode AC-028 names. Decision 17 carries the recapture procedure and the rule that decides when a recapture is legitimate.
+
 Guards the ACs do not name but Gate 2 required:
 
 | Guard | Where |
@@ -712,6 +1047,14 @@ Guards the ACs do not name but Gate 2 required:
 **Likelihood**: Low · **Impact**: High
 **Mitigation**: WC-001 test reads the YAML; `AI_SUMMARY_API_KEY` is only ever an `env:` value and a `.env` line; the client never logs requests; AC-005 greps every artefact.
 
+### Risk 5: Two overall rankings ship and drift (Phase 1)
+**Likelihood**: Medium · **Impact**: Medium
+**Mitigation**: one comparator in `services/rankings.py`, called by `_get_overall_top_teams` and by the digest (Decision 10), so there is nothing to drift; AC-027 additionally asserts the digest's order against the console's rendered table, which is the check that catches a future third copy. **Fallback**: none needed — the design removes the second copy rather than reconciling two.
+
+### Risk 6: The golden rots, or blesses a bug (Phase 1 → 2)
+**Likelihood**: Medium · **Impact**: High
+**Mitigation**: the fixture pins model, clock, prompt, report data, CLI inputs and format args (Decision 17); the capture is a separate task whose output is reviewed as a diff and committed; no test can regenerate it; and a recapture in the same commit as a memory change is a review reject, because reconciling AC-028 that way is exactly the regression the criterion exists to catch. **Fallback**: if the golden fails for a reason unrelated to memory, the failure names the format and the first differing byte, so the cause is visible before anyone reaches for the recapture procedure.
+
 ---
 
 ## Performance Considerations
@@ -721,6 +1064,10 @@ With the feature off, `load_ai_summary_config()` is one dict read and an `os.get
 With it on, the run gains one provider call: 7.7–34.4 s in the spike, bounded by `AI_SUMMARY_TIMEOUT` (default 120 s). A contract failure adds exactly one identical retry (two calls, roughly two socket-read timeouts worst case); nothing else is retried and nothing is cached. One call per run in the normal case regardless of league or format count, which is the only performance requirement this feature can enforce.
 
 Digest size is bounded by the data: 3–4 leagues × (≤16 standings rows + ≤8 matchup rows + ≤7 challenges) — a few KB of JSON, far inside any model's context.
+
+**Phase 1** adds no request and no round trip: history is a pass over `DivisionData.games`, and the league-wide view a sort plus a pass over the weekly rows already in memory. Its cost is prompt size — one more block per league and one cross-division block, a few KB.
+
+**Phase 2** adds at most two store round trips, each bounded by `AI_SUMMARY_TIMEOUT` (120 s default), and a prompt that grows to roughly 10,000 tokens by Week 17 (~56 KB of archive). The reply budget is `AI_SUMMARY_MAX_TOKENS` and is unrelated to the prompt's size; the spec refuses to shorten the archive, so there is no knob here and no tuning task.
 
 ---
 
@@ -736,9 +1083,15 @@ Digest size is bounded by the data: 3–4 leagues × (≤16 standings rows + ≤
 
 ## Complexity Tracking
 
-> Two declared deviations, both from the spec's Constitution Deviations section. Each is approved there; recorded here as the constitution requires.
+> **Two articles are violated**, counted by the clause each breaks, not by the sections below:
+> **Article III** — fail-fast ("no partial data tolerance", "no retry logic"), broken by the narrative
+> fail-open, by the two memory fail-open cases, and by the single contract retry (which also touches
+> Article V's "no retry logic" sentence); and **Article X** — the five-second typical run, which no
+> longer holds with the feature on. Below them are two **scope notes**, not violations: the second
+> external API, and Phase 1's zero-added-I/O claim. Every item is approved in the spec's Constitution
+> Deviations section; recorded here because the constitution requires it.
 
-### Article III — Fail-Fast Error Handling (narrative failures degrade the report)
+### Article III — Fail-Fast Error Handling, violation 1: the narrative degrades the report
 
 **Deviation**: `AISummaryService` does not fail the run when the narrative cannot be obtained, matched, validated or normalised. The report renders without the section and says so.
 
@@ -746,26 +1099,58 @@ Digest size is bounded by the data: 3–4 leagues × (≤16 standings rows + ≤
 
 **Boundary this plan implements**:
 - Applies **only** to obtaining, matching, validating and normalising the narrative — one `try/except AISummaryError` in `generate`.
-- ESPN failures, `ConfigurationError` (missing key, bad `AI_SUMMARY_ENABLED`, bad timeout, oversized prompt), data-validation failures outside the parse boundary and every other `FFTrackerError` still fail fast and stop the run.
+- ESPN failures, `ConfigurationError` (missing key, bad `AI_SUMMARY_ENABLED`, bad timeout, oversized prompt, missing gist id or token), data-validation failures outside the parse boundary and every other `FFTrackerError` still fail fast and stop the run.
 - Never silent: notice in the section's position in all five formats **plus** a `::warning::` under Actions.
 - Normalisation cannot fail: the contract already guarantees ≥1 non-empty paragraph per league and normalisation only drops or shortens, so `AISummary` always constructs once matching succeeded.
 - **The exception hierarchy is part of the boundary**: `AISummaryError` and its five subclasses derive from `Exception`, not from `FFTrackerError`. That is deliberate and load-bearing — if a narrative failure ever escaped the boundary, `main()` must not render it as `Error: ...` with exit 1, which is exactly what an `FFTrackerError` subclass would do. Deriving from the project's own base class would convert a cosmetic failure into a denied report by inheritance alone.
 - **Transport failures map inside the client, not outside it**: `HTTPError`, `URLError`, timeouts, and the mid-body `OSError`/`http.client.HTTPException` raised by `response.read()` all become `AISummaryError` subclasses before they leave `complete()`. A `ConnectionResetError` escaping as an `OSError` would be caught by `main()`'s unexpected-error branch and deny the report, so this mapping is a fail-open requirement, not error-polish.
 
-### Article X — Performance Requirements (provider latency)
+### Article III — Fail-Fast Error Handling, violation 2 (Phase 2): the memory log degrades silently and warns
+
+**Deviation**: a failed memory read never appears in the report at all, and a failed memory write ships the report and warns. Neither is a failure of the run.
+
+**Spec reasoning (FR-014, FR-006)**: the archive is context for prose that has already been produced without it; a read failure changes no output, so a notice would advertise a section that is not missing. A write failure is different — the log is what the next week depends on, so it must be visible — but it still cannot cost the league its report.
+
+**Boundary this plan implements**:
+- `MemorySession` **never raises** (Decision 13), so neither case can enter Decision 1's boundary and neither can acquire a notice. The two Article III cases share one structural guarantee instead of two catch clauses.
+- A read failure is recorded in `provenance.memory_read` and is silent except for a 401/403, which warns once under Actions — the one failure an operator can fix.
+- A write failure is recorded in `provenance.memory_write` and warns once under Actions, naming scope or authentication where identifiable. Outside Actions, nothing is printed.
+- Everything around memory still fails fast: a missing gist id or token with memory on is a `ConfigurationError` (exit 1, no report, no provider call, no store call), and a programming error inside the session propagates as an unexpected error.
+
+### Articles III and V — one bounded retry, contract failures only (existing behaviour, recorded as a violation of both)
+
+**Deviation**: `_generate` retries once. Article III says "no retry logic"; Article V says "no retry logic (fail clearly)". This is the third Article III violation and the only Article V sentence this amendment touches.
+
+**Spec reasoning (FR-003)**: the retried class — malformed JSON, a wrong shape, a league-count or name mismatch, an empty required field — is sampling noise rather than a statement about the provider, so a second identical attempt is cheap and often sufficient. It is never HTTP 4xx/5xx, a transport error, a timeout or `finish_reason == "length"`, each of which would fail identically at the same cost; the retry reuses the same request object, so prompt, model and budget are unchanged; a second contract failure is the ordinary notice.
+
+**Boundary this plan implements**: `except AIContractError` only, `attempts` capped at 2, `provenance.attempts` recording which happened, and no retry of any kind in `AIClient` or `MemoryStore`. Phase 2 adds no retry: a store failure is mapped to a status, never re-attempted.
+
+### Article V — scope note (Phase 2): a second external API, one read and one write per run
+
+**Not a violation.** Article V's clauses are about ESPN call discipline — context managers, a single call for many items, one fetch feeding every format, no retries, rate-limit awareness — and a one-shot gist call that is timed out per socket read and never retried meets every one of them. This section records the *scope* change, which is that a run with memory on now talks to two external services rather than one.
+
+**Spec reasoning (FR-013)**: one gist read before generation and at most one write after, regardless of league count, with no retries of its own and a one-shot client — the same discipline FR-001 applies to the provider call and Article V applies to ESPN.
+
+**What the plan does with it**:
+- `MemorySession.open()` and `.commit()` are each called at most once per run; the write is skipped when there is nothing to key (Decision 16), so a pre-kickoff run makes one call, not two.
+- No ESPN traffic changes: history and the league-wide view are computed in-process from `DivisionData.games`, `TeamStats` and `weekly_games`. **Phase 1 adds no network call at all**, which is why it has no Article V entry of its own.
+- The store's socket read is bounded by `AI_SUMMARY_TIMEOUT`; no new timeout setting is added.
+- The `User-Agent` on both clients is non-default for the same reason: the default `Python-urllib/*` is refused at the edge.
+
+### Article X — Performance Requirements (violation): provider and store latency
 
 **Deviation**: the 5-second typical run no longer holds with the feature enabled.
 
-**Spec reasoning (v0.8)**: 7.7–34.4 s per call in the spike, bounded by `AI_SUMMARY_TIMEOUT` **on each socket read**. There is no wall-clock deadline, so a pathologically slow provider can exceed the configured value. The 5-second budget applies to the deterministic report with the feature off.
+**Spec reasoning (v0.8, v0.23)**: 7.7–34.4 s per provider call in the spike, bounded by `AI_SUMMARY_TIMEOUT` **on each socket read**; there is no wall-clock deadline, so a pathologically slow provider can exceed the configured value. The 5-second budget applies to the deterministic report with the feature off. Phase 2 adds at most two store round trips, each bounded by the same per-socket-read timeout, and a ~10,000-token prompt by Week 17 — a cost the spec states and explicitly refuses to trade against the archive's length.
 
-**Boundary this plan implements**: off by default; zero added network I/O when off; one call per run when on, plus at most one identical retry after a contract failure; no other retries, no streaming, no per-format second call; no thread or signal wrapper (a timed-out `urlopen` cannot be cancelled, so a worker thread would hang shutdown for the same duration it was meant to bound). A caller that cares about schedule duration leaves the feature off, which is the default.
+**Boundary this plan implements**: off by default; zero added network I/O when off; one call per run when on, plus at most one identical retry after a contract failure; no other retries, no streaming, no per-format second call; no thread or signal wrapper (a timed-out `urlopen` cannot be cancelled, so a worker thread would hang shutdown for the same duration it was meant to bound); Phase 1 adds no request at all. A caller that cares about schedule duration leaves the feature off, which is the default.
 
 ### Held without a governing FR
 
-- **The non-default `User-Agent` is a hard requirement.** No FR names it, but the default endpoint sits behind Cloudflare, which rejects `Python-urllib/*`; without an identifying header every call fails at the edge. It is recorded here because a future "remove the unused header" cleanup would silently break the default endpoint, and no acceptance criterion would go red.
+- **The non-default `User-Agent` is a hard requirement** on both clients. No FR names it, but the default endpoint sits behind Cloudflare, which rejects `Python-urllib/*`; without an identifying header every call fails at the edge. It is recorded here because a future "remove the unused header" cleanup would silently break the default endpoint, and no acceptance criterion would go red.
 
 ### Not deviated
-Articles I (no `Any`, no suppressions), II (frozen validated models), IV (services never import display; the `::warning::` is emitted in `main.py`, not the service), V (no extra ESPN calls), VI (one protocol, five formats), VII (docstrings/names, comments only for the non-obvious), IX (no new flags; `--help` states the egress).
+Articles I (no `Any`, no suppressions — the new archive parser narrows from `object` like the existing two), II (frozen validated models; the archive is a `TypedDict` payload, not state), IV (services never import display; the one new edge is display → services for the shared comparator, which is the direction the article permits; every `::warning::` is still emitted in `main.py`), VI (one protocol, five formats, and neither phase touches four of them), VII (docstrings/names, comments only for the non-obvious), IX (no new flags; `--help` unchanged by Phase 1, and Phase 2's three variables are documented where the existing ones are).
 
 ---
 
@@ -782,9 +1167,21 @@ None open. Decisions the spec leaves to the plan, recorded here so Gate 3 can ob
 7. The markdown TOC does not gain an entry for the new heading (Decision 7).
 8. The transport is `_urlopen(request, timeout) -> bytes`; `urlopen` itself cannot be the seam because it returns `HTTPResponse` and takes `data` as its second argument (Decision 6).
 
+Decisions this amendment leaves to the plan, recorded so Gate 3 can object to them specifically:
+
+9. History is its own module, the league-wide view stays in the digest, and one comparator lives in `services/rankings.py` shared with the formatters (Decisions 9, 10). `display → services` is the one new import edge.
+10. History's newest rankings are the per-league standings list object, unfiltered by mode, so the anchor is the report's own ranking in every mode (Decision 11).
+11. Four history fields are `null` for a team with no game, and `head_to_head` is ordered by opponent name (Decision 12).
+12. The store is a `MemoryStore` protocol plus one `MemorySession` per run that never raises; the service takes the session, `main.py` prints its warnings (Decision 13).
+13. `provenance.history_weeks` is a defaulted int; the three memory fields are all-set or all-`None`, and `None` is what keeps them out of JSON (Decision 14).
+14. `prompt_sha` hashes the instructions only; the memory block is appended after it, and the DEBUG line is the block renderer in redacted mode (Decision 15).
+15. A same-week re-run's own previous take **is** sent in the block, because excluding it would be the selection rule FR-014 deletes (Decision 16).
+16. The file's `season` is fixed at creation and the entry key is the week alone, so a later season's Week-N run replaces the earlier season's Week-N entry, hand edits included; retiring `memory.json` at a season boundary is the operator's action, documented in T210 (Decision 16).
+17. The Phase-1 golden is one JSON fixture holding four strings and one parsed document, captured by T106 and never regenerated by a test (Decision 17), with a written recapture procedure and the rule that a memory change may never be reconciled by recapturing it.
+
 ### Spec nits for the next spec edit (not edited here)
 
-- **Configuration table**: `AI_SUMMARY_TIMEOUT` is still described as "Whole-call timeout in seconds". FR-003 (v0.8) and Article X now say the bound is per socket operation with no wall-clock deadline, so the table row should say "Per-socket-read timeout in seconds". One line; belongs to the owner's next spec commit, not to this plan.
+None. The review's wordings are in the spec, and the current version fixed the one unsatisfiable phrase this plan had already read as value-identity (AC-032's "byte-identical" for entries the tool re-serialises), so nothing here asks for a further spec edit.
 
 ---
 
@@ -807,3 +1204,6 @@ None open. Decisions the spec leaves to the plan, recorded here so Gate 3 can ob
 | 1.2 | 2026-10-21 | AI Agent | Gate 3 bookkeeping: the Article III boundary now records why the AI exception hierarchy derives from `Exception` rather than `FFTrackerError` (so a narrative failure cannot be rendered as a report error) and why transport failures, including mid-body `OSError`/`HTTPException`, are mapped inside the client; a new "Held without a governing FR" note records the non-default `User-Agent` as a hard requirement of the default endpoint, which no criterion covers. |
 | 1.3 | 2026-10-21 | AI Agent | Spec v0.12: the section moves from the report's end to between the weekly highlights and the season challenges in console, markdown, email and sheets (JSON unchanged), so Decision 7's placement table and Component 9 are restated and AC-001 becomes a mid-document insertion; `_generate` retries once for `AIContractError` only, reusing the same request, with `provenance.attempts` (1 or 2) recording it; the system prompt names the exact league count and the names, built from the digest at request time, so `prompt_sha` now hashes the composed prompt; AC-018…AC-022 added to the mapping and the performance note moved from "no retries" to "one identical retry". |
 | 1.4 | 2026-10-21 | AI Agent | Gate 3 delta: Decision 8 now hashes the composed prompt only (the commissioner block is already inside it, so appending the user prompt hashed it twice); the Scope line and the spec reference were corrected to v0.13 and the new placement; AC-018's mapping now covers playoff and championship modes plus the no-weekly-challenges case; the logging boundary is recorded as league names only, in the DEBUG prompt line, per FR-009 v0.13. |
+| 2.0 | 2026-10-27 | AI Agent | Spec v0.24: the two-phase amendment. New Amendment Architecture section (Decisions 9–17): history is its own module while the league-wide view stays in the digest; one comparator in `services/rankings.py` called by `_get_overall_top_teams` and the digest, so no second ordering can exist; history's newest rankings are the per-league standings list itself; the store is a `MemoryStore` protocol plus a per-run `MemorySession` that never raises, so Decision 1's boundary is unchanged; provenance carries `history_weeks` always and the three memory fields only when set; `prompt_sha` hashes the instructions with the memory block appended after it, and the DEBUG line is the block renderer redacted; one predicate suppresses a write and one key replaces an entry; the Phase-1 golden and exactly what it pins. Components 13–16, the Phase 1/Phase 2 file inventory, the two delivery phases, the AC-024…AC-033 / WC-002 / LV-005–006 test map, the Phase-2 failure-policy table, two new risks, six new constraints and the four-deviation Complexity Tracking were added. Five spec nits recorded and not edited. |
+| 2.1 | 2026-10-27 | AI Agent | Review findings applied. **B1** — the backfill constraint is proved by behaviour in a fresh subprocess (no CLI invocation, one store write, `main()` never called, empty stdout), because `ff_tracker/__init__.py` imports `.main` and an import assertion could never pass; new Constraint 13 records that. **B2** — `commit(summary)` runs after `_normalise`, and the entry copies `generated_at` from the summary's provenance so one instant is computed once. **B3** — Components 4 and 6 restated to the shipped configuration (the full `AI_SUMMARY_*` set including `MAX_TOKENS` and `REASONING_EFFORT`, default model `deepseek-v4.1-flash`, no hard-coded budget, `reasoning_effort` omitted when unset). **B4** — the paired authentication-read-plus-failed-write fixture counts two warnings, one per cause. **S1** — the failure table points the read-404 row at AC-031/AC-032 and the write guard at AC-033; **S2** — `parse_archive` is described as "parses as the archive shape", with content, counts and text length never read-only causes; **S3** — the season consequence is stated plainly and documented in T210; **S4** — an unknown key inside a prior entry survives a merge. **S5** — T106 names the full patch set and Decision 17 carries the recapture procedure and what may and may not break the golden; **S6** — AC-027's >20-team comparison is the rendered 20 rows against the first 20, and states that it guards rendering order rather than the comparator; **S7** — the gist `curl` is marked manual, once, in the PR description. **S9** — Complexity Tracking counts two violated articles (III, X) with Article V relabelled a scope note. **S10** — see tasks.md. Cuts: no committed `research.md`, no `ai_client.py` rename (the store gets its own transport wrapper), and T104 folded into T103. |
+| 2.2 | 2026-10-27 | AI Agent | Gate 2 close, five corrections and no design change. The dependency map restored **T103 requires T102** (it calls the comparator T102 creates). **AC-033's over-long-paragraph clause gained its owner**: T205 joins the traceability row and its six-week test asserts that a stored paragraph longer than any cap reaches the composed block verbatim. Version pointers retargeted from spec v0.24 to **v0.26**; the phantom Configuration-table nit deleted, because the row already reads "Per-socket-read timeout in seconds"; the spec-nits section now reads "None". Artifacts frozen. |
