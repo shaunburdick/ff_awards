@@ -23,6 +23,7 @@ from ..models import (
 )
 from ..models.championship import ChampionshipRoster
 from ..models.season_summary import SeasonSummary
+from ..services.rankings import rank_overall_teams
 
 
 class ReportMode(Enum):
@@ -260,7 +261,7 @@ class BaseFormatter(ABC):
 
     def _get_sorted_teams_by_division(self, division: DivisionData) -> list[TeamStats]:
         """Get teams sorted by wins (descending) then points for (descending)."""
-        return sorted(division.teams, key=lambda x: (x.wins, x.points_for), reverse=True)
+        return rank_overall_teams([division])
 
     def _get_overall_top_teams(
         self, divisions: Sequence[DivisionData], limit: int | None = None
@@ -276,14 +277,7 @@ class BaseFormatter(ABC):
         Returns:
             Ranked teams, truncated to ``limit`` when one is supplied.
         """
-        all_teams: list[TeamStats] = []
-        for division in divisions:
-            all_teams.extend(division.teams)
-
-        ranked = sorted(all_teams, key=lambda x: (x.wins, x.points_for), reverse=True)
-        if limit is None or limit <= 0:
-            return ranked
-        return ranked[:limit]
+        return rank_overall_teams(divisions, limit)
 
     def _calculate_total_stats(self, divisions: Sequence[DivisionData]) -> tuple[int, int]:
         """Calculate total number of divisions and teams."""

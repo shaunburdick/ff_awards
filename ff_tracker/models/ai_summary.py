@@ -58,6 +58,8 @@ class AIProvenance:
     truncated: bool = False
     # 1, or 2 when one contract-failure retry was spent on sampling noise.
     attempts: int = 1
+    # Distinct weeks every league's history block carried, unioned (FR-011).
+    history_weeks: int = 0
 
     def __post_init__(self) -> None:
         """Validate provenance after construction."""
@@ -76,6 +78,11 @@ class AIProvenance:
 
         if self.attempts not in (1, 2):
             raise DataValidationError(f"Provenance attempts must be 1 or 2: {self.attempts}")
+
+        if self.history_weeks < 0:
+            raise DataValidationError(
+                f"Provenance history weeks cannot be negative: {self.history_weeks}"
+            )
 
 
 @dataclass(frozen=True)

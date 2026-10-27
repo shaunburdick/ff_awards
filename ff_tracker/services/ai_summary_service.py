@@ -29,7 +29,7 @@ from ..models import (
     WeeklyChallenge,
 )
 from .ai_client import CONTRACT_REASON, AIClient, AIRequest
-from .ai_digest import build_digest
+from .ai_digest import build_digest, history_week_count
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,18 @@ SEASON_NOTE_WORD_CAP = 40
 LEAGUE_WORD_CAP = 120
 MAX_PARAGRAPHS = 3
 MAX_BULLETS = 3
+
+# FR-012's two rules about the league-wide block: they are instructions, so
+# they sit inside the hashed prompt, and the narrative may not read a division
+# rank as an overall one.
+LEAGUE_WIDE_RULES: tuple[str, str] = (
+    "An overall claim - the best team, the worst team, the biggest blowup across "
+    "everyone - may come only from the league-wide block (overall_standings and "
+    "weekly_extremes). Each league's standings rank is a rank inside that league's "
+    "own table, not the best record in the setup.",
+    "The league-wide block is the source for any cross-division statement, and "
+    "nothing in it changes a per-league value.",
+)
 
 # The system prompt is a module constant so a prompt edit is one reviewable
 # diff and prompt_sha (which hashes it plus the user prompt) cannot drift.
@@ -101,7 +113,7 @@ def build_system_prompt(user_prompt: str, league_names: Sequence[str]) -> str:
     repair. An empty or whitespace-only user prompt means "no extra
     instructions" and that block is omitted rather than sent empty.
     """
-    prompt = SYSTEM_PROMPT
+    prompt = SYSTEM_PROMPT + "".join(f"- {rule}\n" for rule in LEAGUE_WIDE_RULES)
 
     if league_names:
         count = len(league_names)
@@ -188,6 +200,7 @@ class AISummaryService:
         """
         digest = build_digest(divisions, challenges, weekly_challenges, current_week, championship)
         league_names = [league["league"] for league in digest["leagues"]]
+        history_weeks = history_week_count(digest)
         system_prompt = build_system_prompt(self._config.user_prompt, league_names)
         request = AIRequest(
             system_prompt=system_prompt,
@@ -205,7 +218,7 @@ class AISummaryService:
                 content = self._client.complete(request)
                 narrative = self._parse_response(content)
                 matched = self._match_leagues(narrative["leagues"], divisions)
-                return self._normalise(narrative, matched, attempts, system_prompt)
+                return self._normalise(narrative, matched, attempts, system_prompt, history_weeks)
             except AIContractError:
                 if attempts >= 2:
                     raise
@@ -287,6 +300,7 @@ class AISummaryService:
         matched: Sequence[tuple[str, _RawLeague]],
         attempts: int,
         system_prompt: str,
+        history_weeks: int,
     ) -> AISummary:
         """Apply the caps, structurally, and record whether anything was cut."""
         truncated = False
@@ -310,6 +324,7 @@ class AISummaryService:
                 generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 truncated=truncated or headline_cut or note_cut,
                 attempts=attempts,
+                history_weeks=history_weeks,
             ),
         )
 

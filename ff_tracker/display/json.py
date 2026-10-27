@@ -190,6 +190,7 @@ class JsonFormatter(BaseFormatter):
                 "generated_at": ai_summary.provenance.generated_at,
                 "truncated": ai_summary.provenance.truncated,
                 "attempts": ai_summary.provenance.attempts,
+                "history_weeks": ai_summary.provenance.history_weeks,
             },
         }
 

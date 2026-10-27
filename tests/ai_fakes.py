@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 import urllib.request
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from ff_tracker.exceptions import AISummaryError
 from ff_tracker.models import (
@@ -134,6 +134,102 @@ def make_matchup_pair(
             week=week,
             true_projection_diff=true_diff2,
         ),
+    ]
+
+
+def make_game(
+    team: str,
+    score: float,
+    opponent: str,
+    opponent_score: float,
+    *,
+    division: str = LEAGUE_A,
+    week: int = 1,
+) -> GameResult:
+    """One team's season game, with the outcome derived from the scores."""
+    return GameResult(
+        team_name=team,
+        score=score,
+        opponent_name=opponent,
+        opponent_score=opponent_score,
+        won=score > opponent_score,
+        week=week,
+        margin=abs(score - opponent_score),
+        division=division,
+    )
+
+
+def make_game_pair(
+    team1: str,
+    score1: float,
+    team2: str,
+    score2: float,
+    *,
+    division: str = LEAGUE_A,
+    week: int = 1,
+) -> list[GameResult]:
+    """Both rows of one season game, as the ESPN extractor emits them."""
+    return [
+        make_game(team1, score1, team2, score2, division=division, week=week),
+        make_game(team2, score2, team1, score1, division=division, week=week),
+    ]
+
+
+def make_season_games(
+    scores: Mapping[str, Sequence[float]],
+    schedule: Sequence[Sequence[tuple[str, str]]],
+    *,
+    division: str = LEAGUE_A,
+    first_week: int = 1,
+) -> list[GameResult]:
+    """One game per scheduled pair per week; ``scores[team][index]`` is that week."""
+    return [
+        game
+        for offset, pairs in enumerate(schedule)
+        for team1, team2 in pairs
+        for game in make_game_pair(
+            team1,
+            scores[team1][offset],
+            team2,
+            scores[team2][offset],
+            division=division,
+            week=first_week + offset,
+        )
+    ]
+
+
+def make_teams_from_games(
+    names: Sequence[str],
+    games: Sequence[GameResult],
+    *,
+    division: str = LEAGUE_A,
+    playoff_slots: int = 2,
+) -> list[TeamStats]:
+    """Season stats derived from the games, so the standings and history agree."""
+    wins: dict[str, int] = dict.fromkeys(names, 0)
+    losses: dict[str, int] = dict.fromkeys(names, 0)
+    points_for: dict[str, float] = dict.fromkeys(names, 0.0)
+    points_against: dict[str, float] = dict.fromkeys(names, 0.0)
+    for game in games:
+        if game.team_name in wins:
+            wins[game.team_name] += 1 if game.won else 0
+            losses[game.team_name] += 0 if game.won else 1
+            points_for[game.team_name] += game.score
+            points_against[game.team_name] += game.opponent_score
+
+    ranked = sorted(names, key=lambda name: (wins[name], points_for[name]), reverse=True)
+    in_position = set(ranked[:playoff_slots])
+    return [
+        make_team(
+            name,
+            division=division,
+            wins=wins[name],
+            losses=losses[name],
+            points_for=points_for[name],
+            points_against=points_against[name],
+            in_playoff_position=name in in_position,
+        )
+        for name in names
     ]
 
 
@@ -309,6 +405,117 @@ def make_division(
         playoff_bracket=playoff_bracket,
         reg_season_count=reg_season_count,
     )
+
+
+# Six weeks of scores per team, arranged so week 6 puts the highest score in
+# the first division, the biggest winning margin in the second and the closest
+# game in the third (AC-027). Records differ per team, so the league-wide
+# ranking is not a roster or division order.
+THREE_DIVISION_SCORES: dict[str, dict[str, list[float]]] = {
+    "MM Driveway Surfers": {
+        "Butt Fumble": [110.0, 120.0, 95.0, 130.0, 105.0, 150.0],
+        "Donut Lose": [95.0, 100.0, 90.0, 99.0, 98.0, 100.0],
+        "In JJ We Trust": [88.0, 92.0, 98.0, 105.0, 97.0, 120.0],
+        "Caserta Chumps": [80.0, 85.0, 99.0, 100.0, 95.0, 115.0],
+    },
+    "My 2026 League": {
+        "Sunday Scaries": [105.0, 118.0, 110.0, 125.0, 130.0, 145.0],
+        "Waiver Wire": [90.0, 95.0, 100.0, 99.0, 97.0, 75.0],
+        "Bench Mob": [88.0, 92.0, 101.0, 98.0, 98.0, 110.0],
+        "Trading Places": [85.0, 90.0, 99.0, 95.0, 99.0, 104.0],
+    },
+    "The Hood 2026": {
+        "Hood Rats": [102.0, 111.0, 108.0, 120.0, 118.0, 145.0],
+        "Late Round Larry": [99.0, 100.0, 105.0, 110.0, 112.0, 144.5],
+        "Two Minute Drill": [90.0, 95.0, 101.0, 94.0, 100.0, 99.0],
+        "Sack Exchange": [85.0, 88.0, 99.0, 95.0, 96.0, 90.0],
+    },
+}
+THREE_DIVISION_PAIRS: list[list[tuple[str, str]]] = [
+    [("Butt Fumble", "Donut Lose"), ("In JJ We Trust", "Caserta Chumps")],
+    [("Sunday Scaries", "Waiver Wire"), ("Bench Mob", "Trading Places")],
+    [("Hood Rats", "Late Round Larry"), ("Two Minute Drill", "Sack Exchange")],
+]
+THREE_DIVISION_PLAYERS: dict[str, tuple[str, str, float]] = {
+    "MM Driveway Surfers": ("Christian McCaffrey", "RB", 30.70),
+    "My 2026 League": ("Malik Nabers", "WR", 28.50),
+    "The Hood 2026": ("Bijan Robinson", "RB", 27.20),
+}
+
+
+def make_three_division_divisions(week: int = 6) -> list[DivisionData]:
+    """Three leagues with six weeks behind them and a designed week 6 (AC-027)."""
+    divisions: list[DivisionData] = []
+    for index, name in enumerate(THREE_DIVISION_SCORES):
+        scores = THREE_DIVISION_SCORES[name]
+        schedule = [THREE_DIVISION_PAIRS[index]] * len(next(iter(scores.values())))
+        games = make_season_games(scores, schedule, division=name)
+        player, position, points = THREE_DIVISION_PLAYERS[name]
+        final = {team: values[week - 1] for team, values in scores.items()}
+        divisions.append(
+            make_division(
+                name,
+                league_id=111 + index,
+                teams=make_teams_from_games(list(scores), games, division=name),
+                games=games,
+                weekly_games=[
+                    row
+                    for team1, team2 in THREE_DIVISION_PAIRS[index]
+                    for row in make_matchup_pair(
+                        team1,
+                        final[team1],
+                        team2,
+                        final[team2],
+                        division=name,
+                        week=week,
+                    )
+                ],
+                weekly_players=[
+                    make_player(
+                        player,
+                        points,
+                        position=position,
+                        team=THREE_DIVISION_PAIRS[index][0][0],
+                        division=name,
+                        week=week,
+                    )
+                ],
+                reg_season_count=14,
+            )
+        )
+    return divisions
+
+
+def make_large_divisions(
+    teams_per_division: int = 8, division_count: int = 3
+) -> list[DivisionData]:
+    """More teams than the console's overall table shows (24 by default)."""
+    divisions: list[DivisionData] = []
+    for index in range(division_count):
+        name = f"League {index + 1}"
+        names = [f"Team {index + 1}-{slot + 1}" for slot in range(teams_per_division)]
+        games = []
+        for slot in range(0, len(names), 2):
+            games.extend(
+                make_game_pair(
+                    names[slot],
+                    150.0 - 5.0 * slot - index,
+                    names[slot + 1],
+                    90.0 + 2.0 * slot + index * 0.5,
+                    division=name,
+                    week=WEEK,
+                )
+            )
+        divisions.append(
+            make_division(
+                name,
+                league_id=200 + index,
+                teams=make_teams_from_games(names, games, division=name),
+                games=games,
+                reg_season_count=14,
+            )
+        )
+    return divisions
 
 
 def make_regular_divisions(week: int = WEEK) -> list[DivisionData]:

@@ -128,6 +128,31 @@ class TestAttempts:
             )
 
 
+class TestHistoryWeeks:
+    """provenance.history_weeks is Phase 1's one output-visible field."""
+
+    def test_defaults_to_zero(self) -> None:
+        assert _provenance().history_weeks == 0
+
+    def test_accepts_a_positive_count(self) -> None:
+        provenance = AIProvenance(
+            model="deepseek-v4.1-flash",
+            prompt_sha="abc",
+            generated_at="2026-10-14T05:03:11Z",
+            history_weeks=6,
+        )
+        assert provenance.history_weeks == 6
+
+    def test_rejects_a_negative_count(self) -> None:
+        with pytest.raises(DataValidationError, match="history weeks cannot be negative"):
+            AIProvenance(
+                model="deepseek-v4.1-flash",
+                prompt_sha="abc",
+                generated_at="2026-10-14T05:03:11Z",
+                history_weeks=-1,
+            )
+
+
 class TestAISummary:
     """Article II validation for the narrative."""
 

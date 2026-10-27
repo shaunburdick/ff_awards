@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import difflib
+import io
 import json
+import os
+import sys
 from collections.abc import Callable, Sequence
+from contextlib import redirect_stdout
+from datetime import datetime, timezone
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from ai_fakes import (
     LEAGUE_A,
     LEAGUE_B,
+    FakeAIClient,
     make_championship,
     make_championship_divisions,
     make_division,
@@ -19,6 +27,7 @@ from ai_fakes import (
     make_regular_weekly_challenges,
     make_season_challenge,
     make_team,
+    make_three_division_divisions,
 )
 
 from ff_tracker.display import (
@@ -29,6 +38,7 @@ from ff_tracker.display import (
     MarkdownFormatter,
     SheetsFormatter,
 )
+from ff_tracker.main import main
 from ff_tracker.models import (
     AISummary,
     AISummaryLeague,
@@ -697,3 +707,142 @@ class TestEmailTeamHighlighting:
     def test_other_formats_have_no_span(self, format_name: str) -> None:
         _, on = _both(format_name, make_regular_divisions())
         assert "ai-team" not in on
+
+
+GOLDEN_PATH = Path(__file__).parent / "fixtures" / "ai_summary_phase1_golden.json"
+GOLDEN_MODEL = "deepseek-v4.1-flash"
+GOLDEN_RESPONSE = json.dumps(
+    {
+        "headline": "Three leagues, one long weekend",
+        "leagues": [
+            {
+                "league": "MM Driveway Surfers",
+                "paragraphs": ["Butt Fumble stayed unbeaten through six weeks."],
+                "bullets": ["Donut Lose won by 1.08"],
+            },
+            {
+                "league": "My 2026 League",
+                "paragraphs": ["Sunday Scaries won by 70 and it was not close."],
+                "bullets": [],
+            },
+            {
+                "league": "The Hood 2026",
+                "paragraphs": ["Hood Rats survived by half a point."],
+                "bullets": ["Late Round Larry is still winless"],
+            },
+        ],
+        "season_note": "The middle of every table is a car park.",
+    }
+)
+# Everything the golden pins: a stray variable in the environment would move
+# the prompt, the model or the report data.
+PINNED_ENV = {
+    "AI_SUMMARY_ENABLED": "true",
+    "AI_SUMMARY_API_KEY": "sk-golden",
+    "AI_SUMMARY_MODEL": GOLDEN_MODEL,
+    "AI_SUMMARY_USER_PROMPT": "",
+}
+
+
+class _StubESPNService:
+    """The ESPN service ``main`` drives, with the AC-027 fixture behind it."""
+
+    current_week = 6
+
+    def __init__(self, config: object) -> None:
+        self.divisions = make_three_division_divisions()
+
+    def load_all_divisions(self) -> list[DivisionData]:
+        return self.divisions
+
+
+def phase1_report_outputs(tmp_path: Path) -> dict[str, object]:
+    """
+    Run one report end to end for the golden and return the five outputs.
+
+    The patch set is plan Decision 17's: ``sys.argv`` (the league ids come from
+    it), ``ESPNService``, the provider client, ``datetime`` **on the summary
+    service module** (patching the class globally would leak into the process)
+    and the environment. The capture script and the comparison test both call
+    this, so the two phases compare one path rather than two copies of it.
+    """
+    argv = ["ff-tracker", "111,222,333", "--year", "2026", "--output-dir", str(tmp_path)]
+    previous_cwd = Path.cwd()
+    os.chdir(tmp_path)
+    try:
+        with (
+            patch.object(sys, "argv", argv),
+            patch.dict(os.environ, PINNED_ENV, clear=True),
+            patch("ff_tracker.main.ESPNService", _StubESPNService),
+            patch(
+                "ff_tracker.main.OpenAICompatibleClient",
+                lambda config: FakeAIClient(response=GOLDEN_RESPONSE),
+            ),
+            patch("ff_tracker.services.ai_summary_service.datetime") as frozen,
+            redirect_stdout(io.StringIO()),
+        ):
+            frozen.now.return_value = datetime(2026, 10, 14, 5, 3, 11, tzinfo=timezone.utc)
+            assert main() == 0
+    finally:
+        os.chdir(previous_cwd)
+
+    return {
+        "console": (tmp_path / "standings.txt").read_text(encoding="utf-8"),
+        "sheets": (tmp_path / "standings.tsv").read_text(encoding="utf-8"),
+        "email": (tmp_path / "standings.html").read_text(encoding="utf-8"),
+        "markdown": (tmp_path / "standings.md").read_text(encoding="utf-8"),
+        "json": json.loads((tmp_path / "standings.json").read_text(encoding="utf-8")),
+    }
+
+
+def _first_difference(actual: str, expected: str) -> str:
+    """Name the first differing character, so a failure is read as output."""
+    for index, (left, right) in enumerate(zip(actual, expected)):
+        if left != right:
+            window = slice(max(index - 30, 0), index + 30)
+            return f"offset {index}: {actual[window]!r} != {expected[window]!r}"
+    return f"lengths differ: {len(actual)} != {len(expected)}"
+
+
+class TestPhase1Golden:
+    """
+    AC-028's reference: the Phase-1 five outputs, read from disk only.
+
+    Nothing here regenerates the file. A recapture is a deliberate, separate
+    commit reviewed as output (plan Decision 17), never a side effect of a test.
+    """
+
+    @pytest.fixture(scope="class")
+    def produced(self, tmp_path_factory: pytest.TempPathFactory) -> dict[str, object]:
+        return phase1_report_outputs(tmp_path_factory.mktemp("phase1-golden"))
+
+    @pytest.fixture(scope="class")
+    def golden(self) -> dict[str, object]:
+        document: object = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
+        assert isinstance(document, dict)
+        return document
+
+    @pytest.mark.parametrize("format_name", ["console", "sheets", "email", "markdown"])
+    def test_text_formats_match_the_golden(
+        self, produced: dict[str, object], golden: dict[str, object], format_name: str
+    ) -> None:
+        expected = golden[format_name]
+        actual = produced[format_name]
+
+        assert isinstance(expected, str)
+        assert isinstance(actual, str)
+        assert actual == expected, _first_difference(actual, expected)
+
+    def test_json_matches_the_golden_document(
+        self, produced: dict[str, object], golden: dict[str, object]
+    ) -> None:
+        assert produced["json"] == golden["json"]
+
+    def test_the_golden_carries_the_phase1_provenance(self, golden: dict[str, object]) -> None:
+        document = golden["json"]
+        assert isinstance(document, dict)
+        provenance = document["ai_summary"]["provenance"]
+
+        assert provenance["model"] == GOLDEN_MODEL
+        assert provenance["generated_at"] == "2026-10-14T05:03:11Z"
+        assert provenance["history_weeks"] == 6

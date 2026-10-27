@@ -8,7 +8,21 @@ import logging
 import re
 
 import pytest
-from ai_fakes import LEAGUE_A, LEAGUE_B, FakeAIClient, FakeTransport, make_regular_divisions
+from ai_fakes import (
+    LEAGUE_A,
+    LEAGUE_B,
+    WEEK,
+    FakeAIClient,
+    FakeTransport,
+    make_championship,
+    make_championship_divisions,
+    make_division,
+    make_playoff_divisions,
+    make_regular_divisions,
+    make_season_games,
+    make_team,
+    make_teams_from_games,
+)
 
 from ff_tracker.config import DEFAULT_AI_MAX_TOKENS, DEFAULT_AI_MODEL, AISummaryConfig
 from ff_tracker.exceptions import (
@@ -19,11 +33,18 @@ from ff_tracker.exceptions import (
     AITransportError,
     AITruncationError,
 )
-from ff_tracker.models import AISummary, AISummaryUnavailable, DivisionData
+from ff_tracker.models import (
+    AISummary,
+    AISummaryUnavailable,
+    ChampionshipLeaderboard,
+    DivisionData,
+)
 from ff_tracker.services.ai_client import AIRequest
+from ff_tracker.services.ai_digest import build_digest, history_week_count
 from ff_tracker.services.ai_summary_service import (
     HEADLINE_WORD_CAP,
     INSTRUCTIONS_HEADING,
+    LEAGUE_WIDE_RULES,
     LEAGUE_WORD_CAP,
     MAX_BULLETS,
     MAX_PARAGRAPHS,
@@ -696,3 +717,98 @@ class TestLogging:
         _generate(service)
 
         assert any("AI summary unavailable: HTTP 410" in r.getMessage() for r in caplog.records)
+
+
+class TestLeagueWideRules:
+    """FR-012's two rules are prompt constants, and they sit inside the hash."""
+
+    @pytest.mark.parametrize(
+        ("divisions", "week", "championship"),
+        [
+            (make_regular_divisions(), WEEK, None),
+            (make_playoff_divisions(), 15, None),
+            (make_championship_divisions(), 17, make_championship()),
+        ],
+        ids=["regular", "playoffs", "championship"],
+    )
+    def test_every_mode_composes_the_rules_verbatim(
+        self,
+        divisions: list[DivisionData],
+        week: int,
+        championship: ChampionshipLeaderboard | None,
+    ) -> None:
+        client = FakeAIClient(
+            response=_response(leagues=[_league_section(division.name) for division in divisions])
+        )
+        AISummaryService(_config(), client).generate(divisions, [], None, week, championship)
+
+        prompt = client.requests[0].system_prompt
+        for rule in LEAGUE_WIDE_RULES:
+            assert rule in prompt
+
+    def test_reordering_a_rule_moves_the_hash(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        before = prompt_sha(build_system_prompt("", [LEAGUE_A]))
+
+        monkeypatch.setattr(
+            "ff_tracker.services.ai_summary_service.LEAGUE_WIDE_RULES",
+            tuple(f"{rule} (reworded)" for rule in LEAGUE_WIDE_RULES[::-1]),
+        )
+
+        assert prompt_sha(build_system_prompt("", [LEAGUE_A])) != before
+
+    def test_a_league_with_no_games_still_makes_one_provider_call(self) -> None:
+        division = make_division(LEAGUE_A, teams=[make_team("Butt Fumble")])
+        client = FakeAIClient(response=_response(leagues=[_league_section(LEAGUE_A)]))
+
+        AISummaryService(_config(), client).generate([division], [], None, WEEK, None)
+
+        digest = json.loads(client.requests[0].user_message)
+        assert digest["overall_standings"] is None
+        assert digest["weekly_extremes"] is None
+        assert len(client.requests) == 1
+
+
+class TestHistoryWeeks:
+    """T105: provenance records the distinct weeks the history blocks carried."""
+
+    def test_zero_when_no_league_has_a_game(self) -> None:
+        service, _ = _service(_response())
+        result = _generate(service)
+
+        assert isinstance(result, AISummary)
+        assert result.provenance.history_weeks == 0
+
+    def test_overlapping_leagues_count_each_week_once(self) -> None:
+        """Weeks [1, 2, 3] and [2, 3, 4] are four weeks, not six."""
+        first = make_season_games(
+            {"A1": [100.0, 110.0, 120.0], "A2": [90.0, 95.0, 99.0]},
+            [[("A1", "A2")]] * 3,
+            division=LEAGUE_A,
+        )
+        second = make_season_games(
+            {"B1": [100.0, 110.0, 120.0], "B2": [90.0, 95.0, 99.0]},
+            [[("B1", "B2")]] * 3,
+            division=LEAGUE_B,
+            first_week=2,
+        )
+        divisions = [
+            make_division(
+                LEAGUE_A,
+                teams=make_teams_from_games(["A1", "A2"], first, division=LEAGUE_A),
+                games=first,
+            ),
+            make_division(
+                LEAGUE_B,
+                league_id=222,
+                teams=make_teams_from_games(["B1", "B2"], second, division=LEAGUE_B),
+                games=second,
+            ),
+        ]
+
+        result = AISummaryService(_config(), FakeAIClient(response=_response())).generate(
+            divisions, [], None, WEEK, None
+        )
+
+        assert isinstance(result, AISummary)
+        assert result.provenance.history_weeks == 4
+        assert history_week_count(build_digest(divisions, [], None, WEEK, None)) == 4
