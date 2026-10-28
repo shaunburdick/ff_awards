@@ -37,6 +37,11 @@ on:
         description: 'One-run AI summary instructions (overrides the repository variable/secret; single line; leave empty to use the standing prompt)'
         required: false
         type: string
+      update_memory:
+        description: 'Update the shared memory log (uncheck for a test run that reads the archive without writing it)'
+        required: false
+        type: boolean
+        default: true
 
 env:
   PYTHONUNBUFFERED: 1
@@ -108,10 +113,15 @@ jobs:
       # The gist id and token are scoped to this step, their only consumer, so
       # checkout, setup-python, setup-uv and the .env writer never see the token.
       # Neither is written to .env: the process reads them from this env directly.
+      # update_memory is the one-run read-only switch. It is a plain expression,
+      # not a `||` chain: on a schedule `inputs` is empty, which renders as a
+      # blank value the loader reads as its default (write), and a `||` fallback
+      # would swallow a deliberate false.
       env:
         AI_SUMMARY_USER_PROMPT: ${{ inputs.ai_summary_prompt || vars.AI_SUMMARY_USER_PROMPT || secrets.AI_SUMMARY_USER_PROMPT }}
         AI_MEMORY_GIST_ID: ${{ vars.AI_MEMORY_GIST_ID }}
         AI_MEMORY_GIST_TOKEN: ${{ secrets.AI_MEMORY_GIST_TOKEN }}
+        AI_MEMORY_WRITE: ${{ inputs.update_memory }}
       run: |
         # Hardcoded note for this week (set to empty string to disable)
         # Example: HARDCODED_NOTE="Playoffs start next week! 🏆"

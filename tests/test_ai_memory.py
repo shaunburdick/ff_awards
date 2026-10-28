@@ -333,9 +333,10 @@ def _memory_config(
     gist_id: str = "gist123",
     gist_token: str = "ghp-secret-token",
     timeout: int = 30,
+    write: bool = True,
 ) -> AIMemoryConfig:
     """The settings a memory-on run carries."""
-    return AIMemoryConfig(gist_id=gist_id, gist_token=gist_token, timeout=timeout)
+    return AIMemoryConfig(gist_id=gist_id, gist_token=gist_token, timeout=timeout, write=write)
 
 
 def _gist_document(files: object) -> bytes:
@@ -939,6 +940,23 @@ class TestWriteGuard:
 
         assert session.write_status == "skipped"
         assert store.write_calls == 0
+
+    def test_read_only_mode_reads_the_archive_and_writes_nothing(self) -> None:
+        """AC-034: the choice, not a failure — no write, no warning."""
+        original = make_memory_archive(weeks=(1, 2, 3))
+        store = FakeMemoryStore(data=original)
+        session = MemorySession(_memory_config(write=False), 2026, 6, store)
+
+        session.open()
+        session.commit(make_narrative())
+
+        assert store.read_calls == 1
+        assert session.read_status == "ok"
+        assert session.weeks == [1, 2, 3]
+        assert store.write_calls == 0
+        assert store.data == original
+        assert session.write_status == "skipped"
+        assert session.warnings == []
 
     def test_a_narrative_that_never_arrived_leaves_the_write_skipped(self) -> None:
         """The service simply does not call commit; the status is "skipped" already."""

@@ -232,6 +232,8 @@ class AIMemoryConfig:
     # Never in a repr or a traceback, exactly as AI_SUMMARY_API_KEY.
     gist_token: str = field(default="", repr=False)
     timeout: int = DEFAULT_AI_TIMEOUT
+    # False is a read-only run: the archive is read and used, nothing is written.
+    write: bool = True
 
     def __post_init__(self) -> None:
         """Validate the pair; there are no defaults, and blank is the missing-value error."""
@@ -427,8 +429,14 @@ def _parse_memory_config(timeout: int) -> AIMemoryConfig | None:
     if not _parse_ai_bool("AI_MEMORY_ENABLED", enabled_raw):
         return None
 
+    write = True
+    write_raw = os.getenv("AI_MEMORY_WRITE", "")
+    if write_raw.strip():
+        write = _parse_ai_bool("AI_MEMORY_WRITE", write_raw)
+
     return AIMemoryConfig(
         gist_id=os.getenv("AI_MEMORY_GIST_ID", ""),
         gist_token=os.getenv("AI_MEMORY_GIST_TOKEN", ""),
         timeout=timeout,
+        write=write,
     )

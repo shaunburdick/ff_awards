@@ -827,6 +827,7 @@ class TestMemoryConfig:
         "AI_MEMORY_ENABLED",
         "AI_MEMORY_GIST_ID",
         "AI_MEMORY_GIST_TOKEN",
+        "AI_MEMORY_WRITE",
     )
 
     @pytest.fixture(autouse=True)
@@ -853,6 +854,59 @@ class TestMemoryConfig:
         assert memory is not None
         assert memory.gist_id == "abc123"
         assert memory.gist_token == "ghp-test"
+
+    def test_write_defaults_to_true(self, memory_env: None) -> None:
+        memory = load_ai_summary_config().memory
+
+        assert memory is not None
+        assert memory.write is True
+
+    @pytest.mark.parametrize("value", ["false", "0", "no", "off", "OFF"])
+    def test_write_false_makes_the_run_read_only(
+        self, memory_env: None, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("AI_MEMORY_WRITE", value)
+        memory = load_ai_summary_config().memory
+
+        assert memory is not None
+        assert memory.write is False
+
+    @pytest.mark.parametrize("value", ["true", "1", "yes", "on", " On "])
+    def test_write_true_spellings(
+        self, memory_env: None, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("AI_MEMORY_WRITE", value)
+        memory = load_ai_summary_config().memory
+
+        assert memory is not None
+        assert memory.write is True
+
+    @pytest.mark.parametrize("value", ["", "   "])
+    def test_blank_write_means_the_default(
+        self, memory_env: None, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        monkeypatch.setenv("AI_MEMORY_WRITE", value)
+        memory = load_ai_summary_config().memory
+
+        assert memory is not None
+        assert memory.write is True
+
+    def test_malformed_write_raises_naming_the_variable(
+        self, memory_env: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AI_MEMORY_WRITE", "sometimes")
+        with pytest.raises(ConfigurationError, match="AI_MEMORY_WRITE must be one of"):
+            load_ai_summary_config()
+
+    def test_malformed_write_is_ignored_when_memory_is_off(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AI_SUMMARY_ENABLED", "true")
+        monkeypatch.setenv("AI_SUMMARY_API_KEY", "sk-test")
+        monkeypatch.setenv("AI_MEMORY_ENABLED", "false")
+        monkeypatch.setenv("AI_MEMORY_WRITE", "sometimes")
+
+        assert load_ai_summary_config().memory is None
 
     @pytest.mark.parametrize("value", ["true", "1", "yes", "on", "TRUE", " On "])
     def test_enabled_accepts_the_true_spellings(
@@ -916,6 +970,7 @@ class TestMemoryConfig:
         """Memory is inert without the narrative feature: no error, no store."""
         monkeypatch.setenv("AI_MEMORY_ENABLED", "maybe")
         monkeypatch.setenv("AI_MEMORY_GIST_ID", "")
+        monkeypatch.setenv("AI_MEMORY_WRITE", "sometimes")
 
         config = load_ai_summary_config()
 

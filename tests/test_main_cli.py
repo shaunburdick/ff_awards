@@ -807,6 +807,33 @@ class TestMemoryWiring:
         assert result == 0
         assert "::warning::" not in capsys.readouterr().out
 
+    def test_read_only_memory_writes_nothing_and_warns_about_nothing(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """AC-034: the run reads the archive, writes nothing, and stays quiet."""
+        store = FakeMemoryStore(data=make_memory_archive())
+        read_only = AIMemoryConfig(gist_id="gist123", gist_token="ghp-test", write=False)
+
+        result, client, _, _ = self._run(memory=read_only, store=store)
+        out = capsys.readouterr().out
+
+        assert result == 0
+        assert len(client.requests) == 1
+        assert store.read_calls == 1
+        assert store.write_calls == 0
+        assert out.count("::warning::") == 0
+
+    def test_read_only_memory_warns_about_nothing_outside_actions(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        store = FakeMemoryStore(data=make_memory_archive())
+        read_only = AIMemoryConfig(gist_id="gist123", gist_token="ghp-test", write=False)
+
+        result, _, _, _ = self._run(memory=read_only, store=store, github_actions=None)
+
+        assert result == 0
+        assert "::warning::" not in capsys.readouterr().out
+
     def test_memory_off_prints_no_warning(self, capsys: pytest.CaptureFixture) -> None:
         result, _, _, _ = self._run(memory=None)
 

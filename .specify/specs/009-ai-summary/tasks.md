@@ -1,12 +1,12 @@
 # Implementation Tasks: AI Summary (Commissioner's Take)
 
 > **Spec ID**: 009
-> **Status**: v2.3 — Gate 2 closed; Phase A may start (v2.3 records a behaviour change already in code)
+> **Status**: v2.5 — Gate 2 closed; Phase A may start (v2.3 records a behaviour change already in code; v2.4 adds T211, read-only memory; v2.5 corrects the memory-setting counts)
 > **Created**: 2026-10-21
-> **Last Updated**: 2026-10-27
-> **Version**: 2.3
-> **Plan**: [plan.md](./plan.md) v2.3
-> **Spec**: [spec.md](./spec.md) v0.26
+> **Last Updated**: 2026-10-28
+> **Version**: 2.5
+> **Plan**: [plan.md](./plan.md) v2.5
+> **Spec**: [spec.md](./spec.md) v0.28
 
 **Tasks 1–13 are shipped — read them as context, not as instructions.** Where a line disagrees with
 the code, the code wins. Three shipped tasks were corrected in place so an engineer cannot follow
@@ -41,7 +41,7 @@ so the phase ids keep their old numbers and the gaps are deliberate.
 
 **Phase A** — `T101` is independent of both. `T103` requires `T102`: it calls `rank_overall_teams`, which T102 creates, so the two cannot be done in either order. `T105` requires `T101` (it counts the weeks in the history block). `T106` requires all four and is last.
 
-**Phase B** — `T201`, `T202` and `T203` are independent. `T204` requires `T201`, `T202`, `T203`. `T205` requires `T202` and `T204` (the block renders what the session read). `T206` requires `T204` and `T205`. `T207` requires `T206`. `T208` requires `T206` and reads the golden committed by `T106`. `T210` is independent and last only because nothing depends on it.
+**Phase B** — `T201`, `T202` and `T203` are independent. `T204` requires `T201`, `T202`, `T203`. `T205` requires `T202` and `T204` (the block renders what the session read). `T206` requires `T204` and `T205`. `T207` requires `T206`. `T208` requires `T206` and reads the golden committed by `T106`. `T210` is independent and last only because nothing depends on it. `T211` (read-only memory) requires `T201` and `T204`; it is independent of `T205`–`T210` but ships after them so the doc paragraphs it edits exist.
 
 ---
 
@@ -622,7 +622,7 @@ so the phase ids keep their old numbers and the gaps are deliberate.
 - [ ] On the "Generate fantasy football report" step's `env:` only: `AI_MEMORY_GIST_ID: ${{ vars.AI_MEMORY_GIST_ID }}` and `AI_MEMORY_GIST_TOKEN: ${{ secrets.AI_MEMORY_GIST_TOKEN }}` — the token must not reach checkout or the setup steps, and none of the three is written to `.env`
 - [ ] Every explanatory comment sits on a `#` line above its key; no `if:` in the file references `AI_MEMORY_ENABLED`
 - [ ] `tests/test_ai_summary_config_workflow.py`: static string assertions — the expression exists and names both contexts, the two settings are forwarded on the report step, the flag appears on no `if:` line, and no memory value is appended to `.env`
-- [ ] `.env.example`: the three variables commented, with `AI_MEMORY_GIST_ID` from a repository variable, `AI_MEMORY_GIST_TOKEN` from a secret, the token's scope (Gists read and write, or classic `gist`), and one line saying a secret gist is unlisted rather than private
+- [ ] `.env.example`: the memory settings commented, with `AI_MEMORY_GIST_ID` from a repository variable, `AI_MEMORY_GIST_TOKEN` from a secret, the token's scope (Gists read and write, or classic `gist`), and one line saying a secret gist is unlisted rather than private
 - [ ] `README.md` → the AI Summary section: what memory is (a log of published summaries, one entry per week), what it never contains (standings, scores, the prompt, credentials), that off is the default, that the file is `memory.json`, that seeding past weeks is `--week N` runs rather than a feature (the throwaway script is the owner's, not the repo's), and — plainly — **that a season's file must be retired at a season boundary**: entries are keyed by week alone, so a Week 6 run in the next season would replace the previous season's Week 6 entry, a hand edit included
 - [ ] `CHANGELOG.md`: `### Added` under `## [Unreleased]`
 - [ ] No code change and no `--help` change in this task
@@ -633,7 +633,29 @@ so the phase ids keep their old numbers and the gaps are deliberate.
 
 **Files**: `.github/workflows/weekly-report.yml`, `tests/test_ai_summary_config_workflow.py`, `.env.example`, `README.md`, `CHANGELOG.md`
 
-**Done when**: the workflow test passes, `grep -n "AI_MEMORY" .github/workflows/weekly-report.yml` prints the expression, two step-level forwards and no `if:` line, `grep -oh "AI_MEMORY_[A-Z_]*" README.md .env.example ff_tracker/config.py | sort -u | wc -l` is 3, and the README states the season-boundary retirement.
+**Done when**: the workflow test passes, `grep -n "AI_MEMORY" .github/workflows/weekly-report.yml` prints the expression, two step-level forwards and no `if:` line, `grep -oh "AI_MEMORY_[A-Z_]*" README.md .env.example ff_tracker/config.py | sort -u | wc -l` is 4, and the README states the season-boundary retirement.
+
+---
+
+### Task T211: Read-only memory — `AI_MEMORY_WRITE`
+
+**Deliverable**: a run that uses the archive and does not update it, so the owner's dispatch tests cannot advance it.
+
+- [ ] `config.py`: `AIMemoryConfig.write: bool = True`, parsed from `AI_MEMORY_WRITE` inside `_parse_memory_config` with the same boolean routine; blank means the default, a malformed non-blank value is a `ConfigurationError` naming the variable (only reachable when memory is on)
+- [ ] `services/ai_memory.py`: `commit` records `MEMORY_WRITE_SKIPPED` and returns before the season/week guard when `write` is false — no store call, no warning
+- [ ] The read is untouched: `open()` runs, the block reaches the prompt, `memory_read` and `memory_weeks` are whatever the read produced
+- [ ] `.github/workflows/weekly-report.yml`: a `workflow_dispatch` boolean `update_memory` (default `true`) forwarded to `AI_MEMORY_WRITE` on the report step through a plain expression — empty on a schedule renders blank, which the loader reads as the default; no `||` fallback, which would swallow a deliberate false
+- [ ] `.env.example`: one commented line beside the memory variables; `README.md`: one short paragraph in the AI Memory section on test runs, why they matter and that scheduled runs always write
+- [ ] Tests: config (default, explicit false, blank, malformed, ignored when memory is off); the session writes nothing and reports `skipped` with no warning while still reading the entries; the service's provenance (`memory_read: "ok"`, `memory_weeks` populated, `memory_write: "skipped"`); the CLI prints no `::warning::` with `GITHUB_ACTIONS` set or unset; the five formats match a writing run, the JSON apart from `provenance.memory_write`; a static workflow check that the input exists, is a boolean defaulting to true and reaches the env
+- [ ] No change to backfill, to the prompt, or to how memory is read
+
+**Validation**: `uv run pytest tests/test_config.py tests/test_ai_memory.py tests/test_ai_summary_service.py tests/test_ai_summary_rendering.py tests/test_main_cli.py tests/test_ai_summary_config_workflow.py -q`, `uv run mypy .`
+
+**ACs**: AC-034 · FR-014 · FR-007
+
+**Files**: `config.py`, `services/ai_memory.py`, `.github/workflows/weekly-report.yml`, `.env.example`, `README.md`, `tests/test_config.py`, `tests/test_ai_memory.py`, `tests/test_ai_summary_service.py`, `tests/test_ai_summary_rendering.py`, `tests/test_main_cli.py`, `tests/test_ai_summary_config_workflow.py`
+
+**Done when**: the six test files pass, `grep -n "AI_MEMORY_WRITE" .github/workflows/weekly-report.yml` shows the one step-level forward and no `||`, and the README paragraph explains the dispatch test run.
 
 ---
 
@@ -676,6 +698,7 @@ Every criterion in spec v0.26 maps to at least one task, clause by clause — in
 | AC-031 | T203, T204, T207 | read outcomes and their warning counts, the read 404 → `"none"` case, and **`"skipped"` with an untouched store on every failed read** |
 | AC-032 | T202, T203, T204, T206, T207 | write outcomes after a readable archive, the read-404's failed write (its read is `"none"`, not a failure), and same-week replacement |
 | AC-033 | T201, T202, T204, **T205**, T207 | parse-as-the-archive-shape failure (T202), unknown keys and over-long text read unchanged (T202), the over-long paragraph reaching the composed prompt as written (T205), the `week`/`season` write guard (T204, T207), missing settings (T201) |
+| AC-034 | T211 | read-only memory: one read, zero writes, `"skipped"`, no warning, formats unchanged; the static half covers the `update_memory` input |
 | WC-001 | 12 | shipped |
 | WC-002 | T210 | static YAML assertions (folded with the documentation) |
 | LV-001 | manual | one live three-league run at defaults; **not a task** |
@@ -729,6 +752,7 @@ Every criterion in spec v0.26 maps to at least one task, clause by clause — in
 - [ ] `prompt_sha` is byte-identical to Phase 1 for the same instructions (AC-028)
 - [ ] Backfill path proved in a fresh subprocess: one write, `main()` never called, empty stdout (build constraint)
 - [ ] The README says a season's `memory.json` is retired at a season boundary, and why (S3)
+- [ ] `AI_MEMORY_WRITE` false reads the archive, writes nothing, records `"skipped"`, warns about nothing, and renders exactly as a writing run (AC-034)
 - [ ] LV-005 and LV-006 run manually once against a real gist and the live provider before release
 
 ---
@@ -771,3 +795,5 @@ If either phase had to shrink further, the cheapest single task is T105's `histo
 | 2.1 | 2026-10-27 | AI Agent | Plan review applied. **B1** — T206's backfill proof becomes a fresh-subprocess behaviour test (one store write, `main()` replaced by a raiser and never called, empty stdout), because `ff_tracker/__init__.py` imports `.main` and no import assertion can hold. **B2** — `commit(summary)` moves after `_normalise`, and the entry's `generated_at` is copied from `summary.provenance.generated_at`, so one instant is used twice; T206 asserts equality. **B3** — the "shipped state" block and Tasks 4, 6 and 12 are corrected to the shipped shape: the full `AI_SUMMARY_*` set including `MAX_TOKENS` and `REASONING_EFFORT`, `max_tokens`/`reasoning_effort` as configuration with no hard-coded budget, default model `deepseek-v4.1-flash`, and `AI_SUMMARY_MODEL` forwarded from `vars.*`. **B4** — T207 asserts `== 2` for the paired authentication-read-plus-failed-write fixture and `== 1` for each single cause. **S1** — the failure table and AC-031/AC-033 rows point at the criteria that now exist. **S2** — T202 writes "parses as the archive shape". **S3** — T210 and the README bullet carry the season-boundary retirement, with the consequence stated. **S4** — T202 adds the unknown-key-survives-merge case. **S5** — T106 names the full patch set (`sys.argv`, league ids, `ESPNService`, the provider client, the `datetime` attribute on `ff_tracker.services.ai_summary_service`) and carries a recapture procedure with what may and may not break the golden. **S6** — T102 splits its fixtures and states that the agreement case guards rendering order, not the comparator; the >20-team comparison moves to T103. **S7** — T203's `curl` is marked manual, once, in the PR description. **S10** — Tasks 1–13 are marked shipped-context, with the three stale lines named. Cuts: no committed `research.md`; no `ai_client.py` rename (the store gets its own wrapper); T104 folded into T103; T209 folded into T210. Counts: Phase A 5, Phase B 9. |
 | 2.2 | 2026-10-27 | AI Agent | Gate 2 close. Dependency map: **T103 requires T102**; T101 independent. **T205 joins AC-033's row** and its six-week test asserts an over-long stored paragraph reaches the composed block verbatim, so the criterion's third clause now has an owner. Header points at **spec v0.26**. Artifacts frozen; Phase A may start. |
 | 2.3 | 2026-10-27 | AI Agent | Matches code: **a failed read suppresses the write.** T204 orders `commit` so `read_status: "failed"` is the first check and returns `"skipped"` with no store call, and its tests assert zero saves and unchanged store bytes for auth, 5xx, transport and timeout. T207's warning counts follow: a 401/403 read is one line and zero saves, the paired two-warning fixture is gone because a suppressed write has no line of its own, and the read-404 case keeps its attempted write. Traceability and the Phase B checklist say the same. Correctness change, not a wording one. |
+| 2.4 | 2026-10-28 | AI Agent | New task **T211**, read-only memory (spec v0.28, plan v2.4 Decision 18). The owner tests the production workflow by dispatching it with the recipients overridden to their own address, and those runs must not advance the archive, so `AI_MEMORY_WRITE` (default `true`) makes the run read the archive and skip the write: `provenance.memory_write: "skipped"`, no `::warning::`, read untouched, nothing else changed. T211 carries the config field, the session gate, the `update_memory` dispatch input forwarded through a plain expression (empty on a schedule is the default, never false), the `.env.example` line and README paragraph, and AC-034's tests including the format-equality case. Dependency map and traceability updated; nothing renumbered. |
+| 2.5 | 2026-10-28 | AI Agent | Conformance wording, no behaviour. `AI_MEMORY_WRITE` is the fourth memory setting, so T210's done-when grep now requires **4** rather than 3 — the check is executable and keeps a count — and T210's `.env.example` bullet says "the memory settings" rather than "the three variables". Nothing else in the task list changes; T211 already owns the new setting. |

@@ -1049,6 +1049,32 @@ class TestMemoryLifecycle:
         assert store.write_calls == 0
         assert len(client.requests) == 2  # the one contract retry
 
+    def test_read_only_mode_uses_the_archive_and_skips_the_write(self) -> None:
+        """AC-034: read "ok", weeks populated, write "skipped", no warning."""
+        store = FakeMemoryStore(data=make_memory_archive())
+        config = AISummaryConfig(
+            enabled=True,
+            api_key="sk-test",
+            memory=AIMemoryConfig(gist_id="gist123", gist_token="ghp-test", write=False),
+        )
+        memory = config.memory
+        assert memory is not None
+        session = MemorySession(memory, 2026, WEEK, store)
+        client = FakeAIClient(response=_response())
+
+        result = AISummaryService(config, client, session).generate(
+            make_regular_divisions(), [], None, WEEK, None
+        )
+
+        assert isinstance(result, AISummary)
+        assert result.provenance.memory_read == "ok"
+        assert result.provenance.memory_weeks == [1, 2, 3, 4, 5, 6]
+        assert result.provenance.memory_write == "skipped"
+        assert session.warnings == []
+        assert store.read_calls == 1
+        assert store.write_calls == 0
+        assert MEMORY_HEADING in client.requests[0].system_prompt
+
     def test_memory_off_leaves_provenance_unset(self) -> None:
         service, _ = _service(_response())
 

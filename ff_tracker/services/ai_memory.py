@@ -371,6 +371,7 @@ class MemorySession:
             week: The report's week; ``None`` or out of 1-18 suppresses the write.
             store: Override for tests; defaults to ``GistMemoryStore(config)``.
         """
+        self._config = config
         self._season = season
         self._week = week
         self._store: MemoryStore = store or GistMemoryStore(config)
@@ -427,6 +428,12 @@ class MemorySession:
         Args:
             summary: The narrative the report is about to render.
         """
+        if not self._config.write:
+            # Read-only on request: the archive was read and used, and nothing
+            # is written or warned about because nothing failed.
+            self.write_status = MEMORY_WRITE_SKIPPED
+            return
+
         week = self._week
         if week is None or not _can_key_entry(self._season, week):
             self.write_status = MEMORY_WRITE_SKIPPED

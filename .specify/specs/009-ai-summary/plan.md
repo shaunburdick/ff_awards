@@ -1,11 +1,11 @@
 # Implementation Plan: AI Summary (Commissioner's Take)
 
 > **Spec ID**: 009
-> **Status**: v2.3 — Gate 2 closed; Phase A may start (v2.3 records a behaviour change already in code)
+> **Status**: v2.5 — Gate 2 closed; Phase A may start (v2.3 records a behaviour change already in code; v2.4 adds read-only memory; v2.5 corrects the setting counts)
 > **Created**: 2026-10-21
-> **Last Updated**: 2026-10-27
-> **Version**: 2.3
-> **Spec**: [spec.md](./spec.md) v0.26 (authority — this plan decides implementation only)
+> **Last Updated**: 2026-10-28
+> **Version**: 2.5
+> **Spec**: [spec.md](./spec.md) v0.28 (authority — this plan decides implementation only)
 > **Gate rulings**: [challenge-ledger.md](./challenge-ledger.md) (settled rows are settled; Gate 2 closed at v2.2)
 >
 > Sections 1–12 and Decisions 1–8 describe the **shipped** feature and are unchanged except where
@@ -341,6 +341,16 @@ The golden is one JSON file, `tests/fixtures/ai_summary_phase1_golden.json`, hol
 2. A recapture must still prove what the criterion is for: the five formats render the same *narrative and the same deterministic sections* as the golden's own copy of them, so the diff is reviewed line by line as output, not accepted as a blob.
 3. **What may break it**: a deliberate change to a rendered format, to the digest-backed data the report shows, or to `SYSTEM_PROMPT`/`LEAGUE_WIDE_RULES` (which moves `prompt_sha`). **What may not**: anything memory-related. A Phase-2 change that fails AC-028 and is "fixed" by recapturing the golden is exactly the regression the criterion exists to catch, and a recapture in the same commit as a memory change is a review reject.
 
+### Decision 18: Read-only memory is a configuration switch, and the write's skip is a choice
+
+The owner tests the production workflow by dispatching it with the recipients overridden to their own address, and those runs must not advance the archive the real run depends on. So the write gets its own switch rather than a new mode:
+
+- `AI_MEMORY_WRITE`, default `true`, parsed by the same routine as the other booleans and read only inside the enabled branch, so it is inert with the feature or memory off. A blank value is the default, like every other optional setting; a malformed non-blank value is a `ConfigurationError` naming the variable, only when memory is otherwise on.
+- The gate lives in `MemorySession.commit`, before the season/week guard, and records `MEMORY_WRITE_SKIPPED` with no store call. It emits no warning, because nothing failed: FR-006's warning is for a section that could not be produced, and event 2's for a failure; a skip the operator asked for is neither.
+- The read is untouched. `open()` runs, the block reaches the prompt, `memory_read` and `memory_weeks` are whatever the read produced — the switch can only withhold the write, never the archive. A toggle that quietly downgraded the read would make a test run a *different* run from the one being tested, which is the opposite of what it is for.
+- Provenance carries the choice as `memory_write: "skipped"`, so an archived test run is distinguishable from one whose write failed and one that wrote.
+- The workflow forwards it from a `workflow_dispatch` boolean (`update_memory`, default true) through a plain expression. `inputs.update_memory` is empty on a schedule and renders blank, which the loader reads as the default (write); a `||` fallback would swallow a deliberate `false`, so there is none.
+
 ### Phase 2 failure policy, mapped
 
 | Situation | `memory_read` | `memory_write` | Warnings under `GITHUB_ACTIONS` | Proved by |
@@ -473,7 +483,7 @@ class AISummaryConfig:
 
 While the feature is off the loader returns `AISummaryConfig()` after reading *only* the flag, so no other variable — including the memory group Phase B adds — can deny a report. `max_tokens` and `reasoning_effort` are configuration, not constants: FR-003 forbids a hard-coded budget and AC-010 proves both are read (the request double sees `max_tokens` and `reasoning_effort`, the construction double sees model, base URL, timeout and bearer token).
 
-**Phase B adds** `memory: AIMemoryConfig | None = None` and reads `AI_MEMORY_ENABLED`, `AI_MEMORY_GIST_ID` and `AI_MEMORY_GIST_TOKEN` inside the enabled branch only.
+**Phase B adds** `memory: AIMemoryConfig | None = None` and reads `AI_MEMORY_ENABLED`, `AI_MEMORY_GIST_ID`, `AI_MEMORY_GIST_TOKEN` and `AI_MEMORY_WRITE` inside the enabled branch only. `AI_MEMORY_WRITE` (default true, blank means the default) lands on the config as `AIMemoryConfig.write: bool = True`: false makes the run read the archive without writing it (Decision 18).
 
 `main.py` calls the loader **after** `create_config(...)` and before any ESPN call, inside its existing `try:` block; `ConfigurationError` is an `FFTrackerError`, so `main()` prints and returns 1 with no report and no HTTP call (AC-009), without new plumbing. `load_environment()` has already run inside `create_config`, and the loader calls it again defensively (idempotent), so a `.env`-only configuration enables the feature — proved by a test that leaves `create_config` unpatched.
 
@@ -809,12 +819,12 @@ Functions and types:
 | `models/ai_summary.py` | 1, 2 | `history_weeks` (P1); `memory_read`/`memory_write`/`memory_weeks` (P2) |
 | `services/ai_summary_service.py` | 1, 2 | `LEAGUE_WIDE_RULES` in the hashed prompt (P1); `MemorySession` parameter, block composition, redacted DEBUG line (P2) |
 | `display/json.py` | 1, 2 | `history_weeks` always (P1); memory keys only when set (P2) |
-| `config.py` | 2 | `AIMemoryConfig` inside `AISummaryConfig`, validated only in the enabled branch |
+| `config.py` | 2 | `AIMemoryConfig` inside `AISummaryConfig`, validated only in the enabled branch, including `write` (`AI_MEMORY_WRITE`, default true) |
 | `services/ai_memory.py` | 2 | new — Component 15, including its own transport wrapper |
 | `exceptions.py` | 2 | `AIMemoryStoreError` |
 | `main.py` | 2 | build the session when memory is on; print its warnings under Actions; call count assertions |
-| `.github/workflows/weekly-report.yml` | 2 | `AI_MEMORY_ENABLED` guard + the two settings on the report step |
-| `.env.example`, `README.md`, `CHANGELOG.md` | 2 | the three memory variables, the gist exposure, the token's scope, retiring the file at a season boundary |
+| `.github/workflows/weekly-report.yml` | 2 | `AI_MEMORY_ENABLED` guard + the two settings on the report step, plus the one-run `update_memory` input forwarded to `AI_MEMORY_WRITE` |
+| `.env.example`, `README.md`, `CHANGELOG.md` | 2 | the memory variables, the gist exposure, the token's scope, retiring the file at a season boundary, and the read-only test-run switch |
 
 `display/console.py`, `markdown.py`, `sheets.py`, `email.py` and `services/ai_client.py` are **untouched by both phases**: nothing new is rendered, and the provider client is shipped and correct.
 
@@ -1155,7 +1165,7 @@ Digest size is bounded by the data: 3–4 leagues × (≤16 standings rows + ≤
 - **The non-default `User-Agent` is a hard requirement** on both clients. No FR names it, but the default endpoint sits behind Cloudflare, which rejects `Python-urllib/*`; without an identifying header every call fails at the edge. It is recorded here because a future "remove the unused header" cleanup would silently break the default endpoint, and no acceptance criterion would go red.
 
 ### Not deviated
-Articles I (no `Any`, no suppressions — the new archive parser narrows from `object` like the existing two), II (frozen validated models; the archive is a `TypedDict` payload, not state), IV (services never import display; the one new edge is display → services for the shared comparator, which is the direction the article permits; every `::warning::` is still emitted in `main.py`), VI (one protocol, five formats, and neither phase touches four of them), VII (docstrings/names, comments only for the non-obvious), IX (no new flags; `--help` unchanged by Phase 1, and Phase 2's three variables are documented where the existing ones are).
+Articles I (no `Any`, no suppressions — the new archive parser narrows from `object` like the existing two), II (frozen validated models; the archive is a `TypedDict` payload, not state), IV (services never import display; the one new edge is display → services for the shared comparator, which is the direction the article permits; every `::warning::` is still emitted in `main.py`), VI (one protocol, five formats, and neither phase touches four of them), VII (docstrings/names, comments only for the non-obvious), IX (no new flags; `--help` unchanged by Phase 1, and Phase 2's memory settings are documented where the existing ones are).
 
 ---
 
@@ -1213,3 +1223,5 @@ None. The review's wordings are in the spec, and the current version fixed the o
 | 2.1 | 2026-10-27 | AI Agent | Review findings applied. **B1** — the backfill constraint is proved by behaviour in a fresh subprocess (no CLI invocation, one store write, `main()` never called, empty stdout), because `ff_tracker/__init__.py` imports `.main` and an import assertion could never pass; new Constraint 13 records that. **B2** — `commit(summary)` runs after `_normalise`, and the entry copies `generated_at` from the summary's provenance so one instant is computed once. **B3** — Components 4 and 6 restated to the shipped configuration (the full `AI_SUMMARY_*` set including `MAX_TOKENS` and `REASONING_EFFORT`, default model `deepseek-v4.1-flash`, no hard-coded budget, `reasoning_effort` omitted when unset). **B4** — the paired authentication-read-plus-failed-write fixture counts two warnings, one per cause. **S1** — the failure table points the read-404 row at AC-031/AC-032 and the write guard at AC-033; **S2** — `parse_archive` is described as "parses as the archive shape", with content, counts and text length never read-only causes; **S3** — the season consequence is stated plainly and documented in T210; **S4** — an unknown key inside a prior entry survives a merge. **S5** — T106 names the full patch set and Decision 17 carries the recapture procedure and what may and may not break the golden; **S6** — AC-027's >20-team comparison is the rendered 20 rows against the first 20, and states that it guards rendering order rather than the comparator; **S7** — the gist `curl` is marked manual, once, in the PR description. **S9** — Complexity Tracking counts two violated articles (III, X) with Article V relabelled a scope note. **S10** — see tasks.md. Cuts: no committed `research.md`, no `ai_client.py` rename (the store gets its own transport wrapper), and T104 folded into T103. |
 | 2.2 | 2026-10-27 | AI Agent | Gate 2 close, five corrections and no design change. The dependency map restored **T103 requires T102** (it calls the comparator T102 creates). **AC-033's over-long-paragraph clause gained its owner**: T205 joins the traceability row and its six-week test asserts that a stored paragraph longer than any cap reaches the composed block verbatim. Version pointers retargeted from spec v0.24 to **v0.26**; the phantom Configuration-table nit deleted, because the row already reads "Per-socket-read timeout in seconds"; the spec-nits section now reads "None". Artifacts frozen. |
 | 2.3 | 2026-10-27 | AI Agent | **Correctness change, not a wording one**: a failed read now suppresses the write, matching behaviour already in the code. `commit` returns `"skipped"` with no store call whenever `read_status` is `"failed"`, so a 5xx, transport error, timeout or auth rejection costs one week of memory instead of replacing the whole season with a single entry — the merge cannot preserve what it never read. Decision 16 states three conditions that suppress a write (a failed read, a file that will not parse, a `(season, week)` that cannot key an entry) plus the narrative that never rendered, and drops the old claim that the season/week guard was the only suppressed write. The failure table records `"skipped"` and a byte-identical store on every read-failure row, keeps the read-404 **not** a failure (its write is still attempted and is AC-032's 404), and states that the authentication-read fixture now counts exactly one warning, the read's, because the suppressed write has no line of its own — the paired two-warning fixture no longer describes a reachable state. The data flow, the session row, the Article V scope note and the AC-031/AC-032 test rows follow the same rule. |
+| 2.4 | 2026-10-28 | AI Agent | Read-only memory (spec v0.28). Decision 18 records the switch: `AIMemoryConfig.write` from `AI_MEMORY_WRITE` (default true, blank means the default, malformed only when memory is on), the gate in `MemorySession.commit` before the season/week guard recording `"skipped"` with no store call and no warning, and the read left exactly as it was so a test run is the same run apart from the write. Component 4 gains the variable, Component 15 the `commit` row, Component 16 the `config.py`, workflow and docs rows, and the workflow carries a `workflow_dispatch` boolean forwarded through a plain expression — empty on a schedule, which is the default, not false. The spec's AC-034 is the criterion; nothing about the read, the prompt, the narrative or the formats changes. |
+| 2.5 | 2026-10-28 | AI Agent | Wording, no design change: the Complexity Tracking note said Phase 2's "three variables" are documented, and there are four since `AI_MEMORY_WRITE` — it now says "memory settings". Component 12's `.env.example` bullet and the revision history keep their meaning; the only count left in the artifacts is T210's executable grep, which v2.5 of the task list sets to 4. |

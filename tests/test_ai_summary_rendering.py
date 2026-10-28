@@ -996,3 +996,59 @@ class TestMemoryOffMatchesTheGolden:
         for key in ("memory_read", "memory_write", "memory_weeks"):
             del provenance[key]
         assert document == phase1_golden["json"]
+
+
+class TestMemoryReadOnly:
+    """AC-034: writing is a choice, and choosing not to changes no rendered value."""
+
+    def test_the_five_formats_match_a_writing_run(
+        self, tmp_path: Path, phase1_golden: dict[str, object]
+    ) -> None:
+        archive = make_memory_archive(weeks=(1, 2, 3))
+        writing_store = FakeMemoryStore(data=archive)
+        read_only_store = FakeMemoryStore(data=archive)
+        writing_dir = tmp_path / "writing"
+        read_only_dir = tmp_path / "read-only"
+        writing_dir.mkdir()
+        read_only_dir.mkdir()
+
+        writing = phase1_report_outputs(
+            writing_dir,
+            env={**MEMORY_ENV, "AI_MEMORY_WRITE": "true"},
+            memory_store=writing_store,
+            client=FakeAIClient(response=GOLDEN_RESPONSE),
+        )
+        read_only = phase1_report_outputs(
+            read_only_dir,
+            env={**MEMORY_ENV, "AI_MEMORY_WRITE": "false"},
+            memory_store=read_only_store,
+            client=FakeAIClient(response=GOLDEN_RESPONSE),
+        )
+
+        for format_name in ("console", "sheets", "email", "markdown"):
+            assert read_only[format_name] == writing[format_name], format_name
+
+        # JSON carries provenance, so the one field the choice changes is
+        # memory_write; everything else, narrative included, is identical.
+        writing_json = writing["json"]
+        read_only_json = read_only["json"]
+        assert isinstance(writing_json, dict)
+        assert isinstance(read_only_json, dict)
+        writing_provenance = writing_json["ai_summary"]["provenance"]
+        read_only_provenance = read_only_json["ai_summary"]["provenance"]
+        assert writing_provenance["memory_write"] == "ok"
+        assert read_only_provenance["memory_write"] == "skipped"
+        assert {
+            key: value for key, value in writing_provenance.items() if key != "memory_write"
+        } == {key: value for key, value in read_only_provenance.items() if key != "memory_write"}
+        assert {
+            **writing_json,
+            "ai_summary": {**writing_json["ai_summary"], "provenance": None},
+        } == {
+            **read_only_json,
+            "ai_summary": {**read_only_json["ai_summary"], "provenance": None},
+        }
+
+        assert writing_store.write_calls == 1
+        assert read_only_store.write_calls == 0
+        assert read_only_provenance["memory_weeks"] == [1, 2, 3]

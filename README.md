@@ -461,6 +461,7 @@ AI_SUMMARY_API_KEY=your_opencode_api_key_here
 | `AI_MEMORY_ENABLED` | `false` | Opt-in memory log; inert while `AI_SUMMARY_ENABLED` is off |
 | `AI_MEMORY_GIST_ID` | none | Id of the secret gist holding `memory.json`, required when memory is on |
 | `AI_MEMORY_GIST_TOKEN` | none | Token with Gists read and write, never printed, required when memory is on |
+| `AI_MEMORY_WRITE` | `true` | Read-only switch: `false` reads and uses the archive but writes nothing (`memory_write: "skipped"`, no warning) |
 
 **Why `deepseek-v4.1-flash` is the default:** `glm-5.3-flash` spends the whole
 8000-token budget on reasoning for a three-league digest (8000/8000 tokens,
@@ -535,6 +536,15 @@ on: a missing or empty one is a configuration error that stops the run, exactly
 as a missing API key does, which is why the workflow enables memory only when
 both are present. One read happens before the narrative is generated and at most
 one write after it is accepted; nothing else about a run changes.
+
+**Test runs.** A manual *Run workflow* with `update_memory` unchecked (or
+`AI_MEMORY_WRITE=false` locally) reads the archive and uses it exactly as a normal
+run does, but writes nothing: the take still has the earlier weeks behind it,
+`provenance.memory_write` reads `"skipped"`, and no warning is emitted because
+nothing failed. That is what makes it safe to dispatch the workflow with the
+recipients overridden to your own address — a test run must never advance the
+archive the real run depends on. Scheduled runs always write; a blank value on a
+schedule falls through to the default.
 
 **Append-only.** A run appends its week and replaces that same week's entry on a
 re-run, so a dispatch re-run cannot stack a second take. Nothing written earlier
