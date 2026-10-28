@@ -161,3 +161,23 @@ class AIContractError(AISummaryError):
 
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
+
+
+class AIMemoryStoreError(Exception):
+    """
+    A gist read or write failed; memory degrades quietly and the report ships.
+
+    Deliberately **not** a subclass of ``FFTrackerError``, for the reason
+    ``AISummaryError`` is not: an escaped one must surface as an unexpected
+    error, never as a configuration failure that denies a report. ``kind`` is
+    one of ``auth``, ``not_found``, ``server``, ``transport`` or ``timeout`` and
+    decides FR-014's status for the run and whether it warns.
+
+    ``reason`` names the host and the HTTP status only: never the gist id, the
+    token or a response body.
+    """
+
+    def __init__(self, kind: str, reason: str) -> None:
+        self.kind = kind
+        self.reason = reason
+        super().__init__(reason)

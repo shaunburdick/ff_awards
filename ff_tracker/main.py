@@ -38,6 +38,7 @@ from .models import (
 )
 from .services import ChallengeCalculator, ESPNService, WeeklyChallengeCalculator
 from .services.ai_client import OpenAICompatibleClient
+from .services.ai_memory import GistMemoryStore, MemorySession
 from .services.ai_summary_service import AISummaryService
 
 
@@ -315,18 +316,30 @@ def main() -> int:
         # both output modes embeds the same text from one provider call.
         ai_summary: AISummaryResult | None = None
         if ai_config.enabled:
-            ai_summary = AISummaryService(ai_config, OpenAICompatibleClient(ai_config)).generate(
+            # Memory is one read before generation and one write after the
+            # narrative exists; the session never stops the report.
+            memory = ai_config.memory
+            session: MemorySession | None = None
+            if memory is not None:
+                session = MemorySession(
+                    memory, config.year, espn_service.current_week, GistMemoryStore(memory)
+                )
+            ai_summary = AISummaryService(
+                ai_config, OpenAICompatibleClient(ai_config), session
+            ).generate(
                 divisions,
                 challenges,
                 weekly_challenges if weekly_challenges else None,
                 espn_service.current_week,
                 championship,
             )
-            if (
-                isinstance(ai_summary, AISummaryUnavailable)
-                and os.environ.get("GITHUB_ACTIONS") == "true"
-            ):
+            in_actions = os.environ.get("GITHUB_ACTIONS") == "true"
+            if isinstance(ai_summary, AISummaryUnavailable) and in_actions:
                 print(f"::warning::{ai_summary.notice}")
+            # At most one line: a write only follows a read that did not fail.
+            if session is not None and in_actions:
+                for line in session.warnings:
+                    print(f"::warning::{line}")
 
         # Handle output based on mode
         if args.output_dir:

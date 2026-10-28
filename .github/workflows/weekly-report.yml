@@ -37,6 +37,11 @@ on:
         description: 'One-run AI summary instructions (overrides the repository variable/secret; single line; leave empty to use the standing prompt)'
         required: false
         type: string
+      update_memory:
+        description: 'Update the shared memory log (uncheck for a test run that reads the archive without writing it)'
+        required: false
+        type: boolean
+        default: true
 
 env:
   PYTHONUNBUFFERED: 1
@@ -54,6 +59,10 @@ env:
   AI_SUMMARY_MAX_TOKENS: ${{ vars.AI_SUMMARY_MAX_TOKENS }}
   AI_SUMMARY_REASONING_EFFORT: ${{ vars.AI_SUMMARY_REASONING_EFFORT }}
   AI_SUMMARY_MAX_PROMPT_CHARS: ${{ vars.AI_SUMMARY_MAX_PROMPT_CHARS }}
+  # Memory guard, the same shape as the key guard above: `secrets` cannot appear
+  # in `if:`, so the expression renders the literal true/false here and the loader
+  # reads it. Empty either setting and memory is simply off.
+  AI_MEMORY_ENABLED: ${{ secrets.AI_MEMORY_GIST_TOKEN != '' && vars.AI_MEMORY_GIST_ID != '' }}
 
 jobs:
   generate-report:
@@ -101,8 +110,14 @@ jobs:
       # value falls through to the next rather than clearing it, and dispatch string
       # inputs are single-line, so a multi-line standing prompt belongs in the
       # variable or the secret. Keep every comment above the key.
+      # Gist id/token and the write switch are step-scoped, never written to
+      # .env. A `||` on AI_MEMORY_WRITE would swallow a deliberate false; a
+      # blank value (on a schedule `inputs` is empty) is the loader's default.
       env:
         AI_SUMMARY_USER_PROMPT: ${{ inputs.ai_summary_prompt || vars.AI_SUMMARY_USER_PROMPT || secrets.AI_SUMMARY_USER_PROMPT }}
+        AI_MEMORY_GIST_ID: ${{ vars.AI_MEMORY_GIST_ID }}
+        AI_MEMORY_GIST_TOKEN: ${{ secrets.AI_MEMORY_GIST_TOKEN }}
+        AI_MEMORY_WRITE: ${{ inputs.update_memory }}
       run: |
         # Hardcoded note for this week (set to empty string to disable)
         # Example: HARDCODED_NOTE="Playoffs start next week! 🏆"

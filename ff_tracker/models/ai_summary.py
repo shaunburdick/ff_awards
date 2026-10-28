@@ -13,6 +13,18 @@ from typing import Union
 
 from ..exceptions import DataValidationError
 
+# FR-014's two status vocabularies. They live beside the model that validates
+# them because the memory module imports this one, not the other way round.
+MEMORY_READ_OK = "ok"
+MEMORY_READ_NONE = "none"
+MEMORY_READ_FAILED = "failed"
+MEMORY_WRITE_OK = "ok"
+MEMORY_WRITE_FAILED = "failed"
+MEMORY_WRITE_SKIPPED = "skipped"
+
+MEMORY_READ_STATUSES = (MEMORY_READ_OK, MEMORY_READ_NONE, MEMORY_READ_FAILED)
+MEMORY_WRITE_STATUSES = (MEMORY_WRITE_OK, MEMORY_WRITE_FAILED, MEMORY_WRITE_SKIPPED)
+
 
 @dataclass(frozen=True)
 class AISummaryLeague:
@@ -58,6 +70,13 @@ class AIProvenance:
     truncated: bool = False
     # 1, or 2 when one contract-failure retry was spent on sampling noise.
     attempts: int = 1
+    # Distinct weeks every league's history block carried, unioned (FR-011).
+    history_weeks: int = 0
+    # FR-014's three memory fields: all set when memory is on, all absent when
+    # it is off, and never on the notice path.
+    memory_read: str | None = None
+    memory_write: str | None = None
+    memory_weeks: list[int] | None = None
 
     def __post_init__(self) -> None:
         """Validate provenance after construction."""
@@ -76,6 +95,39 @@ class AIProvenance:
 
         if self.attempts not in (1, 2):
             raise DataValidationError(f"Provenance attempts must be 1 or 2: {self.attempts}")
+
+        if self.history_weeks < 0:
+            raise DataValidationError(
+                f"Provenance history weeks cannot be negative: {self.history_weeks}"
+            )
+
+        self._validate_memory()
+
+    def _validate_memory(self) -> None:
+        """Validate the memory trio: all absent, or all set against FR-014's vocabularies."""
+        read, write, weeks = self.memory_read, self.memory_write, self.memory_weeks
+        if read is None and write is None and weeks is None:
+            return
+
+        if read is None or write is None or weeks is None:
+            raise DataValidationError(
+                "Provenance memory fields must be all set or all absent: "
+                f"read={read!r}, write={write!r}, weeks={weeks!r}"
+            )
+
+        if read not in MEMORY_READ_STATUSES:
+            raise DataValidationError(
+                f"Provenance memory_read must be one of {'|'.join(MEMORY_READ_STATUSES)}: {read}"
+            )
+
+        if write not in MEMORY_WRITE_STATUSES:
+            raise DataValidationError(
+                f"Provenance memory_write must be one of {'|'.join(MEMORY_WRITE_STATUSES)}: {write}"
+            )
+
+        for week in weeks:
+            if not 1 <= week <= 18:
+                raise DataValidationError(f"Provenance memory week must be 1-18: {week}")
 
 
 @dataclass(frozen=True)

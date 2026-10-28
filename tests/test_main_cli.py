@@ -7,22 +7,27 @@ output directory mode, format arguments, and error handling.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from ai_fakes import (
+    FakeAIClient,
+    FakeMemoryStore,
     make_division,
+    make_memory_archive,
     make_narrative,
     make_regular_divisions,
     make_regular_weekly_challenges,
     make_season_challenge,
 )
 
-from ff_tracker.config import AISummaryConfig, FFTrackerConfig
-from ff_tracker.exceptions import ConfigurationError
+from ff_tracker.config import AIMemoryConfig, AISummaryConfig, FFTrackerConfig
+from ff_tracker.exceptions import AIMemoryStoreError, ConfigurationError
 from ff_tracker.main import build_formatter, create_parser
 from ff_tracker.models import AISummaryUnavailable
 
@@ -637,3 +642,214 @@ class TestMidBodyFailureShipstheReport:
         ) in out.out
         # The deterministic report is still there.
         assert "Fantasy Football Multi-Division Challenge Tracker" in out.out
+
+
+MEMORY_CONFIG = AIMemoryConfig(gist_id="gist123", gist_token="ghp-test")
+
+
+def _narrative_for(names: Sequence[str]) -> str:
+    """A contract-valid response for leagues with these names."""
+    return json.dumps(
+        {
+            "headline": "Headline",
+            "leagues": [
+                {"league": name, "paragraphs": [f"{name} had a week."], "bullets": []}
+                for name in names
+            ],
+            "season_note": "Note.",
+        }
+    )
+
+
+class TestMemoryWiring:
+    """T207: the real service and store behind the CLI, so the counts are production's."""
+
+    def _run(
+        self,
+        *,
+        league_count: int = 1,
+        memory: AIMemoryConfig | None = MEMORY_CONFIG,
+        store: FakeMemoryStore | None = None,
+        github_actions: str | None = "true",
+        output_dir: Path | None = None,
+        config_error: Exception | None = None,
+    ) -> tuple[int, FakeAIClient, FakeMemoryStore, MagicMock]:
+        from ff_tracker.main import main
+
+        names = [f"League {index}" for index in range(league_count)]
+        divisions = [
+            make_division(name, league_id=100 + index, reg_season_count=14)
+            for index, name in enumerate(names)
+        ]
+        client = FakeAIClient(response=_narrative_for(names))
+        fake_store = store if store is not None else FakeMemoryStore()
+        ai_config = AISummaryConfig(enabled=True, api_key="sk-test", memory=memory)
+
+        argv = ["ff-tracker", "123456"] + (
+            ["--output-dir", str(output_dir)] if output_dir is not None else ["--format", "json"]
+        )
+        config = FFTrackerConfig(league_ids=[123456], year=2026, private=False)
+        env = {"GITHUB_ACTIONS": github_actions or ""}
+
+        with (
+            patch.object(sys, "argv", argv),
+            patch("ff_tracker.config.create_config", return_value=config),
+            patch("ff_tracker.main.ESPNService") as espn_class,
+            patch("ff_tracker.main.ChallengeCalculator"),
+            patch("ff_tracker.main.WeeklyChallengeCalculator"),
+            patch("ff_tracker.main.create_formatter") as formatter_factory,
+            patch("ff_tracker.main.OpenAICompatibleClient", return_value=client),
+            patch("ff_tracker.main.GistMemoryStore", return_value=fake_store) as store_class,
+            patch(
+                "ff_tracker.main.load_ai_summary_config",
+                return_value=ai_config,
+            )
+            if config_error is None
+            else patch("ff_tracker.main.load_ai_summary_config", side_effect=config_error),
+            patch.dict(os.environ, env, clear=False),
+        ):
+            espn = espn_class.return_value
+            espn.load_all_divisions.return_value = divisions
+            espn.current_week = 6
+            formatter = MagicMock()
+            formatter.format_output.return_value = "REPORT"
+            formatter_factory.return_value = formatter
+            result = main()
+
+        return result, client, fake_store, store_class
+
+    @pytest.mark.parametrize("league_count", [1, 3, 10])
+    def test_one_provider_call_one_read_one_write(
+        self, league_count: int, capsys: pytest.CaptureFixture
+    ) -> None:
+        result, client, store, _ = self._run(league_count=league_count)
+
+        capsys.readouterr()
+        assert result == 0
+        assert len(client.requests) == 1
+        assert store.read_calls == 1
+        assert store.write_calls == 1
+
+    def test_output_dir_mode_makes_the_same_calls(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        result, client, store, _ = self._run(output_dir=tmp_path)
+
+        capsys.readouterr()
+        assert result == 0
+        assert len(client.requests) == 1
+        assert store.read_calls == 1
+        assert store.write_calls == 1
+        for name in ("standings.txt", "standings.tsv", "standings.html", "standings.json"):
+            assert (tmp_path / name).exists()
+
+    def test_memory_off_makes_zero_store_calls(self, capsys: pytest.CaptureFixture) -> None:
+        result, client, _, store_class = self._run(memory=None)
+
+        capsys.readouterr()
+        assert result == 0
+        assert len(client.requests) == 1
+        store_class.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("store", "expected"),
+        [
+            (
+                FakeMemoryStore(
+                    data=make_memory_archive(), read_errors=[AIMemoryStoreError("auth", "x")]
+                ),
+                1,
+            ),
+            (
+                # A failed read suppresses the write, so there is one cause and
+                # one line rather than two.
+                FakeMemoryStore(
+                    data=make_memory_archive(),
+                    read_errors=[AIMemoryStoreError("auth", "x")],
+                    write_errors=[AIMemoryStoreError("auth", "x")],
+                ),
+                1,
+            ),
+            (FakeMemoryStore(write_errors=[AIMemoryStoreError("server", "x")]), 1),
+            (FakeMemoryStore(read_errors=[AIMemoryStoreError("server", "x")]), 0),
+            (FakeMemoryStore(read_errors=[AIMemoryStoreError("transport", "x")]), 0),
+            (FakeMemoryStore(read_errors=[AIMemoryStoreError("timeout", "x")]), 0),
+            (FakeMemoryStore(data=b"{not json"), 1),
+        ],
+        ids=[
+            "auth-read-write-ok",
+            "auth-read-suppresses-write",
+            "failed-write-only",
+            "server-read",
+            "transport-read",
+            "timeout-read",
+            "unparseable-file",
+        ],
+    )
+    def test_warning_counts_are_exact(
+        self, store: FakeMemoryStore, expected: int, capsys: pytest.CaptureFixture
+    ) -> None:
+        result, _, _, _ = self._run(store=store)
+        out = capsys.readouterr().out
+
+        assert result == 0
+        assert out.count("::warning::") == expected
+
+    def test_no_warning_outside_actions(self, capsys: pytest.CaptureFixture) -> None:
+        store = FakeMemoryStore(
+            data=make_memory_archive(),
+            read_errors=[AIMemoryStoreError("auth", "x")],
+            write_errors=[AIMemoryStoreError("auth", "x")],
+        )
+
+        result, _, _, _ = self._run(store=store, github_actions=None)
+
+        assert result == 0
+        assert "::warning::" not in capsys.readouterr().out
+
+    def test_read_only_memory_writes_nothing_and_warns_about_nothing(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """AC-034: the run reads the archive, writes nothing, and stays quiet."""
+        store = FakeMemoryStore(data=make_memory_archive())
+        read_only = AIMemoryConfig(gist_id="gist123", gist_token="ghp-test", write=False)
+
+        result, client, _, _ = self._run(memory=read_only, store=store)
+        out = capsys.readouterr().out
+
+        assert result == 0
+        assert len(client.requests) == 1
+        assert store.read_calls == 1
+        assert store.write_calls == 0
+        assert out.count("::warning::") == 0
+
+    def test_read_only_memory_warns_about_nothing_outside_actions(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        store = FakeMemoryStore(data=make_memory_archive())
+        read_only = AIMemoryConfig(gist_id="gist123", gist_token="ghp-test", write=False)
+
+        result, _, _, _ = self._run(memory=read_only, store=store, github_actions=None)
+
+        assert result == 0
+        assert "::warning::" not in capsys.readouterr().out
+
+    def test_memory_off_prints_no_warning(self, capsys: pytest.CaptureFixture) -> None:
+        result, _, _, _ = self._run(memory=None)
+
+        assert result == 0
+        assert "::warning::" not in capsys.readouterr().out
+
+    def test_a_configuration_error_stops_before_any_call(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        result, client, _, store_class = self._run(
+            config_error=ConfigurationError("AI_MEMORY_GIST_ID is required")
+        )
+
+        captured = capsys.readouterr()
+        assert result == 1
+        assert client.requests == []
+        store_class.assert_not_called()
+        assert "AI_MEMORY_GIST_ID" in captured.err
+        assert "AI summary unavailable" not in captured.out

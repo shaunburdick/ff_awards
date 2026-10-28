@@ -843,6 +843,7 @@ class TestAISummarySection:
             "generated_at": "2026-10-14T05:03:11Z",
             "truncated": False,
             "attempts": 1,
+            "history_weeks": 0,
         }
 
     def test_serializes_the_notice_as_an_error(
@@ -873,6 +874,38 @@ class TestAISummarySection:
             ai_summary=make_narrative(),
         )
         assert list(json.loads(output))[-1] == "ai_summary"
+
+    def test_provenance_key_set_is_exactly_the_documented_one(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        sample_weekly_challenges: list[WeeklyChallenge],
+    ) -> None:
+        """FR-008's five keys plus Phase 1's history_weeks, and nothing else."""
+        args = self._args(sample_division, sample_challenges, sample_weekly_challenges)
+        data = json.loads(self._output(*args, ai_summary=make_narrative()))
+
+        assert set(data["ai_summary"]["provenance"]) == {
+            "model",
+            "prompt_sha",
+            "generated_at",
+            "truncated",
+            "attempts",
+            "history_weeks",
+        }
+
+    def test_notice_carries_no_provenance(
+        self,
+        sample_division: DivisionData,
+        sample_challenges: list[ChallengeResult],
+        sample_weekly_challenges: list[WeeklyChallenge],
+    ) -> None:
+        args = self._args(sample_division, sample_challenges, sample_weekly_challenges)
+        data = json.loads(
+            self._output(*args, ai_summary=AISummaryUnavailable(reason="finish_reason=length"))
+        )
+
+        assert set(data["ai_summary"]) == {"error"}
 
     def test_feature_off_is_byte_identical(
         self,

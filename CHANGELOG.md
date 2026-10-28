@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-10-28 (Season Memory)
+
+### Added - Season context in the take
+- **The AI section now sees the season, not just the week.** Each league's block
+  carries every team's rank week by week, head-to-head record, current streak,
+  scoring trend, best and worst week, a signed average margin, and largest win
+  and loss — all derived from games the report already loads, so there is no
+  extra API call and no new setting. The newest week's ranks are taken verbatim
+  from the standings the report prints, so the prose cannot quote a position
+  that contradicts the table beside it.
+- **A league-wide view for the shared headline.** Every team across divisions in
+  one ranking, plus the week's highest and lowest score, biggest winning margin
+  and closest game measured across all divisions. The ranking uses the same
+  comparator the console's overall table prints, so the two cannot disagree, and
+  a division's first place is never described as the best record in the setup.
+  `provenance.history_weeks` records how many weeks the prompt carried.
+
+### Added - AI memory (optional)
+- **The weekly report can remember what it published.** With `AI_MEMORY_ENABLED`
+  true and a secret gist configured, each run reads one `memory.json` before the
+  narrative is generated and appends that week's published summary to it
+  afterwards — one entry per week, verbatim, under a week tag. The whole archive
+  goes into the prompt, so a running joke can escalate or retire instead of being
+  repeated, and the take can cite an earlier week it already wrote about.
+  Append-only with same-week replacement as the only mutation, so a hand edit in
+  an earlier entry survives by construction; a file that does not parse is
+  treated as no memory and never overwritten; a failed read suppresses the write
+  rather than replacing the season with one entry. Off is the default and changes
+  nothing. `provenance.memory_read`, `memory_write` and `memory_weeks` record
+  what the store said and what the model was shown; no memory outcome changes an
+  exit code, and a write failure warns once under Actions. See the README for the
+  memory settings and the season-boundary retirement.
+- **Test runs can read memory without advancing it.** `AI_MEMORY_WRITE` (default
+  true), or the `update_memory` input on a manual workflow run, keeps the archive
+  read-only for that run: the take is still written from what the season said,
+  `memory_write` records `skipped`, and nothing is emitted as a failure. Made for
+  dispatching the production workflow with the recipient pointed at a test
+  address.
+
 ## [3.5.1] - 2026-10-21 (Lint Cleanup + AI Report Polish)
 
 ### Added - Email team-name highlighting

@@ -16,6 +16,8 @@ from typing import TypedDict
 from ..models import ChallengeResult, ChampionshipLeaderboard, DivisionData, WeeklyChallenge
 from ..models.playoff import PlayoffBracket
 from ..models.week import WeeklyGameResult
+from .ai_history import AILeagueHistory, build_history
+from .rankings import rank_overall_teams
 
 MODE_REGULAR = "regular_season"
 MODE_PLAYOFFS = "playoffs"
@@ -125,6 +127,44 @@ class AILeagueDigest(TypedDict):
     matchups: list[AIMatchupRow]
     matchups_note: str | None
     weekly_challenges: list[AIWeeklyChallenge]
+    history: AILeagueHistory | None
+
+
+class AIOverallStandingRow(TypedDict):
+    """One team in the league-wide table; no owner, no PA, no playoff status."""
+
+    rank: int
+    team: str
+    division: str
+    record: str
+    points_for: float
+
+
+class AIExtremeScore(TypedDict):
+    """The week's highest or lowest score, across every division."""
+
+    team: str
+    division: str
+    score: float
+
+
+class AIExtremeMargin(TypedDict):
+    """The week's biggest win or closest game, across every division."""
+
+    team: str
+    division: str
+    opponent: str
+    margin: float
+
+
+class AIWeeklyExtremes(TypedDict):
+    """This week measured across every division (FR-012)."""
+
+    highest_score: AIExtremeScore
+    lowest_score: AIExtremeScore
+    # Null only when every game that week was a tie, so nobody won.
+    biggest_win: AIExtremeMargin | None
+    closest_game: AIExtremeMargin
 
 
 class AIDigest(TypedDict):
@@ -133,6 +173,8 @@ class AIDigest(TypedDict):
     week: int | None
     mode: str  # MODE_REGULAR | MODE_PLAYOFFS | MODE_CHAMPIONSHIP
     leagues: list[AILeagueDigest]
+    overall_standings: list[AIOverallStandingRow] | None
+    weekly_extremes: AIWeeklyExtremes | None
     season_challenges: list[AISeasonChallenge]
     playoffs: AIPlayoffRound | None
     championship: AIChampionship | None
@@ -171,10 +213,27 @@ def build_digest(
         week=current_week,
         mode=mode,
         leagues=leagues,
+        overall_standings=_overall_standings(divisions),
+        weekly_extremes=_weekly_extremes(divisions, mode),
         season_challenges=_season_challenges(challenges, historical=playoff_only),
         playoffs=_playoff_round(divisions) if mode == MODE_PLAYOFFS else None,
         championship=_championship_digest(championship) if championship else None,
     )
+
+
+def history_week_count(digest: AIDigest) -> int:
+    """
+    Distinct weeks the history blocks carry, unioned across leagues.
+
+    The union is what ``provenance.history_weeks`` reports: two leagues that
+    both played weeks 1-6 count six, not twelve.
+    """
+    weeks: set[int] = set()
+    for league in digest["leagues"]:
+        history = league["history"]
+        if history is not None:
+            weeks.update(history["weeks_included"])
+    return len(weeks)
 
 
 def _derive_mode(
@@ -188,6 +247,61 @@ def _derive_mode(
     return MODE_REGULAR
 
 
+def _overall_standings(divisions: Sequence[DivisionData]) -> list[AIOverallStandingRow] | None:
+    """
+    Every team in every division in the console's own order (FR-012).
+
+    No limit: the console stops at 20, but the jokes land at the bottom as
+    often as the top, so the digest carries all of them. ``None`` until a game
+    has been played — a table of every team at 0-0 is not a ranking.
+    """
+    if not any(division.games for division in divisions):
+        return None
+
+    return [
+        AIOverallStandingRow(
+            rank=rank,
+            team=team.name,
+            division=team.division,
+            record=f"{team.wins}-{team.losses}",
+            points_for=team.points_for,
+        )
+        for rank, team in enumerate(rank_overall_teams(divisions), 1)
+    ]
+
+
+def _weekly_extremes(divisions: Sequence[DivisionData], mode: str) -> AIWeeklyExtremes | None:
+    """This week measured across every division, or None when there is no week."""
+    if mode != MODE_REGULAR:
+        # The digest carries no weekly rows in playoff or championship weeks.
+        return None
+
+    rows = [row for division in divisions for row in division.weekly_games]
+    if not rows:
+        return None
+
+    wins = [row for row in rows if row.won]
+    return AIWeeklyExtremes(
+        highest_score=_extreme_score(max(rows, key=lambda row: row.score)),
+        lowest_score=_extreme_score(min(rows, key=lambda row: row.score)),
+        biggest_win=_extreme_margin(max(wins, key=lambda row: row.margin)) if wins else None,
+        # Same key as the calculator: a shared margin reports from the winner.
+        closest_game=_extreme_margin(min(rows, key=lambda row: (row.margin, not row.won))),
+    )
+
+
+def _extreme_score(row: WeeklyGameResult) -> AIExtremeScore:
+    """One end of the week's scoring, naming the division it came from."""
+    return AIExtremeScore(team=row.team_name, division=row.division, score=row.score)
+
+
+def _extreme_margin(row: WeeklyGameResult) -> AIExtremeMargin:
+    """A margin extreme, reported from the row's own side."""
+    return AIExtremeMargin(
+        team=row.team_name, division=row.division, opponent=row.opponent_name, margin=row.margin
+    )
+
+
 def _league_digest(
     division: DivisionData,
     weekly_challenges: Sequence[WeeklyChallenge] | None,
@@ -198,7 +312,10 @@ def _league_digest(
     in_championship = mode == MODE_CHAMPIONSHIP
     player_only = mode in (MODE_PLAYOFFS, MODE_CHAMPIONSHIP)
 
-    standings = [] if in_championship else _standings_rows(division)
+    # One ranking, used twice: the standings key and the anchor the history's
+    # newest week copies verbatim (FR-011), so the two cannot disagree.
+    rows = _standings_rows(division)
+    standings = [] if in_championship else rows
     # The bracket (playoffs) and the leaderboard (championship) are those modes'
     # matchup sections; the formatters show no weekly team material there.
     if mode == MODE_REGULAR:
@@ -216,6 +333,7 @@ def _league_digest(
         matchups=matchups,
         matchups_note=matchups_note,
         weekly_challenges=_weekly_challenge_rows(weekly_challenges, division.name, player_only),
+        history=build_history(division.games, division.teams, rows),
     )
 
 
@@ -228,7 +346,7 @@ def _weeks_remaining(division: DivisionData, current_week: int | None) -> int | 
 
 def _standings_rows(division: DivisionData) -> list[AIStandingsRow]:
     """Rank teams exactly as the formatters do: wins, then points for."""
-    ordered = sorted(division.teams, key=lambda team: (team.wins, team.points_for), reverse=True)
+    ordered = rank_overall_teams([division])
     return [
         AIStandingsRow(
             rank=index,

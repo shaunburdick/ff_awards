@@ -13,7 +13,7 @@ import urllib.request
 from unittest.mock import MagicMock, patch
 
 import pytest
-from ai_fakes import FakeTransport, envelope
+from ai_fakes import FakeTransport, envelope, make_regular_divisions
 
 from ff_tracker.config import (
     DEFAULT_AI_BASE_URL,
@@ -28,12 +28,14 @@ from ff_tracker.exceptions import (
     AITransportError,
     AITruncationError,
 )
+from ff_tracker.models import AISummaryUnavailable
+from ff_tracker.services._http import urlopen
 from ff_tracker.services.ai_client import (
     USER_AGENT,
     AIRequest,
     OpenAICompatibleClient,
-    _urlopen,
 )
+from ff_tracker.services.ai_summary_service import AISummaryService
 
 API_KEY = "sk-test-SECRET-key"
 NARRATIVE = '{"headline": "Beaten again", "leagues": [], "season_note": "Ouch."}'
@@ -235,6 +237,24 @@ class TestResponseHandling:
         assert "prompt=12 completion=34" in caplog.text
 
 
+class _ResettingBody(io.BytesIO):
+    """An error body that dies while it is being consumed, as a reset proxy is."""
+
+    def read(self, size: int | None = -1) -> bytes:
+        raise ConnectionResetError("peer reset while reading the error body")
+
+
+def _resetting_http_error(status: int) -> urllib.error.HTTPError:
+    """An HTTPError whose ``read()`` raises: the error path's own mid-body failure."""
+    return urllib.error.HTTPError(
+        "https://opencode.ai/inference/openai/v1/chat/completions",
+        status,
+        "boom",
+        email.message.Message(),
+        _ResettingBody(),
+    )
+
+
 class TestFailureTaxonomy:
     """AC-004/AC-005: every transport failure maps to a reason naming the host."""
 
@@ -251,6 +271,36 @@ class TestFailureTaxonomy:
             client.complete(_request())
         assert excinfo.value.reason == "HTTP 410 (model deepseek-v4.1-flash at opencode.ai)"
         assert "inference" not in excinfo.value.reason
+
+    @pytest.mark.parametrize(
+        ("status", "expected"),
+        [
+            (401, "HTTP 401 (model deepseek-v4.1-flash at opencode.ai)"),
+            (403, "HTTP 403 (model deepseek-v4.1-flash at opencode.ai)"),
+            (500, "HTTP 500 (model deepseek-v4.1-flash at opencode.ai)"),
+        ],
+    )
+    def test_an_error_body_that_resets_is_still_mapped(self, status: int, expected: str) -> None:
+        """A reset while discarding the error body must not escape as an OSError."""
+        client = OpenAICompatibleClient(
+            _config(), FakeTransport(error=_resetting_http_error(status))
+        )
+
+        with pytest.raises(AIHTTPError) as excinfo:
+            client.complete(_request())
+
+        assert excinfo.value.reason == expected
+
+    def test_an_error_body_that_resets_still_degrades_to_the_notice(self) -> None:
+        """FR-006: the mapped failure reaches the service as the notice, not a crash."""
+        client = OpenAICompatibleClient(_config(), FakeTransport(error=_resetting_http_error(500)))
+        service = AISummaryService(_config(), client)
+
+        result = service.generate(make_regular_divisions(), [], None, 6, None)
+
+        assert isinstance(result, AISummaryUnavailable)
+        assert result.reason == "HTTP 500 (model deepseek-v4.1-flash at opencode.ai)"
+        assert "The report is unaffected." in result.notice
 
     def test_transport_error(self) -> None:
         error = urllib.error.URLError("connection refused")
@@ -286,6 +336,21 @@ class TestFailureTaxonomy:
         with pytest.raises(AITransportError, match=r"connection failed \(opencode\.ai\)"):
             client.complete(_request())
 
+    @pytest.mark.parametrize(
+        "error",
+        [
+            ValueError("Invalid header value b'Bearer sk-test\n'"),
+            UnicodeEncodeError("ascii", "gist-é", 0, 1, "ordinal not in range(128)"),
+        ],
+        ids=["malformed-header", "non-ascii-input"],
+    )
+    def test_a_urlopen_input_failure_maps_to_a_transport_error(self, error: Exception) -> None:
+        """A pasted key with a trailing newline is configuration to fix, not a crash."""
+        client = OpenAICompatibleClient(_config(), FakeTransport(error=error))
+
+        with pytest.raises(AITransportError, match=r"connection failed \(opencode\.ai\)"):
+            client.complete(_request())
+
     def test_custom_base_url_host_appears_but_not_its_path(self) -> None:
         error = urllib.error.URLError("nope")
         client = OpenAICompatibleClient(
@@ -307,7 +372,7 @@ class TestProductionTransport:
         response.__exit__.return_value = False
 
         with patch("urllib.request.urlopen", return_value=response) as mock_urlopen:
-            body = _urlopen(urllib.request.Request("https://opencode.ai/x"), 42)
+            body = urlopen(urllib.request.Request("https://opencode.ai/x"), 42)
 
         assert body == b'{"ok": true}'
         mock_urlopen.assert_called_once()

@@ -2,31 +2,66 @@
 
 from __future__ import annotations
 
+import dataclasses
 import http.client
 import json
 import logging
 import re
 
 import pytest
-from ai_fakes import LEAGUE_A, LEAGUE_B, FakeAIClient, FakeTransport, make_regular_divisions
+from ai_fakes import (
+    LEAGUE_A,
+    LEAGUE_B,
+    WEEK,
+    FakeAIClient,
+    FakeMemoryStore,
+    FakeTransport,
+    make_championship,
+    make_championship_divisions,
+    make_division,
+    make_memory_archive,
+    make_memory_entry,
+    make_playoff_divisions,
+    make_regular_divisions,
+    make_season_games,
+    make_team,
+    make_teams_from_games,
+)
 
-from ff_tracker.config import DEFAULT_AI_MAX_TOKENS, DEFAULT_AI_MODEL, AISummaryConfig
+from ff_tracker.config import (
+    DEFAULT_AI_MAX_TOKENS,
+    DEFAULT_AI_MODEL,
+    AIMemoryConfig,
+    AISummaryConfig,
+)
 from ff_tracker.exceptions import (
     AIContractError,
     AIHTTPError,
+    AIMemoryStoreError,
     AISummaryError,
     AITimeoutError,
     AITransportError,
     AITruncationError,
 )
-from ff_tracker.models import AISummary, AISummaryUnavailable, DivisionData
+from ff_tracker.models import (
+    AISummary,
+    AISummaryUnavailable,
+    ChampionshipLeaderboard,
+    DivisionData,
+)
 from ff_tracker.services.ai_client import AIRequest
+from ff_tracker.services.ai_digest import build_digest, history_week_count
+from ff_tracker.services.ai_memory import MemorySession, parse_archive, serialize_archive
 from ff_tracker.services.ai_summary_service import (
     HEADLINE_WORD_CAP,
     INSTRUCTIONS_HEADING,
+    LEAGUE_WIDE_RULES,
     LEAGUE_WORD_CAP,
     MAX_BULLETS,
     MAX_PARAGRAPHS,
+    MEMORY_HEADING,
+    MEMORY_INTRO,
+    MEMORY_RULES,
     SEASON_NOTE_WORD_CAP,
     SYSTEM_PROMPT,
     AISummaryService,
@@ -696,3 +731,370 @@ class TestLogging:
         _generate(service)
 
         assert any("AI summary unavailable: HTTP 410" in r.getMessage() for r in caplog.records)
+
+
+class TestLeagueWideRules:
+    """FR-012's two rules are prompt constants, and they sit inside the hash."""
+
+    @pytest.mark.parametrize(
+        ("divisions", "week", "championship"),
+        [
+            (make_regular_divisions(), WEEK, None),
+            (make_playoff_divisions(), 15, None),
+            (make_championship_divisions(), 17, make_championship()),
+        ],
+        ids=["regular", "playoffs", "championship"],
+    )
+    def test_every_mode_composes_the_rules_verbatim(
+        self,
+        divisions: list[DivisionData],
+        week: int,
+        championship: ChampionshipLeaderboard | None,
+    ) -> None:
+        client = FakeAIClient(
+            response=_response(leagues=[_league_section(division.name) for division in divisions])
+        )
+        AISummaryService(_config(), client).generate(divisions, [], None, week, championship)
+
+        prompt = client.requests[0].system_prompt
+        for rule in LEAGUE_WIDE_RULES:
+            assert rule in prompt
+
+    def test_reordering_a_rule_moves_the_hash(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        before = prompt_sha(build_system_prompt("", [LEAGUE_A]))
+
+        monkeypatch.setattr(
+            "ff_tracker.services.ai_summary_service.LEAGUE_WIDE_RULES",
+            tuple(f"{rule} (reworded)" for rule in LEAGUE_WIDE_RULES[::-1]),
+        )
+
+        assert prompt_sha(build_system_prompt("", [LEAGUE_A])) != before
+
+    def test_a_league_with_no_games_still_makes_one_provider_call(self) -> None:
+        division = make_division(LEAGUE_A, teams=[make_team("Butt Fumble")])
+        client = FakeAIClient(response=_response(leagues=[_league_section(LEAGUE_A)]))
+
+        AISummaryService(_config(), client).generate([division], [], None, WEEK, None)
+
+        digest = json.loads(client.requests[0].user_message)
+        assert digest["overall_standings"] is None
+        assert digest["weekly_extremes"] is None
+        assert len(client.requests) == 1
+
+
+class TestHistoryWeeks:
+    """T105: provenance records the distinct weeks the history blocks carried."""
+
+    def test_zero_when_no_league_has_a_game(self) -> None:
+        service, _ = _service(_response())
+        result = _generate(service)
+
+        assert isinstance(result, AISummary)
+        assert result.provenance.history_weeks == 0
+
+    def test_overlapping_leagues_count_each_week_once(self) -> None:
+        """Weeks [1, 2, 3] and [2, 3, 4] are four weeks, not six."""
+        first = make_season_games(
+            {"A1": [100.0, 110.0, 120.0], "A2": [90.0, 95.0, 99.0]},
+            [[("A1", "A2")]] * 3,
+            division=LEAGUE_A,
+        )
+        second = make_season_games(
+            {"B1": [100.0, 110.0, 120.0], "B2": [90.0, 95.0, 99.0]},
+            [[("B1", "B2")]] * 3,
+            division=LEAGUE_B,
+            first_week=2,
+        )
+        divisions = [
+            make_division(
+                LEAGUE_A,
+                teams=make_teams_from_games(["A1", "A2"], first, division=LEAGUE_A),
+                games=first,
+            ),
+            make_division(
+                LEAGUE_B,
+                league_id=222,
+                teams=make_teams_from_games(["B1", "B2"], second, division=LEAGUE_B),
+                games=second,
+            ),
+        ]
+
+        result = AISummaryService(_config(), FakeAIClient(response=_response())).generate(
+            divisions, [], None, WEEK, None
+        )
+
+        assert isinstance(result, AISummary)
+        assert result.provenance.history_weeks == 4
+        assert history_week_count(build_digest(divisions, [], None, WEEK, None)) == 4
+
+
+MEMORY_CONFIG = AIMemoryConfig(gist_id="gist123", gist_token="ghp-test")
+
+
+def _memory_service(
+    store: FakeMemoryStore,
+    *,
+    response: str | None = None,
+    week: int | None = 6,
+    season: int = 2026,
+) -> tuple[AISummaryService, FakeAIClient, MemorySession]:
+    """A service with a memory session over ``store``, as ``main`` wires it."""
+    config = AISummaryConfig(enabled=True, api_key="sk-test", memory=MEMORY_CONFIG)
+    session = MemorySession(MEMORY_CONFIG, season, week, store)
+    client = FakeAIClient(response=_response() if response is None else response)
+    return AISummaryService(config, client, session), client, session
+
+
+class TestMemoryBlock:
+    """T205/AC-030: every stored week in the prompt, under its tag, in order."""
+
+    def test_six_stored_weeks_appear_in_week_order(self) -> None:
+        store = FakeMemoryStore(data=make_memory_archive(weeks=(6, 2, 4, 1, 3, 5)))
+        service, client, _ = _memory_service(store)
+
+        _generate(service)
+
+        prompt = client.requests[0].system_prompt
+        assert MEMORY_HEADING in prompt
+        assert MEMORY_INTRO in prompt
+        positions = [prompt.index(f"Week {week} (published") for week in range(1, 7)]
+        assert positions == sorted(positions)
+
+    def test_the_block_is_introduced_as_what_the_model_published(self) -> None:
+        assert "what you published in earlier weeks" in MEMORY_INTRO
+
+    def test_both_rules_reach_the_prompt_verbatim(self) -> None:
+        store = FakeMemoryStore(data=make_memory_archive(weeks=(1,)))
+        service, client, _ = _memory_service(store)
+
+        _generate(service)
+
+        prompt = client.requests[0].system_prompt
+        for rule in MEMORY_RULES:
+            assert rule in prompt
+
+    def test_an_over_long_stored_paragraph_reaches_the_prompt_as_written(self) -> None:
+        """AC-033: the archive is never trimmed, reflowed or capped."""
+        long_paragraph = "Marked prose. " + "word " * 400 + "End of the stored take."
+        entry = make_memory_entry(1)
+        entry["leagues"][0]["paragraphs"] = [long_paragraph]
+        archive = serialize_archive({"schema": 1, "season": 2026, "entries": [entry]})
+        service, client, _ = _memory_service(FakeMemoryStore(data=archive))
+
+        _generate(service)
+
+        prompt = client.requests[0].system_prompt
+        assert long_paragraph in prompt
+        assert "word …" not in prompt
+
+    def test_no_block_and_no_rule_text_when_memory_is_off(self) -> None:
+        service, client = _service(_response())
+
+        _generate(service)
+
+        prompt = client.requests[0].system_prompt
+        assert MEMORY_HEADING not in prompt
+        for rule in MEMORY_RULES:
+            assert rule not in prompt
+
+    def test_no_block_when_the_read_found_nothing(self) -> None:
+        service, client, session = _memory_service(FakeMemoryStore())
+
+        _generate(service)
+
+        prompt = client.requests[0].system_prompt
+        assert MEMORY_HEADING not in prompt
+        assert session.read_status == "none"
+
+    def test_no_block_when_the_read_failed(self) -> None:
+        store = FakeMemoryStore(
+            read_errors=[AIMemoryStoreError("transport", "gist connection failed")]
+        )
+        service, client, _ = _memory_service(store)
+
+        _generate(service)
+
+        assert MEMORY_HEADING not in client.requests[0].system_prompt
+        assert store.read_calls == 1
+
+    def test_prompt_sha_is_the_hash_of_the_instructions_alone(self) -> None:
+        """A block that changes every week cannot move the hash."""
+        without_archive = _memory_service(FakeMemoryStore())[0]
+        with_archive = _memory_service(FakeMemoryStore(data=make_memory_archive()))[0]
+        memory_off, _ = _service(_response())
+
+        results = [_generate(service) for service in (without_archive, with_archive, memory_off)]
+
+        hashes = {
+            result.provenance.prompt_sha for result in results if isinstance(result, AISummary)
+        }
+        assert len(hashes) == 1
+        expected = prompt_sha(build_system_prompt("", [LEAGUE_A, LEAGUE_B]))
+        assert hashes == {expected}
+
+    def test_the_debug_line_shows_week_tags_and_never_the_prose(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        store = FakeMemoryStore(data=make_memory_archive(weeks=(1, 2)))
+        service, _, _ = _memory_service(store)
+
+        with caplog.at_level(logging.DEBUG):
+            _generate(service)
+
+        logged = "\n".join(record.getMessage() for record in caplog.records)
+        assert "Week 1" in logged and "Week 2" in logged
+        assert "Week 1 prose about Butt Fumble." not in logged
+        assert "Week 1 headline" not in logged
+        assert "Week 1 season note." not in logged
+
+
+class TestMemoryLifecycle:
+    """T206: one read before, one write after, and the entry is the published take."""
+
+    def test_an_absent_file_is_none_with_empty_weeks_and_one_write(self) -> None:
+        """AC-029."""
+        store = FakeMemoryStore()
+        service, client, session = _memory_service(store)
+
+        result = _generate(service)
+
+        assert isinstance(result, AISummary)
+        assert result.provenance.memory_read == "none"
+        assert result.provenance.memory_write == "ok"
+        assert result.provenance.memory_weeks == []
+        assert store.read_calls == 1
+        assert store.write_calls == 1
+        assert len(client.requests) == 1
+
+        saved = parse_archive(store.data or b"")
+        assert saved is not None
+        entry = saved["entries"][0]
+        assert entry["week"] == WEEK
+        assert entry["generated_at"] == result.provenance.generated_at
+        assert entry["headline"] == result.headline
+        assert entry["season_note"] == result.season_note
+        assert entry["leagues"] == [
+            {
+                "league": league.league,
+                "paragraphs": list(league.paragraphs),
+                "bullets": list(league.bullets),
+            }
+            for league in result.leagues
+        ]
+
+    def test_an_empty_gist_is_also_none(self) -> None:
+        """AC-029: an archive with no entries is "nothing published yet"."""
+        store = FakeMemoryStore(data=make_memory_archive(weeks=()))
+        service, _, session = _memory_service(store)
+
+        result = _generate(service)
+
+        assert isinstance(result, AISummary)
+        assert result.provenance.memory_read == "none"
+        assert result.provenance.memory_weeks == []
+        assert store.write_calls == 1
+
+    def test_six_prior_weeks_are_ok_and_reported(self) -> None:
+        """AC-030."""
+        store = FakeMemoryStore(data=make_memory_archive())
+        service, client, _ = _memory_service(store)
+
+        result = _generate(service)
+
+        assert isinstance(result, AISummary)
+        assert result.provenance.memory_read == "ok"
+        assert result.provenance.memory_weeks == [1, 2, 3, 4, 5, 6]
+        assert len(client.requests) == 1
+        assert store.read_calls == 1
+        assert store.write_calls == 1
+
+    def test_the_request_carries_no_gist_id_token_or_league_id(self) -> None:
+        store = FakeMemoryStore(data=make_memory_archive())
+        service, client, _ = _memory_service(store)
+        divisions = [
+            dataclasses.replace(division, league_id=987654321)
+            for division in make_regular_divisions()
+        ]
+
+        service.generate(divisions, [], None, WEEK, None)
+
+        request = client.requests[0]
+        request_text = request.system_prompt + request.user_message
+        assert "gist123" not in request_text
+        assert "ghp-test" not in request_text
+        assert "987654321" not in request_text
+
+    def test_the_section_renders_identically_with_or_without_an_archive(self) -> None:
+        """AC-030: the archive changes the prompt, not the render."""
+        without = _generate(_memory_service(FakeMemoryStore())[0])
+        with_archive = _generate(_memory_service(FakeMemoryStore(data=make_memory_archive()))[0])
+
+        assert isinstance(without, AISummary)
+        assert isinstance(with_archive, AISummary)
+        assert with_archive.headline == without.headline
+        assert with_archive.leagues == without.leagues
+        assert with_archive.season_note == without.season_note
+
+    def test_a_failed_narrative_performs_no_write(self) -> None:
+        """AC-032: the notice object carries no provenance, so the session's status is it."""
+        store = FakeMemoryStore(data=make_memory_archive())
+        service, client, session = _memory_service(store, response="not json")
+
+        result = _generate(service)
+
+        assert isinstance(result, AISummaryUnavailable)
+        assert session.write_status == "skipped"
+        assert store.write_calls == 0
+        assert len(client.requests) == 2  # the one contract retry
+
+    def test_read_only_mode_uses_the_archive_and_skips_the_write(self) -> None:
+        """AC-034: read "ok", weeks populated, write "skipped", no warning."""
+        store = FakeMemoryStore(data=make_memory_archive())
+        config = AISummaryConfig(
+            enabled=True,
+            api_key="sk-test",
+            memory=AIMemoryConfig(gist_id="gist123", gist_token="ghp-test", write=False),
+        )
+        memory = config.memory
+        assert memory is not None
+        session = MemorySession(memory, 2026, WEEK, store)
+        client = FakeAIClient(response=_response())
+
+        result = AISummaryService(config, client, session).generate(
+            make_regular_divisions(), [], None, WEEK, None
+        )
+
+        assert isinstance(result, AISummary)
+        assert result.provenance.memory_read == "ok"
+        assert result.provenance.memory_weeks == [1, 2, 3, 4, 5, 6]
+        assert result.provenance.memory_write == "skipped"
+        assert session.warnings == []
+        assert store.read_calls == 1
+        assert store.write_calls == 0
+        assert MEMORY_HEADING in client.requests[0].system_prompt
+
+    def test_memory_off_leaves_provenance_unset(self) -> None:
+        service, _ = _service(_response())
+
+        result = _generate(service)
+
+        assert isinstance(result, AISummary)
+        assert result.provenance.memory_read is None
+        assert result.provenance.memory_write is None
+        assert result.provenance.memory_weeks is None
+
+    def test_a_same_week_rerun_replaces_the_entry_and_nothing_else(self) -> None:
+        store = FakeMemoryStore(data=make_memory_archive(weeks=(1, 2)))
+        _generate(_memory_service(store)[0])
+        first = parse_archive(store.data or b"")
+        assert first is not None
+
+        _generate(_memory_service(store)[0])
+        second = parse_archive(store.data or b"")
+        assert second is not None
+
+        assert [row["week"] for row in second["entries"]] == [1, 2, 6]
+        for week in (1, 2):
+            before = next(row for row in first["entries"] if row["week"] == week)
+            after = next(row for row in second["entries"] if row["week"] == week)
+            assert after == before

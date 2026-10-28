@@ -3,22 +3,33 @@
 from __future__ import annotations
 
 import difflib
+import io
 import json
-from collections.abc import Callable, Sequence
+import os
+import sys
+from collections.abc import Callable, Mapping, Sequence
+from contextlib import redirect_stdout
+from datetime import datetime, timezone
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from ai_fakes import (
     LEAGUE_A,
     LEAGUE_B,
+    FakeAIClient,
+    FakeMemoryStore,
     make_championship,
     make_championship_divisions,
     make_division,
+    make_memory_archive,
     make_narrative,
     make_playoff_divisions,
     make_regular_divisions,
     make_regular_weekly_challenges,
     make_season_challenge,
     make_team,
+    make_three_division_divisions,
 )
 
 from ff_tracker.display import (
@@ -29,6 +40,8 @@ from ff_tracker.display import (
     MarkdownFormatter,
     SheetsFormatter,
 )
+from ff_tracker.exceptions import AIMemoryStoreError
+from ff_tracker.main import main
 from ff_tracker.models import (
     AISummary,
     AISummaryLeague,
@@ -39,6 +52,7 @@ from ff_tracker.models import (
     WeeklyChallenge,
 )
 from ff_tracker.services.ai_digest import build_digest
+from ff_tracker.services.ai_summary_service import MEMORY_HEADING
 
 FORMATTERS: dict[str, Callable[..., BaseFormatter]] = {
     "console": ConsoleFormatter,
@@ -697,3 +711,350 @@ class TestEmailTeamHighlighting:
     def test_other_formats_have_no_span(self, format_name: str) -> None:
         _, on = _both(format_name, make_regular_divisions())
         assert "ai-team" not in on
+
+
+GOLDEN_PATH = Path(__file__).parent / "fixtures" / "ai_summary_phase1_golden.json"
+GOLDEN_MODEL = "deepseek-v4.1-flash"
+# The email footer prints the package version. Pinning it here keeps a release
+# bump out of a golden whose whole job is to prove memory-off output is
+# unchanged; it is deliberately not kept in step with pyproject.toml.
+GOLDEN_VERSION = "3.6.0"
+GOLDEN_RESPONSE = json.dumps(
+    {
+        "headline": "Three leagues, one long weekend",
+        "leagues": [
+            {
+                "league": "MM Driveway Surfers",
+                "paragraphs": ["Butt Fumble stayed unbeaten through six weeks."],
+                "bullets": ["Donut Lose won by 1.08"],
+            },
+            {
+                "league": "My 2026 League",
+                "paragraphs": ["Sunday Scaries won by 70 and it was not close."],
+                "bullets": [],
+            },
+            {
+                "league": "The Hood 2026",
+                "paragraphs": ["Hood Rats survived by half a point."],
+                "bullets": ["Late Round Larry is still winless"],
+            },
+        ],
+        "season_note": "The middle of every table is a car park.",
+    }
+)
+# Everything the golden pins: a stray variable in the environment would move
+# the prompt, the model or the report data.
+PINNED_ENV = {
+    "AI_SUMMARY_ENABLED": "true",
+    "AI_SUMMARY_API_KEY": "sk-golden",
+    "AI_SUMMARY_MODEL": GOLDEN_MODEL,
+    "AI_SUMMARY_USER_PROMPT": "",
+}
+
+
+class _StubESPNService:
+    """The ESPN service ``main`` drives, with the AC-027 fixture behind it."""
+
+    current_week = 6
+
+    def __init__(self, config: object) -> None:
+        self.divisions = make_three_division_divisions()
+
+    def load_all_divisions(self) -> list[DivisionData]:
+        return self.divisions
+
+
+def phase1_report_outputs(
+    tmp_path: Path,
+    *,
+    env: Mapping[str, str] | None = None,
+    memory_store: FakeMemoryStore | None = None,
+    client: FakeAIClient | None = None,
+) -> dict[str, object]:
+    """
+    Run one report end to end for the golden and return the five outputs.
+
+    The patch set is plan Decision 17's: ``sys.argv`` (the league ids come from
+    it), ``ESPNService``, the provider client, ``datetime`` **on the summary
+    service module** (patching the class globally would leak into the process)
+    and the environment. The capture script and the comparison test both call
+    this, so the two phases compare one path rather than two copies of it.
+
+    ``env`` is layered over the pinned environment, so a memory run varies one
+    variable rather than the whole set. The email footer's version is pinned too,
+    so a release bump cannot fail the comparison for a reason it does not guard.
+    """
+    argv = ["ff-tracker", "111,222,333", "--year", "2026", "--output-dir", str(tmp_path)]
+    ai_client = client if client is not None else FakeAIClient(response=GOLDEN_RESPONSE)
+    store = memory_store if memory_store is not None else FakeMemoryStore()
+    environment = {**PINNED_ENV, **(env or {})}
+    previous_cwd = Path.cwd()
+    os.chdir(tmp_path)
+    try:
+        with (
+            patch.object(sys, "argv", argv),
+            patch.dict(os.environ, environment, clear=True),
+            patch("ff_tracker.main.ESPNService", _StubESPNService),
+            patch("ff_tracker.main.OpenAICompatibleClient", lambda config: ai_client),
+            patch("ff_tracker.main.GistMemoryStore", lambda config: store),
+            patch("ff_tracker.display.email.version", return_value=GOLDEN_VERSION),
+            patch("ff_tracker.services.ai_summary_service.datetime") as frozen,
+            redirect_stdout(io.StringIO()),
+        ):
+            frozen.now.return_value = datetime(2026, 10, 14, 5, 3, 11, tzinfo=timezone.utc)
+            assert main() == 0
+    finally:
+        os.chdir(previous_cwd)
+
+    return {
+        "console": (tmp_path / "standings.txt").read_text(encoding="utf-8"),
+        "sheets": (tmp_path / "standings.tsv").read_text(encoding="utf-8"),
+        "email": (tmp_path / "standings.html").read_text(encoding="utf-8"),
+        "markdown": (tmp_path / "standings.md").read_text(encoding="utf-8"),
+        "json": json.loads((tmp_path / "standings.json").read_text(encoding="utf-8")),
+    }
+
+
+def _first_difference(actual: str, expected: str) -> str:
+    """Name the first differing character, so a failure is read as output."""
+    for index, (left, right) in enumerate(zip(actual, expected)):
+        if left != right:
+            window = slice(max(index - 30, 0), index + 30)
+            return f"offset {index}: {actual[window]!r} != {expected[window]!r}"
+    return f"lengths differ: {len(actual)} != {len(expected)}"
+
+
+class TestPhase1Golden:
+    """
+    AC-028's reference: the Phase-1 five outputs, read from disk only.
+
+    Nothing here regenerates the file. A recapture is a deliberate, separate
+    commit reviewed as output (plan Decision 17), never a side effect of a test.
+    """
+
+    @pytest.fixture(scope="class")
+    def produced(self, tmp_path_factory: pytest.TempPathFactory) -> dict[str, object]:
+        return phase1_report_outputs(tmp_path_factory.mktemp("phase1-golden"))
+
+    @pytest.fixture(scope="class")
+    def golden(self) -> dict[str, object]:
+        document: object = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
+        assert isinstance(document, dict)
+        return document
+
+    @pytest.mark.parametrize("format_name", ["console", "sheets", "email", "markdown"])
+    def test_text_formats_match_the_golden(
+        self, produced: dict[str, object], golden: dict[str, object], format_name: str
+    ) -> None:
+        expected = golden[format_name]
+        actual = produced[format_name]
+
+        assert isinstance(expected, str)
+        assert isinstance(actual, str)
+        assert actual == expected, _first_difference(actual, expected)
+
+    def test_json_matches_the_golden_document(
+        self, produced: dict[str, object], golden: dict[str, object]
+    ) -> None:
+        assert produced["json"] == golden["json"]
+
+    def test_the_golden_carries_the_phase1_provenance(self, golden: dict[str, object]) -> None:
+        document = golden["json"]
+        assert isinstance(document, dict)
+        provenance = document["ai_summary"]["provenance"]
+
+        assert provenance["model"] == GOLDEN_MODEL
+        assert provenance["generated_at"] == "2026-10-14T05:03:11Z"
+        assert provenance["history_weeks"] == 6
+
+
+MEMORY_ENV = {
+    "AI_MEMORY_ENABLED": "true",
+    "AI_MEMORY_GIST_ID": "gist123",
+    "AI_MEMORY_GIST_TOKEN": "ghp-golden",
+}
+
+
+@pytest.fixture(scope="module")
+def phase1_golden() -> dict[str, object]:
+    """The checked-in Phase-1 document, read and never written."""
+    document: object = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
+    assert isinstance(document, dict)
+    return document
+
+
+class TestMemoryOffMatchesTheGolden:
+    """AC-028: memory off is invisible, and memory on changes only the prompt."""
+
+    def _text_formats(self) -> list[str]:
+        return ["console", "sheets", "email", "markdown"]
+
+    def test_memory_unset_makes_zero_store_calls_and_reproduces_the_golden(
+        self, tmp_path: Path, phase1_golden: dict[str, object]
+    ) -> None:
+        store = FakeMemoryStore()
+        client = FakeAIClient(response=GOLDEN_RESPONSE)
+
+        produced = phase1_report_outputs(tmp_path, memory_store=store, client=client)
+
+        assert store.read_calls == 0 == store.write_calls
+        for format_name in self._text_formats():
+            assert produced[format_name] == phase1_golden[format_name], format_name
+        assert produced["json"] == phase1_golden["json"]
+        assert MEMORY_HEADING not in client.requests[0].system_prompt
+
+    def test_memory_explicitly_false_is_the_same(
+        self, tmp_path: Path, phase1_golden: dict[str, object]
+    ) -> None:
+        store = FakeMemoryStore()
+        client = FakeAIClient(response=GOLDEN_RESPONSE)
+
+        produced = phase1_report_outputs(
+            tmp_path,
+            env={"AI_MEMORY_ENABLED": "false"},
+            memory_store=store,
+            client=client,
+        )
+
+        assert store.read_calls == 0 == store.write_calls
+        assert produced["json"] == phase1_golden["json"]
+        assert MEMORY_HEADING not in client.requests[0].system_prompt
+
+    @pytest.mark.parametrize("kind", ["server", "transport", "timeout"])
+    def test_a_read_failure_renders_the_golden_sections(
+        self, tmp_path: Path, phase1_golden: dict[str, object], kind: str
+    ) -> None:
+        """AC-031: a read that fails is invisible in every format but the prompt."""
+        store = FakeMemoryStore(
+            data=make_memory_archive(), read_errors=[AIMemoryStoreError(kind, "x")]
+        )
+
+        produced = phase1_report_outputs(
+            tmp_path, env=MEMORY_ENV, memory_store=store, client=FakeAIClient(GOLDEN_RESPONSE)
+        )
+
+        for format_name in self._text_formats():
+            assert produced[format_name] == phase1_golden[format_name], format_name
+
+        document = produced["json"]
+        assert isinstance(document, dict)
+        assert isinstance(phase1_golden["json"], dict)
+        summary = document["ai_summary"]
+        assert isinstance(summary, dict)
+        provenance = summary["provenance"]
+        assert isinstance(provenance, dict)
+        assert provenance["memory_read"] == "failed"
+        assert provenance["memory_weeks"] == []
+        for key in ("memory_read", "memory_write", "memory_weeks"):
+            del provenance[key]
+        assert document == phase1_golden["json"]
+
+    def test_the_golden_carries_no_memory_provenance(
+        self, phase1_golden: dict[str, object]
+    ) -> None:
+        document = phase1_golden["json"]
+        assert isinstance(document, dict)
+        provenance = document["ai_summary"]["provenance"]
+
+        assert set(provenance) == {
+            "model",
+            "prompt_sha",
+            "generated_at",
+            "truncated",
+            "attempts",
+            "history_weeks",
+        }
+
+    def test_memory_on_renders_the_golden_section_and_changes_only_provenance(
+        self, tmp_path: Path, phase1_golden: dict[str, object]
+    ) -> None:
+        """AC-030: the archive changes the prompt, not the render."""
+        store = FakeMemoryStore(data=make_memory_archive(weeks=(1, 2, 3)))
+        client = FakeAIClient(response=GOLDEN_RESPONSE)
+
+        produced = phase1_report_outputs(
+            tmp_path, env=MEMORY_ENV, memory_store=store, client=client
+        )
+
+        assert store.read_calls == 1
+        assert store.write_calls == 1
+        assert len(client.requests) == 1
+        assert MEMORY_HEADING in client.requests[0].system_prompt
+
+        for format_name in self._text_formats():
+            assert produced[format_name] == phase1_golden[format_name], format_name
+
+        document = produced["json"]
+        assert isinstance(document, dict)
+        assert isinstance(phase1_golden["json"], dict)
+        summary = document["ai_summary"]
+        assert isinstance(summary, dict)
+        provenance = summary["provenance"]
+        assert isinstance(provenance, dict)
+
+        # prompt_sha hashes the instructions, so an archive cannot move it.
+        golden_provenance = phase1_golden["json"]["ai_summary"]["provenance"]
+        assert provenance["prompt_sha"] == golden_provenance["prompt_sha"]
+        assert provenance["memory_read"] == "ok"
+        assert provenance["memory_write"] == "ok"
+        assert provenance["memory_weeks"] == [1, 2, 3]
+
+        for key in ("memory_read", "memory_write", "memory_weeks"):
+            del provenance[key]
+        assert document == phase1_golden["json"]
+
+
+class TestMemoryReadOnly:
+    """AC-034: writing is a choice, and choosing not to changes no rendered value."""
+
+    def test_the_five_formats_match_a_writing_run(
+        self, tmp_path: Path, phase1_golden: dict[str, object]
+    ) -> None:
+        archive = make_memory_archive(weeks=(1, 2, 3))
+        writing_store = FakeMemoryStore(data=archive)
+        read_only_store = FakeMemoryStore(data=archive)
+        writing_dir = tmp_path / "writing"
+        read_only_dir = tmp_path / "read-only"
+        writing_dir.mkdir()
+        read_only_dir.mkdir()
+
+        writing = phase1_report_outputs(
+            writing_dir,
+            env={**MEMORY_ENV, "AI_MEMORY_WRITE": "true"},
+            memory_store=writing_store,
+            client=FakeAIClient(response=GOLDEN_RESPONSE),
+        )
+        read_only = phase1_report_outputs(
+            read_only_dir,
+            env={**MEMORY_ENV, "AI_MEMORY_WRITE": "false"},
+            memory_store=read_only_store,
+            client=FakeAIClient(response=GOLDEN_RESPONSE),
+        )
+
+        for format_name in ("console", "sheets", "email", "markdown"):
+            assert read_only[format_name] == writing[format_name], format_name
+
+        # JSON carries provenance, so the one field the choice changes is
+        # memory_write; everything else, narrative included, is identical.
+        writing_json = writing["json"]
+        read_only_json = read_only["json"]
+        assert isinstance(writing_json, dict)
+        assert isinstance(read_only_json, dict)
+        writing_provenance = writing_json["ai_summary"]["provenance"]
+        read_only_provenance = read_only_json["ai_summary"]["provenance"]
+        assert writing_provenance["memory_write"] == "ok"
+        assert read_only_provenance["memory_write"] == "skipped"
+        assert {
+            key: value for key, value in writing_provenance.items() if key != "memory_write"
+        } == {key: value for key, value in read_only_provenance.items() if key != "memory_write"}
+        assert {
+            **writing_json,
+            "ai_summary": {**writing_json["ai_summary"], "provenance": None},
+        } == {
+            **read_only_json,
+            "ai_summary": {**read_only_json["ai_summary"], "provenance": None},
+        }
+
+        assert writing_store.write_calls == 1
+        assert read_only_store.write_calls == 0
+        assert read_only_provenance["memory_weeks"] == [1, 2, 3]
