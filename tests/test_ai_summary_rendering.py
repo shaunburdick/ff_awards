@@ -715,6 +715,10 @@ class TestEmailTeamHighlighting:
 
 GOLDEN_PATH = Path(__file__).parent / "fixtures" / "ai_summary_phase1_golden.json"
 GOLDEN_MODEL = "deepseek-v4.1-flash"
+# The email footer prints the package version. Pinning it here keeps a release
+# bump out of a golden whose whole job is to prove memory-off output is
+# unchanged; it is deliberately not kept in step with pyproject.toml.
+GOLDEN_VERSION = "3.6.0"
 GOLDEN_RESPONSE = json.dumps(
     {
         "headline": "Three leagues, one long weekend",
@@ -777,7 +781,8 @@ def phase1_report_outputs(
     this, so the two phases compare one path rather than two copies of it.
 
     ``env`` is layered over the pinned environment, so a memory run varies one
-    variable rather than the whole set.
+    variable rather than the whole set. The email footer's version is pinned too,
+    so a release bump cannot fail the comparison for a reason it does not guard.
     """
     argv = ["ff-tracker", "111,222,333", "--year", "2026", "--output-dir", str(tmp_path)]
     ai_client = client if client is not None else FakeAIClient(response=GOLDEN_RESPONSE)
@@ -792,6 +797,7 @@ def phase1_report_outputs(
             patch("ff_tracker.main.ESPNService", _StubESPNService),
             patch("ff_tracker.main.OpenAICompatibleClient", lambda config: ai_client),
             patch("ff_tracker.main.GistMemoryStore", lambda config: store),
+            patch("ff_tracker.display.email.version", return_value=GOLDEN_VERSION),
             patch("ff_tracker.services.ai_summary_service.datetime") as frozen,
             redirect_stdout(io.StringIO()),
         ):
