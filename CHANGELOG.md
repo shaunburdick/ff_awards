@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing. `provenance.memory_read`, `memory_write` and `memory_weeks` record
   what the store said and what the model was shown; no memory outcome changes an
   exit code, and a write failure warns once under Actions. See the README for the
-  three settings and the season-boundary retirement.
+  memory settings and the season-boundary retirement.
 
 ## [3.5.1] - 2026-10-21 (Lint Cleanup + AI Report Polish)
 

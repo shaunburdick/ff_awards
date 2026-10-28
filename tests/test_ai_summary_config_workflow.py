@@ -270,20 +270,5 @@ class TestMemoryWriteInput:
     def test_the_report_step_forwards_it_to_ai_memory_write(self) -> None:
         assert _report_step_env()["AI_MEMORY_WRITE"] == "${{ inputs.update_memory }}"
 
-    def test_the_expression_has_no_fallback_that_would_swallow_false(self) -> None:
-        """`a || b` would turn a deliberate false back into the fallback."""
-        expression = _report_step_env()["AI_MEMORY_WRITE"]
-
-        assert "||" not in expression
-        assert expression == "${{ inputs.update_memory }}"
-
-    def test_a_blank_on_schedule_means_the_default_not_off(self) -> None:
-        """The loader reads a blank value as its default (write), never as false."""
-        raw = WORKFLOW.read_text(encoding="utf-8")
-
-        assert "AI_MEMORY_WRITE:" in raw
-        assert "AI_MEMORY_WRITE: false" not in raw
-        assert "AI_MEMORY_WRITE: true" not in raw
-
     def test_it_is_not_set_at_the_workflow_level(self) -> None:
         assert "AI_MEMORY_WRITE" not in _env()

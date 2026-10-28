@@ -7,7 +7,6 @@ import http.client
 import json
 import logging
 import re
-from pathlib import Path
 
 import pytest
 from ai_fakes import (
@@ -71,7 +70,6 @@ from ff_tracker.services.ai_summary_service import (
 )
 
 USER_PROMPT = "Be dry. Never mention the commissioner's team."
-REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _config(

@@ -336,8 +336,7 @@ def main() -> int:
             in_actions = os.environ.get("GITHUB_ACTIONS") == "true"
             if isinstance(ai_summary, AISummaryUnavailable) and in_actions:
                 print(f"::warning::{ai_summary.notice}")
-            # One line per cause: the session appends at most one per read and
-            # one per write, so a paired authentication failure prints two.
+            # At most one line: a write only follows a read that did not fail.
             if session is not None and in_actions:
                 for line in session.warnings:
                     print(f"::warning::{line}")

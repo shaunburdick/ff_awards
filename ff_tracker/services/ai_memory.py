@@ -472,7 +472,7 @@ class MemorySession:
 
 
 def _can_key_entry(season: int, week: int) -> bool:
-    """The one thing that suppresses a write: an entry nothing could ever address."""
+    """One of the reasons a write is skipped: an entry nothing could ever address."""
     return 2000 <= season <= 9999 and 1 <= week <= 18
 
 

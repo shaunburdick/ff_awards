@@ -6,7 +6,7 @@
 > **Last Updated**: 2026-10-28
 > **Version**: 2.5
 > **Plan**: [plan.md](./plan.md) v2.5
-> **Spec**: [spec.md](./spec.md) v0.28
+> **Spec**: [spec.md](./spec.md) v0.29
 
 **Tasks 1–13 are shipped — read them as context, not as instructions.** Where a line disagrees with
 the code, the code wins. Three shipped tasks were corrected in place so an engineer cannot follow

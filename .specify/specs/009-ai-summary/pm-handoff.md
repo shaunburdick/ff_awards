@@ -1,39 +1,35 @@
 # PM Handoff: AI Commissioner memory (spec 009 amendment)
 
-- Spec: `.specify/specs/009-ai-summary/spec.md` — **v0.26**
-- Plan / tasks: `plan.md`, `tasks.md` — **v2.2**, frozen
-- Branch: `ai-memory` · Commits: `cb4aac3` (spec/plan/tasks), `84c8733` (Phase A), `7e2517c` (Phase B) · Tree clean, nothing pushed
+- Spec: `.specify/specs/009-ai-summary/spec.md` — **v0.29**
+- Plan / tasks: `plan.md`, `tasks.md` — **v2.5**
+- Ledger: `challenge-ledger.md`
+- Branch: `ai-memory`, **7 commits, pushed, PR https://github.com/shaunburdick/ff_awards/pull/13**
+- Tree: clean apart from this file's refresh
 
-## Phase
+## State
 
-Both phases built and conformance-approved · Next: owner supplies a gist + token, one live run verifies the real API shape, then PR/merge · Blocked: nothing
+Both phases are built, reviewed and on the branch. The feature is live against the owner's real gist and has been exercised end to end.
 
-## Delivered
+- **Phase A** — season history per league and the league-wide view in the digest. `services/ai_history.py`, `services/rankings.py`.
+- **Phase B** — the memory log: one gist, one `memory.json`, one entry per week holding the published summary verbatim, read before generation, appended after. `services/ai_memory.py`, `MemorySession`.
+- **Read-only mode** — `AI_MEMORY_WRITE` (default true) and the `update_memory` dispatch input: reads and uses memory, writes nothing, records `skipped`. Added so a test dispatch to the owner's own address does not advance the archive.
+- 1141 tests; ruff, format and mypy clean. Memory-off output is byte-identical to the committed Phase-A golden.
 
-- **Phase A** — `services/ai_history.py` (week-by-week rank anchored to the printed standings, head-to-head, streak, ±1.0 trend, best/worst week, signed margin) and `services/rankings.py` (one comparator; the console table and the prompt cannot disagree). Digest gains `history`, `overall_standings`, `weekly_extremes`; provenance gains `history_weeks`.
-- **Phase B** — `services/ai_memory.py` (archive parse/merge/serialize, gist store with its own injectable transport) and `MemorySession` (status map, warnings, week guard). One gist, one `memory.json`, append-only, whole season in the prompt, two voice rules. Provenance gains `memory_read`, `memory_write`, `memory_weeks`.
-- 1106 tests, ruff/format/mypy clean. Memory-off output is byte-identical to the committed Phase-A golden (`tests/fixtures/ai_summary_phase1_golden.json`).
+## What has been proven against the real thing
 
-## Owner actions before this is live
+- The gist holds **weeks 1–7**, one entry each, 21.7 KB, reading back as `ok` with no warnings.
+- Weeks 6 and 7 are the takes the league actually received; weeks 1–5 were reconstructed with a throwaway script in `/tmp` (never committed) that rebuilt each week's records from games up to that week, so a week-1 take could not quote a week-7 record.
+- A week-7 dry run with weeks 1–6 behind it produced visible continuity — "six weeks of mockery", the Belt arc, the driveway motif — with no figures contradicting the week's data.
 
-1. Create a secret gist and a fine-grained token with **Gists: read and write** only.
-2. Repository variable `AI_MEMORY_GIST_ID`, secret `AI_MEMORY_GIST_TOKEN`; the workflow's guard turns memory on when both exist.
-3. One live run (LV-005) to confirm the documented API shape — the suite uses fakes, so the real read/patch shape is the only unverified piece.
-4. Run the throwaway backfill script once; generating a week and appending are callable outside the CLI, proven by a subprocess test.
+## Before it runs for real on Tuesday
 
-## Quality review (after the first push)
+1. **CI does not have the credentials yet.** `.env` covers local runs only. Add repository variable `AI_MEMORY_GIST_ID` and secret `AI_MEMORY_GIST_TOKEN` (fine-grained, Gists read and write only); the workflow's guard enables memory when both exist.
+2. Confirm the scheduled run writes week 8 and leaves weeks 1–7 untouched.
+3. The unproven piece is a scheduled CI run against the live gist — everything so far used the local `.env`.
 
-Three defects were found after the branch was pushed, all fixed in the same branch:
+## Owner preferences
 
-- a malformed token or non-ASCII gist id raised `ValueError` out of the transport and denied the report — `services/_http.py` now owns the transport for both clients and maps it
-- a failed read left the archive empty in memory, so the next write replaced the season with one entry; a read failure now suppresses the write and costs one week instead of the season
-- the README's retirement step ("empty the file") would have bricked memory permanently; it now gives the working empty archive
-
-Transport plumbing was duplicated between the two clients and is now one module. The backfill subprocess test (152 lines asserting a property every other service test already implies) was cut.
-
-## User preferences
-
-- A sportscaster with a persona and a running theme, not a data readout; league patterns over self-commentary.
+- A sportscaster with a persona and a running theme; league patterns over self-commentary.
 - One 24+ person league split across divisions; the shared headline is what makes them one league.
-- Full-season memory in the prompt, no caps, no compaction, single season, accuracy over token count.
-- Alliance to simplicity: every extra mechanism asked for was cut once the simpler shape was found. Dislikes process talk and detail that does not change a decision.
+- Full season in the prompt, no caps, no compaction, single season, accuracy over token count.
+- Allergic to bloat and to process talk. Every mechanism he did not ask for was cut; do not restore one.

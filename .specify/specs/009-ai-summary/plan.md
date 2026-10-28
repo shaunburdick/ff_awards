@@ -5,7 +5,7 @@
 > **Created**: 2026-10-21
 > **Last Updated**: 2026-10-28
 > **Version**: 2.5
-> **Spec**: [spec.md](./spec.md) v0.28 (authority — this plan decides implementation only)
+> **Spec**: [spec.md](./spec.md) v0.29 (authority — this plan decides implementation only)
 > **Gate rulings**: [challenge-ledger.md](./challenge-ledger.md) (settled rows are settled; Gate 2 closed at v2.2)
 >
 > Sections 1–12 and Decisions 1–8 describe the **shipped** feature and are unchanged except where
