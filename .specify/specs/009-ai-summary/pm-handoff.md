@@ -1,40 +1,33 @@
 # PM Handoff: AI Commissioner memory (spec 009 amendment)
 
-- Spec: `.specify/specs/009-ai-summary/spec.md` — **v0.25**
-- Plan / tasks: `.specify/specs/009-ai-summary/plan.md`, `tasks.md` — **v2.1** (Phase A 5 tasks, Phase B 9)
-- Ledger: `.specify/specs/009-ai-summary/challenge-ledger.md`
-- Constitution: `.specify/memory/constitution.md`
-- Branch: `ai-memory` (worktree). Modified: spec.md, plan.md, tasks.md, challenge-ledger.md; untracked: pm-handoff.md. No code written, nothing committed.
+- Spec: `.specify/specs/009-ai-summary/spec.md` — **v0.26**
+- Plan / tasks: `plan.md`, `tasks.md` — **v2.2**, frozen
+- Branch: `ai-memory` · Commits: `cb4aac3` (spec/plan/tasks), `84c8733` (Phase A), `7e2517c` (Phase B) · Tree clean, nothing pushed
 
 ## Phase
 
-Gate 2 verification in progress · Completed: intake, ideation, spec (v0.15 → v0.25 through three Gate 1 rounds), plan + tasks, Gate 2 fixes · Next: owner approval, then Phase A build · Blocked: none
+Both phases built and conformance-approved · Next: owner supplies a gist + token, one live run verifies the real API shape, then PR/merge · Blocked: nothing
 
-## What the feature is
+## Delivered
 
-**Phase A — prompt input, no store (5 tasks).** Season history per league (rank by week, head-to-head, streak, trend, best/worst week, signed average margin) and the league-wide view (every team across divisions in one ranking that copies the console's order; highest/lowest score, biggest margin, closest game across all divisions). Both derive from games the report already loads. Adds `provenance.history_weeks`.
+- **Phase A** — `services/ai_history.py` (week-by-week rank anchored to the printed standings, head-to-head, streak, ±1.0 trend, best/worst week, signed margin) and `services/rankings.py` (one comparator; the console table and the prompt cannot disagree). Digest gains `history`, `overall_standings`, `weekly_extremes`; provenance gains `history_weeks`.
+- **Phase B** — `services/ai_memory.py` (archive parse/merge/serialize, gist store with its own injectable transport) and `MemorySession` (status map, warnings, week guard). One gist, one `memory.json`, append-only, whole season in the prompt, two voice rules. Provenance gains `memory_read`, `memory_write`, `memory_weeks`.
+- 1106 tests, ruff/format/mypy clean. Memory-off output is byte-identical to the committed Phase-A golden (`tests/fixtures/ai_summary_phase1_golden.json`).
 
-**Phase B — the memory log (9 tasks).** One gist, one file `memory.json`, one entry per week holding that week's published summary verbatim (headline, season note, every league's paragraphs and bullets). Read before generation, append after, whole archive in the prompt as "what you published", two prompt rules: quote it as your own words rather than league fact, and continue a bit rather than repeat it. Off by default; off is byte-identical to the Phase-A golden. Adds `memory_read`, `memory_write`, `memory_weeks`.
+## Owner actions before this is live
 
-## Decisions the owner made (do not reopen)
+1. Create a secret gist and a fine-grained token with **Gists: read and write** only.
+2. Repository variable `AI_MEMORY_GIST_ID`, secret `AI_MEMORY_GIST_TOKEN`; the workflow's guard turns memory on when both exist.
+3. One live run (LV-005) to confirm the documented API shape — the suite uses fakes, so the real read/patch shape is the only unverified piece.
+4. Run the throwaway backfill script once; generating a week and appending are callable outside the CLI, proven by a subprocess test.
 
-- Memory is a log of what was published — nothing new is generated for it, no model-authored memory field.
-- One gist = one commissioner setup; one file; append-only; same-week replacement is the only mutation. This is what keeps the 24+ person league from crossing divisions.
-- Full season in the prompt, no caps, no compaction, no rollover, single season only. Accuracy over token count; cost is a few cents a season.
-- Backfill is a throwaway local script the owner runs once, not a product feature — but generating a week and appending must be callable outside the CLI.
-- The shared headline exists because one 24+ person league was split across divisions; it needs cross-division material, which is what the league-wide view provides.
-- Two rules carry the voice: quotation (past takes are its own words, the current data is truth) and continue-don't-repeat (the owner's explicit ask).
-- Stance/persona schemas, per-league files, aliasing, `source` markers, caps and season summaries were all designed and deleted. Do not restore them.
+## Known follow-up
 
-## Next
-
-1. Gate 2 verification closes (challenger confirms B1–B4, S1–S10, cuts, spec wordings).
-2. Owner approves; Phase A goes to one `modern-architect-engineer` pass, then a conformance check.
-3. Phase B after a real Phase-A report is read; gist + fine-grained PAT (Gists read/write only) set up before its first live run.
-4. The owner's backfill script runs once after Phase B lands.
+`services/ai_client.py` has the same error-body read inside `except HTTPError` that Phase B just fixed in the memory store: a provider that resets mid-error-body escapes as a bare `OSError` and turns the FR-006 notice into exit 1. Pre-existing, outside this amendment, wants its own small change with the same guard and a matching fixture.
 
 ## User preferences
 
-- Wants a sportscaster with a persona and a running theme, not a data readout; league patterns over the AI talking about itself.
-- Wants full-season context and voice continuity; team data outside the repo, in a gist.
-- Irritated by over-engineering and by detail that does not change a decision. Talk about the thing, not about the process.
+- A sportscaster with a persona and a running theme, not a data readout; league patterns over self-commentary.
+- One 24+ person league split across divisions; the shared headline is what makes them one league.
+- Full-season memory in the prompt, no caps, no compaction, single season, accuracy over token count.
+- Alliance to simplicity: every extra mechanism asked for was cut once the simpler shape was found. Dislikes process talk and detail that does not change a decision.

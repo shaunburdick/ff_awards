@@ -199,9 +199,18 @@ class OpenAICompatibleClient:
 
     @staticmethod
     def _discard(error: urllib.error.HTTPError) -> None:
-        """Read and drop the error body: it may echo the request and is never logged."""
+        """
+        Drain and close the error response without letting its body fail the run.
+
+        A reset or a truncated read while consuming an *error* body is not a
+        failure to report: the status already decided the outcome, and an
+        exception raised inside ``_send``'s ``except`` block would escape as a
+        raw ``OSError`` and deny the report. The body is never logged.
+        """
         try:
             error.read()
+        except (OSError, http.client.HTTPException):
+            pass
         finally:
             error.close()
 
