@@ -548,10 +548,13 @@ as it is — never overwritten.
 (the weeks the model was shown) appear in JSON only when a narrative rendered; the
 failure notice carries none of them. A read failure never appears in any format: a
 404 is "nothing published yet", a 401/403 warns once under Actions, and a 5xx,
-transport error or timeout is silent. A write failure ships the complete report,
-exits 0, and warns once under Actions naming scope or authentication. A run whose
-week is not 1–18 — pre-kickoff, or a week it could not detect — writes nothing and
-records `skipped`.
+transport error or timeout is silent. **A failed read also skips the write**: with no
+archive in hand, appending this week would replace the stored weeks with a single
+entry, so the run records the failure and leaves the file untouched — one week of
+memory, never the season. A write failure ships the complete report, exits 0, and
+warns once under Actions naming scope or authentication. A run whose week is not
+1–18 — pre-kickoff, or a week it could not detect — writes nothing and records
+`skipped`.
 
 **Seeding past weeks** is a series of ordinary `--week N` runs, not a feature: the
 throwaway script that loops over a season is the owner's, not part of this repo.
@@ -560,10 +563,20 @@ Each run appends the week it was given, so the archive grows one entry at a time
 **Retire the file at a season boundary.** Entries are keyed by week alone inside a
 file whose `season` is fixed when it is created, and the tool never compares that
 season to the run's. A Week 6 run next season would therefore **replace** last
-season's Week 6 entry — a hand edit included — rather than add to it. At the end of
-a season either start a new gist or empty `memory.json` in the existing one; that is
-a hand action on purpose, because a rollover rule would make a legitimate mid-season
-correction impossible.
+season's Week 6 entry — a hand edit included — rather than add to it.
+
+Starting a new gist is the simplest reset. To reuse the same gist, replace the
+file's content with a valid empty archive:
+
+```json
+{"schema": 1, "season": 2026, "entries": []}
+```
+
+That is a hand action on purpose, because a rollover rule would make a legitimate
+mid-season correction impossible. **Do not merely blank the file:** an empty or
+unparseable `memory.json` is treated as no memory, warned about once under Actions,
+and never overwritten — so memory stays off until someone writes a valid archive
+back into the gist.
 
 **What leaves the machine:** team names, owner names, points for, points against,
 scores and league names are sent to `AI_SUMMARY_BASE_URL`, together with

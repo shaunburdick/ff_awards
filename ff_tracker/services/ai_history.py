@@ -141,7 +141,7 @@ def _ranks_by_team(
     ranks: dict[str, list[AIRankByWeek]] = {name: [] for name in names}
 
     for week in weeks:
-        for rank, name in enumerate(_order_at_week(names, by_team, week, anchor_order), 1):
+        for rank, name in enumerate(_order_at_week(names, by_team, week), 1):
             ranks[name].append(AIRankByWeek(week=week, rank=rank))
 
     latest_week = weeks[-1]
@@ -156,21 +156,16 @@ def _ranks_by_team(
 
 
 def _order_at_week(
-    names: Sequence[str],
-    by_team: dict[str, list[GameResult]],
-    week: int,
-    anchor_order: dict[str, int],
+    names: Sequence[str], by_team: dict[str, list[GameResult]], week: int
 ) -> list[str]:
-    """Rank every team by wins, then points for, over its games up to ``week``."""
+    """
+    Rank every team by wins, then points for, over its games up to ``week``.
+
+    ``names`` arrives in anchor order and the sort is stable, so a tie keeps the
+    standings' own relative order.
+    """
     records = {name: _record_through(by_team.get(name, []), week) for name in names}
-    return sorted(
-        names,
-        key=lambda name: (
-            -records[name][0],
-            -records[name][1],
-            _anchor_position(anchor_order, name),
-        ),
-    )
+    return sorted(names, key=lambda name: (-records[name][0], -records[name][1]))
 
 
 def _record_through(games: Sequence[GameResult], week: int) -> tuple[int, float]:

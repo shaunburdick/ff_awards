@@ -644,7 +644,7 @@ class TestMidBodyFailureShipstheReport:
         assert "Fantasy Football Multi-Division Challenge Tracker" in out.out
 
 
-MEMORY_CONFIG = AIMemoryConfig(enabled=True, gist_id="gist123", gist_token="ghp-test")
+MEMORY_CONFIG = AIMemoryConfig(gist_id="gist123", gist_token="ghp-test")
 
 
 def _narrative_for(names: Sequence[str]) -> str:
@@ -761,12 +761,14 @@ class TestMemoryWiring:
                 1,
             ),
             (
+                # A failed read suppresses the write, so there is one cause and
+                # one line rather than two.
                 FakeMemoryStore(
                     data=make_memory_archive(),
                     read_errors=[AIMemoryStoreError("auth", "x")],
                     write_errors=[AIMemoryStoreError("auth", "x")],
                 ),
-                2,
+                1,
             ),
             (FakeMemoryStore(write_errors=[AIMemoryStoreError("server", "x")]), 1),
             (FakeMemoryStore(read_errors=[AIMemoryStoreError("server", "x")]), 0),
@@ -776,7 +778,7 @@ class TestMemoryWiring:
         ],
         ids=[
             "auth-read-write-ok",
-            "auth-read-and-failed-write",
+            "auth-read-suppresses-write",
             "failed-write-only",
             "server-read",
             "transport-read",

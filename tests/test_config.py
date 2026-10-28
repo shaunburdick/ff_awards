@@ -851,7 +851,6 @@ class TestMemoryConfig:
         memory = load_ai_summary_config().memory
 
         assert memory is not None
-        assert memory.enabled is True
         assert memory.gist_id == "abc123"
         assert memory.gist_token == "ghp-test"
 
@@ -862,7 +861,7 @@ class TestMemoryConfig:
         monkeypatch.setenv("AI_MEMORY_ENABLED", value)
         memory = load_ai_summary_config().memory
 
-        assert memory is not None and memory.enabled is True
+        assert memory is not None
 
     @pytest.mark.parametrize("value", ["false", "0", "no", "off", "OFF"])
     def test_false_spellings_mean_no_memory(
@@ -925,7 +924,7 @@ class TestMemoryConfig:
 
     def test_the_token_is_absent_from_a_configuration_error(self) -> None:
         with pytest.raises(ConfigurationError) as caught:
-            AIMemoryConfig(enabled=True, gist_id="", gist_token="ghp-marker-token")
+            AIMemoryConfig(gist_id="", gist_token="ghp-marker-token")
 
         assert "AI_MEMORY_GIST_ID" in str(caught.value)
         assert "ghp-marker-token" not in str(caught.value)

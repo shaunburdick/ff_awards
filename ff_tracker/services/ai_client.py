@@ -8,12 +8,9 @@ without failing the report.
 
 from __future__ import annotations
 
-import http.client
 import json
 import logging
-import socket
 import time
-import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -28,6 +25,14 @@ from ..exceptions import (
     AITransportError,
     AITruncationError,
     DataValidationError,
+)
+from ._http import (
+    HTTPStatusFailure,
+    HTTPTimeoutFailure,
+    HTTPTransport,
+    HTTPTransportFailure,
+    send,
+    urlopen,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,21 +77,6 @@ class AIClient(Protocol):
         ...
 
 
-class HTTPTransport(Protocol):
-    """One HTTP POST, returning the response body."""
-
-    def __call__(self, request: urllib.request.Request, timeout: int) -> bytes:
-        """Perform the request and read the body."""
-        ...
-
-
-def _urlopen(request: urllib.request.Request, timeout: int) -> bytes:
-    """Default transport: one request, one read, no retries."""
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        body: bytes = response.read()
-    return body
-
-
 class OpenAICompatibleClient:
     """Chat Completions client for any OpenAI-compatible endpoint."""
 
@@ -96,10 +86,10 @@ class OpenAICompatibleClient:
 
         Args:
             config: Provider settings (base URL, model, key, timeout).
-            transport: Override for tests; defaults to ``_urlopen``.
+            transport: Override for tests; defaults to ``urlopen``.
         """
         self._config = config
-        self._transport: HTTPTransport = transport or _urlopen
+        self._transport: HTTPTransport = transport or urlopen
 
     @property
     def _host(self) -> str:
@@ -177,42 +167,17 @@ class OpenAICompatibleClient:
         return json.dumps(payload).encode("utf-8")
 
     def _send(self, http_request: urllib.request.Request) -> bytes:
-        """Perform the request, mapping transport failures onto the taxonomy."""
+        """Perform the request, mapping the shared HTTP failures onto the taxonomy."""
         try:
-            return self._transport(http_request, self._config.timeout)
-        except urllib.error.HTTPError as e:
-            self._discard(e)
-            logger.warning("AI summary provider returned HTTP %s from %s", e.code, self._host)
-            raise AIHTTPError(status=e.code, host=self._host, model=self._config.model) from None
-        except urllib.error.URLError as e:
-            if isinstance(e.reason, (TimeoutError, socket.timeout)):
-                logger.warning("AI summary provider timed out after %ss", self._config.timeout)
-                raise AITimeoutError(self._config.timeout) from None
-            raise AITransportError(self._host) from None
-        except (TimeoutError, socket.timeout):
+            return send(self._transport, http_request, self._config.timeout)
+        except HTTPStatusFailure as e:
+            logger.warning("AI summary provider returned HTTP %s from %s", e.status, self._host)
+            raise AIHTTPError(status=e.status, host=self._host, model=self._config.model) from None
+        except HTTPTimeoutFailure:
             logger.warning("AI summary provider timed out after %ss", self._config.timeout)
             raise AITimeoutError(self._config.timeout) from None
-        except (OSError, http.client.HTTPException):
-            # A provider or proxy closing mid-body raises ConnectionResetError or
-            # IncompleteRead; both are ordinary transport failures, not crashes.
+        except HTTPTransportFailure:
             raise AITransportError(self._host) from None
-
-    @staticmethod
-    def _discard(error: urllib.error.HTTPError) -> None:
-        """
-        Drain and close the error response without letting its body fail the run.
-
-        A reset or a truncated read while consuming an *error* body is not a
-        failure to report: the status already decided the outcome, and an
-        exception raised inside ``_send``'s ``except`` block would escape as a
-        raw ``OSError`` and deny the report. The body is never logged.
-        """
-        try:
-            error.read()
-        except (OSError, http.client.HTTPException):
-            pass
-        finally:
-            error.close()
 
     def _parse_envelope(self, raw: bytes) -> tuple[str | None, str]:
         """

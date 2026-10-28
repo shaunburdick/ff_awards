@@ -29,11 +29,11 @@ from ff_tracker.exceptions import (
     AITruncationError,
 )
 from ff_tracker.models import AISummaryUnavailable
+from ff_tracker.services._http import urlopen
 from ff_tracker.services.ai_client import (
     USER_AGENT,
     AIRequest,
     OpenAICompatibleClient,
-    _urlopen,
 )
 from ff_tracker.services.ai_summary_service import AISummaryService
 
@@ -336,6 +336,21 @@ class TestFailureTaxonomy:
         with pytest.raises(AITransportError, match=r"connection failed \(opencode\.ai\)"):
             client.complete(_request())
 
+    @pytest.mark.parametrize(
+        "error",
+        [
+            ValueError("Invalid header value b'Bearer sk-test\n'"),
+            UnicodeEncodeError("ascii", "gist-é", 0, 1, "ordinal not in range(128)"),
+        ],
+        ids=["malformed-header", "non-ascii-input"],
+    )
+    def test_a_urlopen_input_failure_maps_to_a_transport_error(self, error: Exception) -> None:
+        """A pasted key with a trailing newline is configuration to fix, not a crash."""
+        client = OpenAICompatibleClient(_config(), FakeTransport(error=error))
+
+        with pytest.raises(AITransportError, match=r"connection failed \(opencode\.ai\)"):
+            client.complete(_request())
+
     def test_custom_base_url_host_appears_but_not_its_path(self) -> None:
         error = urllib.error.URLError("nope")
         client = OpenAICompatibleClient(
@@ -357,7 +372,7 @@ class TestProductionTransport:
         response.__exit__.return_value = False
 
         with patch("urllib.request.urlopen", return_value=response) as mock_urlopen:
-            body = _urlopen(urllib.request.Request("https://opencode.ai/x"), 42)
+            body = urlopen(urllib.request.Request("https://opencode.ai/x"), 42)
 
         assert body == b'{"ok": true}'
         mock_urlopen.assert_called_once()

@@ -1,11 +1,11 @@
 # Implementation Tasks: AI Summary (Commissioner's Take)
 
 > **Spec ID**: 009
-> **Status**: Frozen at v2.2 — Gate 2 closed; Phase A may start
+> **Status**: v2.3 — Gate 2 closed; Phase A may start (v2.3 records a behaviour change already in code)
 > **Created**: 2026-10-21
 > **Last Updated**: 2026-10-27
-> **Version**: 2.2
-> **Plan**: [plan.md](./plan.md) v2.2
+> **Version**: 2.3
+> **Plan**: [plan.md](./plan.md) v2.3
 > **Spec**: [spec.md](./spec.md) v0.26
 
 **Tasks 1–13 are shipped — read them as context, not as instructions.** Where a line disagrees with
@@ -516,19 +516,19 @@ so the phase ids keep their old numbers and the gaps are deliberate.
 **Deliverable**: one object per run that performs the read and the write, maps every outcome to a status, and never raises.
 
 - [ ] `services/ai_memory.py`: `MEMORY_READ_OK/NONE/FAILED`, `MEMORY_WRITE_OK/FAILED/SKIPPED`; `MemorySession(memory_config, season, week, store=None)` with `open()`, `commit(summary)`, `read_status`, `write_status`, `entries`, `weeks`, `warnings`
-- [ ] `open()`: at most one `load()`; bytes → `parse_archive` → `"ok"` with entries and weeks, or `"none"` plus **one** warning when the file will not parse (and `parsed` stays false, so `commit` will not write); `None` → `"none"` with no warning; `auth` → `"failed"` with one warning naming authentication; a read `not_found` → `"none"`; `server`/`transport`/`timeout` → `"failed"` with **no** warning
-- [ ] `commit(summary)`: `_can_key_entry(season, week)` (`2000–9999`, `1–18`) false → `"skipped"` with no store call; no entry to write (narrative unavailable) → `"skipped"`; the file failed to parse → `"skipped"` with no store call and the bytes untouched; `save()` success → `"ok"`; any store failure → `"failed"` with exactly one warning naming scope or authentication where identifiable
+- [ ] `open()`: at most one `load()`; bytes → `parse_archive` → `"ok"` with entries and weeks, or `"none"` plus **one** warning when the file will not parse (and `parsed` stays false, so `commit` will not write); `None` → `"none"` with no warning; `auth` → `"failed"` with one warning naming authentication; a read `not_found` → `"none"`, which is not a failure and does not suppress the write; `server`/`transport`/`timeout` → `"failed"` with **no** warning. Every `"failed"` read is what suppresses the write in `commit`
+- [ ] `commit(summary)`: **`read_status == "failed"` → `"skipped"` with no store call and the store untouched** (the merge cannot preserve what it never read); `_can_key_entry(season, week)` (`2000–9999`, `1–18`) false → `"skipped"` with no store call; no entry to write (narrative unavailable) → `"skipped"`; the file failed to parse → `"skipped"` with no store call and the bytes untouched; `save()` success → `"ok"`; any store failure → `"failed"` with exactly one warning naming scope or authentication where identifiable. Order the checks so the failed-read case is the first one and cannot be reached with a stale archive
 - [ ] It catches `AIMemoryStoreError` and nothing else, so a programming error escapes and fails the run loudly (Article III, and the same rule Decision 1 applies to the narrative)
 - [ ] Entries and weeks are ordered by week; `weeks` is what will be reported as `memory_weeks`
-- [ ] Tests, one case per cell of the plan's "Phase 2 failure policy" table: statuses, warning counts (exactly one, or zero), the pre-kickoff `week=0` and `week=None` cases with **zero** store calls, and one test that a store raising `AttributeError` propagates
+- [ ] Tests, one case per cell of the plan's "Phase 2 failure policy" table: statuses, warning counts (exactly one, or zero), the pre-kickoff `week=0` and `week=None` cases with **zero** store calls, **a failed read of each kind (auth, 5xx, transport, timeout) asserting `write_status: "skipped"`, zero `save()` calls and the store bytes unchanged**, and one test that a store raising `AttributeError` propagates
 
 **Validation**: `uv run pytest tests/test_ai_memory.py -q`.
 
-**ACs**: AC-031 · AC-032 · AC-033 (warn once, file untouched) · FR-014
+**ACs**: AC-031 (every read failure records `"skipped"` and warns once for authentication or not at all) · AC-032 (write failures after a readable archive) · AC-033 (warn once, file untouched) · FR-014
 
 **Files**: `services/ai_memory.py`, `tests/test_ai_memory.py`
 
-**Done when**: `tests/test_ai_memory.py` passes and every row of the plan's failure-policy table has a named test that fails if its status or warning count changes.
+**Done when**: `tests/test_ai_memory.py` passes and every row of the plan's failure-policy table has a named test that fails if its status or warning count changes — including one test per read-failure kind asserting zero saves.
 
 ---
 
@@ -579,19 +579,19 @@ so the phase ids keep their old numbers and the gaps are deliberate.
 **Deliverable**: memory on in the CLI, its warnings printed once each, exit 0 always.
 
 - [ ] `main.py`: when `ai_config.memory is not None`, build `MemorySession(ai_config.memory, config.year, espn_service.current_week)` (store defaulting to `GistMemoryStore`) and pass it to `AISummaryService`
-- [ ] After generation, print each entry of `session.warnings` as `::warning::{line}` when `os.environ.get("GITHUB_ACTIONS") == "true"`, and nothing otherwise; the existing narrative-warning path is unchanged and can co-exist (two lines, one per cause)
+- [ ] After generation, print each entry of `session.warnings` as `::warning::{line}` when `os.environ.get("GITHUB_ACTIONS") == "true"`, and nothing otherwise; the existing narrative-warning path is unchanged and can co-exist (one line per cause)
 - [ ] Both `format_output` call sites keep passing `ai_summary=ai_summary`; nothing else about the report path changes
-- [ ] Tests in `tests/test_main_cli.py`. The **count** assertions run the real service with `ff_tracker.main.OpenAICompatibleClient` and `ff_tracker.main.GistMemoryStore` patched to a fake client and a fake store, so the numbers are the ones production would make: one provider call, exactly one store read and at most one store write for 1/3/10 leagues and in `--output-dir` mode; memory off → zero store calls; exit 0 in every failure case. The existing `AISummaryService`-patched tests keep asserting one `generate` call per run (AC-003's "one logical call")
-- [ ] **Warning counts, exact and per cause**: a 401/403 read with a write that succeeds → `out.count("::warning::") == 1`; a 401/403 read **and** a failed write → `== 2`, one line for each cause (AC-032's paired fixture — this is the case a single-line assertion used to get wrong); a failed write alone → `== 1`; a 5xx, transport error or timeout on the read → `== 0`; a file that will not parse → `== 1`; memory off → `== 0`. The same fixtures with `GITHUB_ACTIONS` unset print no `::warning::` at all
+- [ ] Tests in `tests/test_main_cli.py`. The **count** assertions run the real service with `ff_tracker.main.OpenAICompatibleClient` and `ff_tracker.main.GistMemoryStore` patched to a fake client and a fake store, so the numbers are the ones production would make: one provider call, exactly one store read and **at most** one store write for 1/3/10 leagues and in `--output-dir` mode — at most one because a failed read suppresses the write; memory off → zero store calls; exit 0 in every failure case. The existing `AISummaryService`-patched tests keep asserting one `generate` call per run (AC-003's "one logical call")
+- [ ] **Warning counts, exact and per cause**: a 401/403 read → `out.count("::warning::") == 1` and **zero `save()` calls**, because the failed read suppresses the write and there is no second cause to report; a 5xx, transport error or timeout on the read → `== 0` and zero saves; a failed write after a readable archive → `== 1`; a file that will not parse → `== 1` and zero saves; memory off → `== 0`. The same fixtures with `GITHUB_ACTIONS` unset print no `::warning::` at all
 - [ ] A `ConfigurationError` from the loader → exit 1, no report, zero provider calls, zero store calls
 
 **Validation**: `uv run pytest tests/test_main_cli.py -q`.
 
-**ACs**: AC-003 (memory counts) · AC-004 (exit 0 preserved) · AC-009 (unchanged) · AC-031 · AC-032 · AC-033 (warn once) · FR-006 · FR-014
+**ACs**: AC-003 (memory counts) · AC-004 (exit 0 preserved) · AC-009 (unchanged) · AC-031 (read failures and the suppressed write) · AC-032 (write failures after a successful read) · AC-033 (warn once) · FR-006 · FR-014
 
 **Files**: `main.py`, `tests/test_main_cli.py`, `tests/ai_fakes.py`
 
-**Done when**: `tests/test_main_cli.py` passes and every warning assertion is an exact count rather than a substring check.
+**Done when**: `tests/test_main_cli.py` passes, every warning assertion is an exact count rather than a substring check, and each read-failure fixture asserts zero saves as well as its line count.
 
 ---
 
@@ -673,8 +673,8 @@ Every criterion in spec v0.26 maps to at least one task, clause by clause — in
 | AC-028 | T106 (capture) · T205, T206, T208 | memory off compared against the committed golden; a memory-caused failure is never reconciled by recapturing |
 | AC-029 | T202, T206 | absent file and empty gist; entry contents, including `generated_at` equal to `provenance.generated_at` |
 | AC-030 | T203, T205, T206, T208 | six prior weeks; prompt contents; no gist id, token or league id in the body |
-| AC-031 | T203, T204, T207 | read outcomes and their warning counts, **including the read 404 → `"none"` case** |
-| AC-032 | T202, T203, T204, T206, T207 | write outcomes, including the read-404's failed write and the two-line paired fixture; same-week replacement |
+| AC-031 | T203, T204, T207 | read outcomes and their warning counts, the read 404 → `"none"` case, and **`"skipped"` with an untouched store on every failed read** |
+| AC-032 | T202, T203, T204, T206, T207 | write outcomes after a readable archive, the read-404's failed write (its read is `"none"`, not a failure), and same-week replacement |
 | AC-033 | T201, T202, T204, **T205**, T207 | parse-as-the-archive-shape failure (T202), unknown keys and over-long text read unchanged (T202), the over-long paragraph reaching the composed prompt as written (T205), the `week`/`season` write guard (T204, T207), missing settings (T201) |
 | WC-001 | 12 | shipped |
 | WC-002 | T210 | static YAML assertions (folded with the documentation) |
@@ -722,7 +722,7 @@ Every criterion in spec v0.26 maps to at least one task, clause by clause — in
 - [ ] A same-week re-run leaves one entry for that week; every other entry unchanged, including one carrying an unknown key (AC-032, LV-005)
 - [ ] A pre-kickoff run (`week` 0/None) writes nothing and makes zero store calls (AC-033's write guard)
 - [ ] `memory_read` / `memory_write` / `memory_weeks` exist only when a narrative renders (FR-005)
-- [ ] A read 404 is `"none"` and its write fails per AC-032; a read failure never appears in any format; a 401/403 read warns once, a 5xx/transport/timeout read does not; a write failure warns once and ships; the paired fixture emits exactly two lines (AC-031, AC-032)
+- [ ] A read 404 is `"none"`, so its write is attempted and fails per AC-032; **any other read failure records `"skipped"`, makes no store call and leaves the store unchanged**; a read failure never appears in any format; a 401/403 read warns once, a 5xx/transport/timeout read does not; a write failure after a readable archive warns once and ships; the authentication-read fixture emits exactly one line (AC-031, AC-032)
 - [ ] The entry's `generated_at` equals the rendered `provenance.generated_at` because one instant is computed once (AC-029)
 - [ ] The gist token and id appear in no output, message, log line or artefact (AC-005, FR-009)
 - [ ] No memory outcome changes the exit code: every case exits 0 (FR-006)
@@ -770,3 +770,4 @@ If either phase had to shrink further, the cheapest single task is T105's `histo
 | 2.0 | 2026-10-27 | AI Agent | Spec v0.24: the two-phase amendment. Phase A (T101–T106) adds the history block and the league-wide view to the digest, one shared comparator, the two league-wide prompt rules, `provenance.history_weeks`, and the Phase-1 golden capture as its last task. Phase B (T201–T210) adds memory configuration, the archive and its structural read, the gist store, `MemorySession`, the redacted prompt block, the service lifecycle and provenance, the CLI wiring and warnings, the AC-028 golden comparison, the WC-002 workflow guard and the operator documentation. Tasks 1–13 keep their ids; the amendment is numbered `T1xx`/`T2xx` so nothing shipped is renumbered. New: a dependency map (which tasks are independent, which are strict prerequisites), a full traceability table for AC-001…AC-033, WC-001/WC-002 and LV-001…LV-006 with the manual rows marked, and the two tasks considered and left out (a `--help` paragraph, a separate backfill task — the constraint rides on T206). No task exceeded the single-pass ceiling: A is 6, B is 10. |
 | 2.1 | 2026-10-27 | AI Agent | Plan review applied. **B1** — T206's backfill proof becomes a fresh-subprocess behaviour test (one store write, `main()` replaced by a raiser and never called, empty stdout), because `ff_tracker/__init__.py` imports `.main` and no import assertion can hold. **B2** — `commit(summary)` moves after `_normalise`, and the entry's `generated_at` is copied from `summary.provenance.generated_at`, so one instant is used twice; T206 asserts equality. **B3** — the "shipped state" block and Tasks 4, 6 and 12 are corrected to the shipped shape: the full `AI_SUMMARY_*` set including `MAX_TOKENS` and `REASONING_EFFORT`, `max_tokens`/`reasoning_effort` as configuration with no hard-coded budget, default model `deepseek-v4.1-flash`, and `AI_SUMMARY_MODEL` forwarded from `vars.*`. **B4** — T207 asserts `== 2` for the paired authentication-read-plus-failed-write fixture and `== 1` for each single cause. **S1** — the failure table and AC-031/AC-033 rows point at the criteria that now exist. **S2** — T202 writes "parses as the archive shape". **S3** — T210 and the README bullet carry the season-boundary retirement, with the consequence stated. **S4** — T202 adds the unknown-key-survives-merge case. **S5** — T106 names the full patch set (`sys.argv`, league ids, `ESPNService`, the provider client, the `datetime` attribute on `ff_tracker.services.ai_summary_service`) and carries a recapture procedure with what may and may not break the golden. **S6** — T102 splits its fixtures and states that the agreement case guards rendering order, not the comparator; the >20-team comparison moves to T103. **S7** — T203's `curl` is marked manual, once, in the PR description. **S10** — Tasks 1–13 are marked shipped-context, with the three stale lines named. Cuts: no committed `research.md`; no `ai_client.py` rename (the store gets its own wrapper); T104 folded into T103; T209 folded into T210. Counts: Phase A 5, Phase B 9. |
 | 2.2 | 2026-10-27 | AI Agent | Gate 2 close. Dependency map: **T103 requires T102**; T101 independent. **T205 joins AC-033's row** and its six-week test asserts an over-long stored paragraph reaches the composed block verbatim, so the criterion's third clause now has an owner. Header points at **spec v0.26**. Artifacts frozen; Phase A may start. |
+| 2.3 | 2026-10-27 | AI Agent | Matches code: **a failed read suppresses the write.** T204 orders `commit` so `read_status: "failed"` is the first check and returns `"skipped"` with no store call, and its tests assert zero saves and unchanged store bytes for auth, 5xx, transport and timeout. T207's warning counts follow: a 401/403 read is one line and zero saves, the paired two-warning fixture is gone because a suppressed write has no line of its own, and the read-404 case keeps its attempted write. Traceability and the Phase B checklist say the same. Correctness change, not a wording one. |

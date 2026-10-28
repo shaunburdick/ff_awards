@@ -228,7 +228,6 @@ class AIMemoryConfig:
     store's socket read is bounded by it, and it is not a memory setting.
     """
 
-    enabled: bool = False
     gist_id: str = ""
     # Never in a repr or a traceback, exactly as AI_SUMMARY_API_KEY.
     gist_token: str = field(default="", repr=False)
@@ -236,13 +235,13 @@ class AIMemoryConfig:
 
     def __post_init__(self) -> None:
         """Validate the pair; there are no defaults, and blank is the missing-value error."""
-        if self.enabled and not self.gist_id.strip():
+        if not self.gist_id.strip():
             raise ConfigurationError(
                 "AI_MEMORY_GIST_ID is required when AI_MEMORY_ENABLED is true. "
                 "Set the gist id, or unset AI_MEMORY_ENABLED to run without memory."
             )
 
-        if self.enabled and not self.gist_token.strip():
+        if not self.gist_token.strip():
             raise ConfigurationError(
                 "AI_MEMORY_GIST_TOKEN is required when AI_MEMORY_ENABLED is true. "
                 "Set a token with Gists read and write, or unset AI_MEMORY_ENABLED."
@@ -429,7 +428,6 @@ def _parse_memory_config(timeout: int) -> AIMemoryConfig | None:
         return None
 
     return AIMemoryConfig(
-        enabled=True,
         gist_id=os.getenv("AI_MEMORY_GIST_ID", ""),
         gist_token=os.getenv("AI_MEMORY_GIST_TOKEN", ""),
         timeout=timeout,

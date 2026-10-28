@@ -196,11 +196,6 @@ def render_memory_block(entries: Sequence[MemoryEntry], redact: bool = False) ->
     return "\n".join(lines)
 
 
-def build_memory_block(entries: Sequence[MemoryEntry]) -> str:
-    """The archive as the model reads it: every entry, verbatim, then the two rules."""
-    return render_memory_block(entries)
-
-
 def compose_system_prompt(instructions: str, entries: Sequence[MemoryEntry]) -> str:
     """
     Assemble the request's system prompt: instructions, then the archive block.
@@ -210,7 +205,7 @@ def compose_system_prompt(instructions: str, entries: Sequence[MemoryEntry]) -> 
     """
     if not entries:
         return instructions
-    return f"{instructions}\n\n{build_memory_block(entries)}"
+    return f"{instructions}\n\n{render_memory_block(entries)}"
 
 
 class AISummaryService:

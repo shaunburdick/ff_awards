@@ -14,12 +14,9 @@ exactly as wide as it was before this phase.
 
 from __future__ import annotations
 
-import http.client
 import json
 import logging
-import socket
 import time
-import urllib.error
 import urllib.request
 from typing import Protocol, TypedDict, cast
 
@@ -33,6 +30,14 @@ from ..models import (
     MEMORY_WRITE_OK,
     MEMORY_WRITE_SKIPPED,
     AISummary,
+)
+from ._http import (
+    HTTPStatusFailure,
+    HTTPTimeoutFailure,
+    HTTPTransport,
+    HTTPTransportFailure,
+    send,
+    urlopen,
 )
 from .ai_client import USER_AGENT
 
@@ -190,14 +195,6 @@ def _is_league(value: object) -> bool:
     )
 
 
-class MemoryTransport(Protocol):
-    """One gist request, returning the response body."""
-
-    def __call__(self, request: urllib.request.Request, timeout: int) -> bytes:
-        """Perform the request and read the body."""
-        ...
-
-
 class MemoryStore(Protocol):
     """Where the archive lives: one read and at most one write per run."""
 
@@ -210,13 +207,6 @@ class MemoryStore(Protocol):
         ...
 
 
-def _urlopen(request: urllib.request.Request, timeout: int) -> bytes:
-    """Default transport: one request, one read, no retries."""
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        body: bytes = response.read()
-    return body
-
-
 class GistMemoryStore:
     """
     The production store: one file in one secret gist, over stdlib ``urllib``.
@@ -227,16 +217,16 @@ class GistMemoryStore:
     session maps onto a status; nothing here retries or streams.
     """
 
-    def __init__(self, config: AIMemoryConfig, transport: MemoryTransport | None = None) -> None:
+    def __init__(self, config: AIMemoryConfig, transport: HTTPTransport | None = None) -> None:
         """
         Initialize the store.
 
         Args:
             config: The gist id and token, plus the read timeout.
-            transport: Override for tests; defaults to ``_urlopen``.
+            transport: Override for tests; defaults to ``urlopen``.
         """
         self._config = config
-        self._transport: MemoryTransport = transport or _urlopen
+        self._transport: HTTPTransport = transport or urlopen
 
     def load(self) -> bytes | None:
         """
@@ -259,6 +249,12 @@ class GistMemoryStore:
         stored = files.get(MEMORY_FILE_NAME)
         if not isinstance(stored, dict):
             return None
+        if stored.get("truncated") is True:
+            # GitHub drops the content above 1 MB and says so; reading that as
+            # "no file" would let the next write replace the whole archive.
+            raise AIMemoryStoreError(
+                "server", f"gist returned a truncated memory.json ({GIST_HOST})"
+            )
         content = stored.get("content")
         if not isinstance(content, str):
             return None
@@ -281,7 +277,6 @@ class GistMemoryStore:
         self._send(request, "PATCH")
 
     def _url(self) -> str:
-        """The gist's API URL."""
         return f"https://{GIST_HOST}/gists/{self._config.gist_id}"
 
     def _headers(self, *, include_body: bool) -> dict[str, str]:
@@ -296,21 +291,15 @@ class GistMemoryStore:
         return headers
 
     def _send(self, request: urllib.request.Request, method: str) -> bytes:
-        """Perform the request, mapping every outcome onto a store error kind."""
+        """Perform the request, mapping the shared HTTP failures onto store kinds."""
         started = time.monotonic()
         try:
-            body = self._transport(request, self._config.timeout)
-        except urllib.error.HTTPError as e:
-            _discard(e)
-            raise _status_error(e.code) from None
-        except urllib.error.URLError as e:
-            if isinstance(e.reason, (TimeoutError, socket.timeout)):
-                raise _timeout_error(self._config.timeout) from None
-            raise _transport_error() from None
-        except (TimeoutError, socket.timeout):
+            body = send(self._transport, request, self._config.timeout)
+        except HTTPStatusFailure as e:
+            raise _status_error(e.status) from None
+        except HTTPTimeoutFailure:
             raise _timeout_error(self._config.timeout) from None
-        except (OSError, http.client.HTTPException):
-            # A reset or a short body mid-read is an ordinary transport failure.
+        except HTTPTransportFailure:
             raise _transport_error() from None
 
         # INFO only: method, status and latency. Never the id, token or content.
@@ -320,23 +309,6 @@ class GistMemoryStore:
             int((time.monotonic() - started) * 1000),
         )
         return body
-
-
-def _discard(error: urllib.error.HTTPError) -> None:
-    """
-    Drain and close the error response without letting its body fail the run.
-
-    A reset or a truncated read while consuming an *error* body is not a
-    failure to report: the status already decided the outcome, and an exception
-    raised inside ``_send``'s ``except`` block would escape the store as a raw
-    ``OSError`` and deny the report. The body is never logged.
-    """
-    try:
-        error.read()
-    except (OSError, http.client.HTTPException):
-        pass
-    finally:
-        error.close()
 
 
 def _status_error(status: int) -> AIMemoryStoreError:
@@ -408,7 +380,6 @@ class MemorySession:
         self.write_status: str = MEMORY_WRITE_SKIPPED
         self.entries: list[MemoryEntry] = []
         self.warnings: list[str] = []
-        # True only when a stored file was present and parsed as the archive.
         self.parsed = False
         self._archive: MemoryFile | None = None
         self._unparseable = False
@@ -461,7 +432,10 @@ class MemorySession:
             self.write_status = MEMORY_WRITE_SKIPPED
             return
 
-        if self._unparseable:
+        # A failed read leaves no archive to merge into, so writing would
+        # replace every stored week with this one. A transient error must cost a
+        # week of memory, not the season.
+        if self._unparseable or self.read_status == MEMORY_READ_FAILED:
             self.write_status = MEMORY_WRITE_SKIPPED
             return
 

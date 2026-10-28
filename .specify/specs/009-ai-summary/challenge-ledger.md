@@ -364,3 +364,17 @@ Minor: FR-002's no-matchups sentence restored; the "existing mode predicate" wor
 | Note — AC-032's "byte-identical" | CLOSED — the same-week replacement clause required every other entry to be byte-identical, which no parse-and-rewrite can satisfy: re-serialising changes whitespace and key order with nothing edited. Spec v0.26 changes it to **"unchanged in value"**, matching AC-033 and the plan's existing reading. One row records it and nothing else. | spec.md v0.26, AC-032 |
 
 **Verdict:** GATE 2 CLOSED. The two must-fixes are applied, all three notes are closed with no requirement changed beyond AC-032's one word, and every criterion clause now names a task that asserts it — the traceability table covers AC-001…AC-033, WC-001/WC-002, LV-001…LV-006 and T203's manual premise, with the manual rows marked as manual. **Artifacts frozen at plan v2.2, tasks v2.2 and spec v0.26**: no further edits to these three without a new gate. **Phase A (T101, T102, T103, T105, T106) may start**, delivered as one engineer pass against the merged task list.
+
+---
+
+## Quality review — v0.27: a failed read must not overwrite
+
+| Item | Ruling | Carries to |
+|---|---|---|
+| What was found | A read failure suppressed nothing but the unparseable-file case: a 5xx, transport error, timeout or auth rejection left the archive empty in memory, and the write that followed replaced a whole season's entries with the one new week. Read failures are the silent kind, so the loss would not have announced itself. | FR-014 |
+| Why it was a defect and not a preference | Append-only is the promise that makes a hand edit safe by construction. A path that silently rewrites the whole file in one write is an exception to that promise in the same sentence that advertises it — so this is a contradiction inside the requirement, not a tuning choice. | FR-014 |
+| The ruling | The write is skipped when the read failed for any reason — auth, server, transport, timeout, unparseable file — in addition to the season/week guard, because the merge cannot preserve what it never read. During a failed read the store is left exactly as it was, and `memory_write` is `"skipped"`, never a later `"ok"` or `"failed"` for that run. | FR-014, FR-013, AC-032 |
+| Criterion it changes | AC-032's paired clause (an auth read failure plus a failed write emitting two lines) was unreachable once a failed read suppresses the write. It now asserts the failed-read case: one `::warning::` when the failure was a 401/403 and none otherwise, `"skipped"` for the write, and the fake store byte-identical afterwards. Write failures stay reachable through a store that reads cleanly and fails on write; a 404 read is still `"none"` and still attempts the write. | AC-032, AC-031 |
+| Traffic wording | FR-013 said "one read and one write per run", which no longer describes a run whose read failed. It now says one read, and one write only when that read succeeded. | FR-013 |
+
+**Verdict:** ACCEPTED, and implemented in code before the wording landed. The spec's own append-only promise is what made this a defect rather than a preference: a transient error must cost one week of memory, never the season.

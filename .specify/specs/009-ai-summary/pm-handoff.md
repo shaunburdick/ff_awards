@@ -21,9 +21,15 @@ Both phases built and conformance-approved · Next: owner supplies a gist + toke
 3. One live run (LV-005) to confirm the documented API shape — the suite uses fakes, so the real read/patch shape is the only unverified piece.
 4. Run the throwaway backfill script once; generating a week and appending are callable outside the CLI, proven by a subprocess test.
 
-## Known follow-up
+## Quality review (after the first push)
 
-`services/ai_client.py` has the same error-body read inside `except HTTPError` that Phase B just fixed in the memory store: a provider that resets mid-error-body escapes as a bare `OSError` and turns the FR-006 notice into exit 1. Pre-existing, outside this amendment, wants its own small change with the same guard and a matching fixture.
+Three defects were found after the branch was pushed, all fixed in the same branch:
+
+- a malformed token or non-ASCII gist id raised `ValueError` out of the transport and denied the report — `services/_http.py` now owns the transport for both clients and maps it
+- a failed read left the archive empty in memory, so the next write replaced the season with one entry; a read failure now suppresses the write and costs one week instead of the season
+- the README's retirement step ("empty the file") would have bricked memory permanently; it now gives the working empty archive
+
+Transport plumbing was duplicated between the two clients and is now one module. The backfill subprocess test (152 lines asserting a property every other service test already implies) was cut.
 
 ## User preferences
 

@@ -6,11 +6,7 @@ import dataclasses
 import http.client
 import json
 import logging
-import os
 import re
-import subprocess
-import sys
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -834,7 +830,7 @@ class TestHistoryWeeks:
         assert history_week_count(build_digest(divisions, [], None, WEEK, None)) == 4
 
 
-MEMORY_CONFIG = AIMemoryConfig(enabled=True, gist_id="gist123", gist_token="ghp-test")
+MEMORY_CONFIG = AIMemoryConfig(gist_id="gist123", gist_token="ghp-test")
 
 
 def _memory_service(
@@ -1078,157 +1074,3 @@ class TestMemoryLifecycle:
             before = next(row for row in first["entries"] if row["week"] == week)
             after = next(row for row in second["entries"] if row["week"] == week)
             assert after == before
-
-
-BACKFILL_SCRIPT = '''
-"""A throwaway backfill entry point: append one week's summary, no CLI, no output."""
-
-import json
-import sys
-from pathlib import Path
-
-import ff_tracker.main
-from ai_fakes import make_three_division_divisions
-from ff_tracker.config import create_config, load_ai_summary_config
-from ff_tracker.models import AISummary
-from ff_tracker.services.ai_client import AIRequest
-from ff_tracker.services.ai_memory import MemorySession
-from ff_tracker.services.ai_summary_service import AISummaryService
-
-
-def _no_cli() -> int:
-    raise AssertionError("a backfill run must not call the CLI")
-
-
-ff_tracker.main.main = _no_cli
-
-
-class FileStore:
-    """The gist, stood in for by a file on disk."""
-
-    def __init__(self, path: str) -> None:
-        self._path = Path(path)
-
-    def load(self) -> bytes | None:
-        return self._path.read_bytes() if self._path.exists() else None
-
-    def save(self, data: bytes) -> None:
-        self._path.write_bytes(data)
-
-
-class FakeClient:
-    """The provider, stood in for by one canned response."""
-
-    def __init__(self, response: str) -> None:
-        self._response = response
-
-    def complete(self, request: AIRequest) -> str:
-        return self._response
-
-
-RESPONSE = json.dumps(
-    {
-        "headline": "Backfilled take",
-        "leagues": [
-            {"league": name, "paragraphs": ["Backfilled prose."], "bullets": []}
-            for name in ("MM Driveway Surfers", "My 2026 League", "The Hood 2026")
-        ],
-        "season_note": "Backfilled note.",
-    }
-)
-
-
-def run(store_path: str, week: int, result_path: str) -> int:
-    config = create_config(league_ids=[111, 222, 333], year=2026, week=week)
-    ai_config = load_ai_summary_config()
-    if ai_config.memory is None:
-        raise AssertionError("memory must be configured for a backfill run")
-
-    session = MemorySession(
-        ai_config.memory, config.year, config.week, store=FileStore(store_path)
-    )
-    service = AISummaryService(ai_config, FakeClient(RESPONSE), session)
-    result = service.generate(make_three_division_divisions(), [], None, week, None)
-    if not isinstance(result, AISummary):
-        raise AssertionError("the backfill run produced no narrative")
-
-    Path(result_path).write_text(
-        json.dumps(
-            {
-                "headline": result.headline,
-                "generated_at": result.provenance.generated_at,
-                "memory_read": result.provenance.memory_read,
-                "memory_write": result.provenance.memory_write,
-                "memory_weeks": result.provenance.memory_weeks,
-            }
-        ),
-        encoding="utf-8",
-    )
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(run(sys.argv[1], int(sys.argv[2]), sys.argv[3]))
-'''
-
-
-class TestBackfillOutsideTheCli:
-    """
-    The build constraint, as behaviour: a week can be appended with no CLI run.
-
-    ``ff_tracker/__init__`` imports ``.main``, so "main was never imported" is
-    not assertable and not the constraint. What is asserted is a process that
-    calls the services, reads no arguments, prints nothing, and exits 0 — with
-    ``main`` replaced by a raiser so a stray CLI call would fail loudly.
-    """
-
-    def _run(self, tmp_path: Path, week: int) -> tuple[subprocess.CompletedProcess[str], Path]:
-        script = tmp_path / "backfill.py"
-        script.write_text(textwrap.dedent(BACKFILL_SCRIPT), encoding="utf-8")
-        store_path = tmp_path / "memory.json"
-        result_path = tmp_path / f"week-{week}.json"
-        env = {name: value for name, value in os.environ.items() if not name.startswith("AI_")}
-        env.update(
-            {
-                "AI_SUMMARY_ENABLED": "true",
-                "AI_SUMMARY_API_KEY": "sk-test",
-                "AI_MEMORY_ENABLED": "true",
-                "AI_MEMORY_GIST_ID": "gist123",
-                "AI_MEMORY_GIST_TOKEN": "ghp-test",
-                "PYTHONPATH": os.pathsep.join([str(REPO_ROOT), str(REPO_ROOT / "tests")]),
-            }
-        )
-        completed = subprocess.run(
-            [sys.executable, str(script), str(store_path), str(week), str(result_path)],
-            cwd=tmp_path,
-            env=env,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        return completed, result_path
-
-    def test_two_subprocess_runs_grow_the_archive_by_one_each(self, tmp_path: Path) -> None:
-        first, first_result = self._run(tmp_path, 5)
-        assert first.returncode == 0, first.stderr
-        assert first.stdout == ""
-        assert "AssertionError" not in first.stderr
-
-        second, second_result = self._run(tmp_path, 6)
-        assert second.returncode == 0, second.stderr
-        assert second.stdout == ""
-
-        archive = parse_archive((tmp_path / "memory.json").read_bytes())
-        assert archive is not None
-        assert [row["week"] for row in archive["entries"]] == [5, 6]
-
-        for week, result_path in ((5, first_result), (6, second_result)):
-            written = json.loads(result_path.read_text(encoding="utf-8"))
-            entry = next(row for row in archive["entries"] if row["week"] == week)
-            assert written["headline"] == "Backfilled take"
-            assert written["memory_write"] == "ok"
-            assert entry["generated_at"] == written["generated_at"]
-            assert entry["headline"] == "Backfilled take"
-
-        assert json.loads(first_result.read_text(encoding="utf-8"))["memory_read"] == "none"
-        assert json.loads(second_result.read_text(encoding="utf-8"))["memory_read"] == "ok"

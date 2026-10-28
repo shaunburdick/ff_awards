@@ -335,7 +335,7 @@ def _memory_config(
     timeout: int = 30,
 ) -> AIMemoryConfig:
     """The settings a memory-on run carries."""
-    return AIMemoryConfig(enabled=True, gist_id=gist_id, gist_token=gist_token, timeout=timeout)
+    return AIMemoryConfig(gist_id=gist_id, gist_token=gist_token, timeout=timeout)
 
 
 def _gist_document(files: object) -> bytes:
@@ -524,6 +524,37 @@ class TestGistStoreErrors:
 
         assert caught.value.kind == "transport"
 
+    @pytest.mark.parametrize(
+        "error",
+        [
+            ValueError("Invalid header value b'Bearer ghp-secret-token\n'"),
+            UnicodeEncodeError("ascii", "gist-é", 0, 1, "ordinal not in range(128)"),
+        ],
+        ids=["malformed-header", "non-ascii-input"],
+    )
+    def test_a_urlopen_input_failure_maps_to_a_transport_error(self, error: Exception) -> None:
+        """A pasted token with a trailing newline must not deny the report."""
+        store = GistMemoryStore(_memory_config(), transport=FakeTransport(error=error))
+
+        with pytest.raises(AIMemoryStoreError) as caught:
+            store.load()
+
+        assert caught.value.kind == "transport"
+        assert "api.github.com" in caught.value.reason
+        assert "ghp-secret-token" not in caught.value.reason
+
+    def test_a_truncated_file_is_a_server_failure_not_an_absent_one(self) -> None:
+        """GitHub drops the content above 1 MB; reading that as "no file" would overwrite it."""
+        body = _gist_document({"memory.json": {"truncated": True}})
+        store = GistMemoryStore(_memory_config(), transport=FakeTransport(body=body))
+
+        with pytest.raises(AIMemoryStoreError) as caught:
+            store.load()
+
+        assert caught.value.kind == "server"
+        assert "truncated" in caught.value.reason
+        assert "gist123" not in caught.value.reason
+
     def test_the_token_and_the_gist_id_are_in_no_reason(self) -> None:
         cases: list[BaseException] = [
             urllib.error.HTTPError(
@@ -688,10 +719,10 @@ class TestReadPolicy:
 
         session.commit(make_narrative())
 
-        # The same transport fails the write: one line for that cause, and the
-        # session still never raises.
-        assert session.write_status == "failed"
-        assert len(session.warnings) == 1
+        # A failed read leaves nothing to merge into, so the write is skipped
+        # rather than replacing the archive; the session still never raises.
+        assert session.write_status == "skipped"
+        assert session.warnings == []
 
     def test_a_read_error_body_that_resets_keeps_the_authentication_warning(self) -> None:
         store = GistMemoryStore(
@@ -704,6 +735,44 @@ class TestReadPolicy:
         assert session.read_status == "failed"
         assert len(session.warnings) == 1
         assert "authentication" in session.warnings[0]
+
+    def test_a_malformed_credential_writes_nothing(self) -> None:
+        """A ValueError out of urlopen is a failed read, so no write is attempted."""
+        transport = FakeTransport(error=ValueError("Invalid header value"))
+        session = MemorySession(
+            _memory_config(), 2026, 6, GistMemoryStore(_memory_config(), transport=transport)
+        )
+
+        session.open()
+        session.commit(make_narrative())
+
+        assert session.read_status == "failed"
+        assert session.write_status == "skipped"
+        assert session.warnings == []
+        assert len(transport.calls) == 1  # the read, and no write after it
+
+    def test_a_truncated_read_suppresses_the_write(self) -> None:
+        class TruncatedStore:
+            """A store whose read says the file was too big to return."""
+
+            def __init__(self) -> None:
+                self.writes = 0
+
+            def load(self) -> bytes | None:
+                raise AIMemoryStoreError("server", "gist returned a truncated memory.json")
+
+            def save(self, data: bytes) -> None:
+                self.writes += 1
+
+        store = TruncatedStore()
+        session = MemorySession(_memory_config(), 2026, 6, store)
+
+        session.open()
+        session.commit(make_narrative())
+
+        assert session.read_status == "failed"
+        assert session.write_status == "skipped"
+        assert store.writes == 0
 
     def test_an_unparseable_file_is_no_memory_and_is_never_overwritten(self) -> None:
         store = FakeMemoryStore(data=b"{not json")
@@ -796,9 +865,11 @@ class TestWritePolicy:
         assert "authentication" in session.warnings[0]
         assert "AI_MEMORY_GIST_TOKEN" in session.warnings[0]
 
-    def test_a_paired_authentication_read_and_failed_write_warn_twice(self) -> None:
-        """One line per cause: the read's and the write's, never more."""
+    def test_an_authentication_read_failure_suppresses_the_write(self) -> None:
+        """One cause, one line: a failed read never attempts a write."""
+        original = make_memory_archive(weeks=(1, 2, 3))
         store = FakeMemoryStore(
+            data=original,
             read_errors=[_error("auth")],
             write_errors=[_error("auth")],
         )
@@ -808,8 +879,10 @@ class TestWritePolicy:
         session.commit(make_narrative())
 
         assert session.read_status == "failed"
-        assert session.write_status == "failed"
-        assert len(session.warnings) == 2
+        assert session.write_status == "skipped"
+        assert len(session.warnings) == 1
+        assert store.write_calls == 0
+        assert store.data == original
 
     def test_a_read_404_then_a_write_404_warns_once(self) -> None:
         """AC-032's paired fixture: the read is "none" and only the write warns."""
@@ -826,16 +899,20 @@ class TestWritePolicy:
         assert session.write_status == "failed"
         assert len(session.warnings) == 1
 
-    def test_a_failed_read_does_not_stop_a_recovering_write(self) -> None:
-        store = FakeMemoryStore(read_errors=[_error("server")])
+    def test_a_failed_read_writes_nothing_and_keeps_the_archive(self) -> None:
+        """A transient 500 costs one week of memory, not the season."""
+        original = make_memory_archive(weeks=(1, 2, 3, 4, 5, 6))
+        store = FakeMemoryStore(data=original, read_errors=[_error("server")])
         session = _session(store)
 
         session.open()
         session.commit(make_narrative())
 
         assert session.read_status == "failed"
-        assert session.write_status == "ok"
+        assert session.write_status == "skipped"
         assert session.warnings == []
+        assert store.write_calls == 0
+        assert store.data == original
 
 
 class TestWriteGuard:
